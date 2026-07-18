@@ -8,8 +8,7 @@ PROJECTS_DIR="$CLAUDE_DIR/projects"
 
 DRY_RUN=1
 
-# session id -> "keep" | "delete", so a chat linked by several memory files is
-# previewed and decided only once.
+# Claude transcript path -> "keep" | "delete".
 declare -A CHAT_DECISION=()
 # Codex thread id -> "keep" | "delete"; same idea for Codex session transcripts.
 declare -A CODEX_CHAT_DECISION=()
@@ -25,6 +24,8 @@ This preserves:
   ~/.codex/config.toml
   ~/.codex/statusline.toml
   ~/.codex/rules/
+  ~/.codex/skills/
+  ~/.codex/plugins/
   ~/.claude/.credentials.json
   ~/.claude/settings.json
   ~/.claude/settings.local.json
@@ -34,24 +35,20 @@ This preserves:
   ~/.claude/commands/
   ~/.claude/skills/
   ~/.claude/plugins/
+  ~/.claude/backups/
   ~/.claude.json
 
-Claude and Codex chat/memory get the same careful workflow: nothing under
-either tool's chat or memory store is erased without first showing a verbose
-preview and (with --apply) asking.
+Claude and Codex chat/memory get the same careful workflow: every transcript is
+previewed and, with --apply, offered for deletion individually (default "no").
+Each tool's complete memory store is then previewed and only erased after a
+separate confirmation (also default "no").
 
-Claude: when a memory file (.../projects/*/memory/*.md) is erased, its
-originating chat transcript is previewed first. With --apply you are asked
-whether to delete that chat too; the default answer is "no", which keeps the
-transcript. Chat transcripts with no linked memory file are removed as before.
-
-Codex: every session transcript (~/.codex/sessions/**/*.jsonl) is previewed --
-title, time span, message counts, opening prompt, and any memory summary Codex
-derived from it -- and with --apply you are asked, per chat, whether to delete
-it (default "no"). The chat index/logs (history.jsonl, state_*/logs_* DBs) are
-kept while any chat is kept and pruned to match your choices. Codex memory (the
-~/.codex/memories/ store, generated summaries in memories_*.sqlite, and goals in
-goals_*.sqlite) is previewed and, with --apply, only erased after you confirm.
+Claude chats are ~/.claude/projects/**/*.jsonl and Claude memory is everything
+under ~/.claude/projects/*/memory/. Codex chats are
+~/.codex/sessions/**/*.jsonl. Codex's chat index/logs (history.jsonl and
+state_*/logs_* DBs) follow the chat choices, while Codex memory includes
+~/.codex/memories/, generated summaries in memories_*.sqlite, and goals in
+goals_*.sqlite.
 USAGE
 }
 
@@ -85,7 +82,16 @@ is_protected() {
     "$CODEX_DIR/rules"|"$CODEX_DIR/rules/"*)
       return 0
       ;;
+    "$CODEX_DIR/skills"|"$CODEX_DIR/skills/"*)
+      return 0
+      ;;
+    "$CODEX_DIR/plugins"|"$CODEX_DIR/plugins/"*)
+      return 0
+      ;;
     "$CLAUDE_DIR/.credentials.json"|"$CLAUDE_DIR/settings.json"|"$CLAUDE_DIR/settings.local.json"|"$CLAUDE_DIR/statusline-command.sh"|"$CLAUDE_DIR/CLAUDE.md")
+      return 0
+      ;;
+    "$CLAUDE_DIR/backups"|"$CLAUDE_DIR/backups/"*)
       return 0
       ;;
     "$CLAUDE_DIR/agents"|"$CLAUDE_DIR/agents/"*)
@@ -149,8 +155,9 @@ clean_directory_contents() {
   [[ -d "$dir" ]] || return 0
 
   while IFS= read -r -d '' child; do
-    # process_memory_files/sweep_projects_remainder own the projects tree.
+    # The Claude chat/memory functions own the projects tree and chat history.
     [[ "$child" == "$PROJECTS_DIR" ]] && continue
+    [[ "$dir" == "$CLAUDE_DIR" && "$child" == "$CLAUDE_DIR/history.jsonl" ]] && continue
     # The Codex chat/memory buckets are owned by the Codex functions below.
     if [[ "$dir" == "$CODEX_DIR" && -n "$(codex_bucket "$child")" ]]; then
       continue
@@ -175,11 +182,11 @@ clean_other_marker_paths() {
   done < <(find "$HOME_DIR" -mindepth 1 -maxdepth 1 -print0)
 }
 
-# ---- Interactive memory + linked-chat handling (Claude) ---------------------
-# clean_directory_contents skips "$PROJECTS_DIR", so these two functions are the
-# sole authority over it: every memory file is erased, its linked chat is
-# previewed and (with --apply) offered for deletion, and any transcript with no
-# memory file is removed as before.
+# ---- Interactive chat + memory handling (Claude) ----------------------------
+# clean_directory_contents skips "$PROJECTS_DIR", so these functions are the
+# sole authority over it. As on the Codex side, every transcript is previewed
+# and offered for deletion, and the complete memory store gets its own preview
+# and confirmation.
 
 # Print "name<TAB>description<TAB>type<TAB>originSessionId" for a memory file,
 # always four tab-separated fields even when the frontmatter lacks some keys.
@@ -293,40 +300,25 @@ PY
   fi
 }
 
-# Echo the transcript path for a session id, or nothing if it cannot be found.
-find_transcript() {
-  local sid="$1" proj="$2" candidate
-  candidate="$proj/$sid.jsonl"
-  if [[ -f "$candidate" ]]; then
-    printf '%s' "$candidate"
-    return 0
-  fi
-  while IFS= read -r -d '' candidate; do
-    printf '%s' "$candidate"
-    return 0
-  done < <(find "$PROJECTS_DIR" -maxdepth 2 -name "$sid.jsonl" -print0 2>/dev/null)
-}
-
-# Preview a linked chat and record (once per session) whether to delete it.
+# Preview a Claude transcript and record whether to delete it.
 decide_chat() {
   local sid="$1" jsonl="$2" reply=""
 
-  if [[ -n "${CHAT_DECISION[$sid]:-}" ]]; then
-    printf '  Linked chat %s already handled (%s).\n' "${sid:0:8}" "${CHAT_DECISION[$sid]}"
-    return 0
+  if (( DRY_RUN )); then
+    printf '\nWould review chat transcript (%s):\n' "${sid:0:8}"
+  else
+    printf '\nReviewing chat transcript (%s):\n' "${sid:0:8}"
   fi
-
-  printf '  Linked chat transcript (%s):\n' "${sid:0:8}"
   chat_preview "$jsonl"
 
   if (( DRY_RUN )); then
     printf '    -> --apply would ask whether to delete this chat (kept in dry run).\n'
-    CHAT_DECISION[$sid]="keep"
+    CHAT_DECISION["$jsonl"]="keep"
     return 0
   fi
 
   if [[ -r /dev/tty ]]; then
-    printf '    Delete this chat transcript too? [y/N] '
+    printf '    Delete this chat transcript? [y/N] '
     read -r reply < /dev/tty || reply=""
   else
     printf '    (no terminal available; keeping chat by default)\n'
@@ -335,76 +327,200 @@ decide_chat() {
   case "$reply" in
     y|Y|yes|YES|Yes)
       rm -f -- "$jsonl"
-      CHAT_DECISION[$sid]="delete"
+      CHAT_DECISION["$jsonl"]="delete"
       printf '    Deleted chat transcript: %s\n' "$jsonl"
       ;;
     *)
-      CHAT_DECISION[$sid]="keep"
+      CHAT_DECISION["$jsonl"]="keep"
       printf '    Kept chat transcript: %s\n' "$jsonl"
       ;;
   esac
 }
 
-# Erase every memory file, previewing/prompting for each one's linked chat.
-process_memory_files() {
-  [[ -d "$PROJECTS_DIR" ]] || return 0
+# Preview every Claude transcript and decide each one.
+process_claude_chats() {
+  local found=0 jsonl sid
 
-  local memfile proj name desc typ origin jsonl
-  while IFS= read -r -d '' memfile; do
-    proj="$(dirname "$(dirname "$memfile")")"
-    IFS=$'\t' read -r name desc typ origin < <(read_memory_meta "$memfile")
+  while IFS= read -r -d '' jsonl; do
+    found=1
+    sid="$(basename "$jsonl" .jsonl)"
+    decide_chat "$sid" "$jsonl"
+  done < <(find "$PROJECTS_DIR" -type f -name '*.jsonl' -print0 2>/dev/null | sort -z)
 
-    if (( DRY_RUN )); then
-      printf '\nWould erase memory file: %s\n' "$memfile"
-    else
-      printf '\nErasing memory file: %s\n' "$memfile"
-    fi
-    [[ -n "$name" ]] && printf '  Name:  %s (%s)\n' "$name" "${typ:-memory}"
-    [[ -n "$desc" ]] && printf '  About: %s\n' "$desc"
-
-    if [[ -n "$origin" ]]; then
-      jsonl="$(find_transcript "$origin" "$proj")"
-      if [[ -n "$jsonl" ]]; then
-        decide_chat "$origin" "$jsonl"
-      else
-        printf '  Linked chat %s: transcript not found (already gone).\n' "${origin:0:8}"
-      fi
-    else
-      printf '  (no linked chat recorded)\n'
-    fi
-
-    (( DRY_RUN )) || rm -f -- "$memfile"
-  done < <(find "$PROJECTS_DIR" -type f -path '*/memory/*.md' -print0 2>/dev/null | sort -z)
+  (( found )) || printf 'No Claude chat transcripts found.\n'
 }
 
-# Remove whatever is left under "$PROJECTS_DIR" except chats kept above.
-sweep_projects_remainder() {
+# Reconcile Claude's history index with the per-chat decisions, matching the
+# Codex history behavior: prune it when chats remain, or offer to remove it
+# after every chat has been deleted.
+finalize_claude_chat_side() {
+  local any_kept=0 jsonl sid reply=""
+  local kept=()
+
+  if (( ${#CHAT_DECISION[@]} )); then
+    for jsonl in "${!CHAT_DECISION[@]}"; do
+      if [[ "${CHAT_DECISION[$jsonl]}" == "keep" ]]; then
+        any_kept=1
+        sid="$(basename "$jsonl" .jsonl)"
+        kept+=("$sid")
+      fi
+    done
+  fi
+
+  local hist="$CLAUDE_DIR/history.jsonl"
+  if (( any_kept )); then
+    [[ -f "$hist" ]] || return 0
+    if (( DRY_RUN )); then
+      printf '\nWould prune Claude history.jsonl to the kept chats.\n'
+      return 0
+    fi
+
+    local n
+    n="$(python3 - "$hist" "${kept[@]}" <<'PY'
+import json, os, sys
+path = sys.argv[1]
+kept = set(sys.argv[2:])
+out = []
+try:
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            s = line.strip()
+            if not s:
+                continue
+            try:
+                rec = json.loads(s)
+            except ValueError:
+                continue
+            if rec.get("sessionId") in kept:
+                out.append(s)
+except OSError:
+    print(0)
+    raise SystemExit
+if out:
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(out) + "\n")
+else:
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+print(len(out))
+PY
+)" || n="?"
+    printf '\nPruned Claude history.jsonl to %s kept entr%s.\n' \
+      "$n" "$([[ "$n" == 1 ]] && printf y || printf ies)"
+    return 0
+  fi
+
+  [[ -f "$hist" ]] || return 0
+  if (( DRY_RUN )); then
+    printf '\nNo Claude chats kept; --apply would ask to remove the orphaned chat history:\n'
+    printf '  %s\n' "${hist##*/}"
+    printf '  -> kept in dry run.\n'
+    return 0
+  fi
+
+  printf '\nNo Claude chats kept. Orphaned chat history remains:\n'
+  printf '  %s\n' "${hist##*/}"
+  if [[ -r /dev/tty ]]; then
+    printf '  Remove this orphaned chat history? [y/N] '
+    read -r reply < /dev/tty || reply=""
+  else
+    printf '  (no terminal available; keeping chat history by default)\n'
+  fi
+
+  case "$reply" in
+    y|Y|yes|YES|Yes)
+      rm -f -- "$hist"
+      printf '  Removed: %s\n' "$hist"
+      ;;
+    *)
+      printf '  Kept orphaned chat history.\n'
+      ;;
+  esac
+}
+
+# Remove project files that are neither chat transcripts nor memory. The chat
+# and memory passes above own their respective stores.
+sweep_claude_projects_remainder() {
   [[ -d "$PROJECTS_DIR" ]] || return 0
 
-  local path base label
+  local path
   while IFS= read -r -d '' path; do
-    label='file'
-    if [[ "$path" == *.jsonl ]]; then
-      base="$(basename "$path" .jsonl)"
-      if [[ "${CHAT_DECISION[$base]:-}" == "keep" ]]; then
-        printf 'Keeping linked chat: %s\n' "$path"
-        continue
-      fi
-      label='chat (no linked memory)'
-    fi
     if (( DRY_RUN )); then
-      printf 'Would remove %s: %s\n' "$label" "$path"
+      printf 'Would remove project-state file: %s\n' "$path"
     else
       rm -f -- "$path"
-      printf 'Removed %s: %s\n' "$label" "$path"
+      printf 'Removed project-state file: %s\n' "$path"
     fi
-  done < <(find "$PROJECTS_DIR" -type f -not -path '*/memory/*' -print0 2>/dev/null)
+  done < <(find "$PROJECTS_DIR" -type f ! -name '*.jsonl' ! -path '*/memory/*' -print0 2>/dev/null)
 
   if (( ! DRY_RUN )); then
-    # Prune now-empty project directories bottom-up; this removes
-    # "$PROJECTS_DIR" itself only when no chats were kept.
+    # Prune now-empty project directories bottom-up. Kept chats or memory keep
+    # their containing directories in place.
     find "$PROJECTS_DIR" -depth -type d -empty -delete 2>/dev/null || true
   fi
+}
+
+# Preview the complete Claude memory store and, with --apply, erase it only
+# after a separate yes.
+process_claude_memory() {
+  if [[ ! -d "$PROJECTS_DIR" ]]; then
+    printf 'No Claude memory stored (nothing to erase).\n'
+    return 0
+  fi
+
+  local memdirs=0 pfiles=0 memfile name desc typ origin reply="" memdir
+  memdirs="$(find "$PROJECTS_DIR" -type d -name memory -prune -print 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "$memdirs" -eq 0 ]]; then
+    printf 'No Claude memory stored (nothing to erase).\n'
+    return 0
+  fi
+
+  pfiles="$(find "$PROJECTS_DIR" -type f -path '*/memory/*' 2>/dev/null | wc -l | tr -d ' ')"
+  printf 'Claude memory store:\n'
+  printf '  Persistent store: %s file%s under ~/.claude/projects/*/memory/\n' \
+    "$pfiles" "$([[ "$pfiles" == 1 ]] && printf '' || printf s)"
+
+  if [[ "$pfiles" -gt 0 ]]; then
+    printf '  Sample memories:\n'
+    local shown=0
+    while IFS= read -r -d '' memfile; do
+      IFS=$'\t' read -r name desc typ origin < <(read_memory_meta "$memfile")
+      printf '    - %s' "${name:-$(basename "$memfile")}"
+      [[ -n "$typ" ]] && printf ' (%s)' "$typ"
+      [[ -n "$desc" ]] && printf ': %s' "${desc:0:90}"
+      [[ -n "$origin" ]] && printf ' [chat %s]' "${origin:0:8}"
+      printf '\n'
+      (( ++shown >= 5 )) && break
+    done < <(find "$PROJECTS_DIR" -type f -path '*/memory/*' -print0 2>/dev/null | sort -z)
+  else
+    printf '  (memory is empty; only store directories are present)\n'
+  fi
+
+  if (( DRY_RUN )); then
+    printf '  -> --apply would ask whether to erase the Claude memory store (kept in dry run).\n'
+    return 0
+  fi
+
+  if [[ -r /dev/tty ]]; then
+    printf '  Erase the Claude memory store above? [y/N] '
+    read -r reply < /dev/tty || reply=""
+  else
+    printf '  (no terminal available; keeping memory by default)\n'
+  fi
+
+  case "$reply" in
+    y|Y|yes|YES|Yes)
+      while IFS= read -r -d '' memdir; do
+        rm -rf -- "$memdir"
+        printf '  Removed: %s\n' "$memdir"
+      done < <(find "$PROJECTS_DIR" -type d -name memory -prune -print0 2>/dev/null)
+      ;;
+    *)
+      printf '  Kept the Claude memory store.\n'
+      ;;
+  esac
 }
 
 # ---- Interactive chat + memory handling (Codex) -----------------------------
@@ -814,10 +930,13 @@ else
   printf 'Deleting Claude/Codex cleanup targets.\n\n'
 fi
 
-if [[ -d "$PROJECTS_DIR" ]]; then
-  printf '== Claude memory files and linked chat history ==\n'
-  process_memory_files
-  sweep_projects_remainder
+if [[ -d "$CLAUDE_DIR" ]]; then
+  printf '== Claude chat transcripts ==\n'
+  process_claude_chats
+  finalize_claude_chat_side
+  printf '\n== Claude memory ==\n'
+  process_claude_memory
+  sweep_claude_projects_remainder
   printf '\n'
 fi
 

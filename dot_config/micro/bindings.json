@@ -18,5 +18,8 @@
     "Alt-g": "CursorStart",
     "Alt-G": "CursorEnd",
     "Alt-m": "JumpToMatchingBrace",
-    "Alt-t": "lua:filemanager.toggle_tree"
+    "Alt-t": "lua:filemanager.toggle_tree",
+    "Ali-;": "ToggleKeyMenu",
+    "Alt-d": "command-edit:jump +",
+    "Alt-u": "command-edit:jump -"
 }

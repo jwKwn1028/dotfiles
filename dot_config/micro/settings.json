@@ -23,5 +23,6 @@
     "tabhighlight": true,
     "tabstospaces": true,
     "useprimary": false,
-    "wordwrap": true
+    "wordwrap": true,
+    "relativeruler": true
 }
