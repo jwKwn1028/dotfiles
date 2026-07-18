@@ -1,0 +1,69 @@
+format = """
+$os\
+$directory\
+$git_branch\
+$git_status\
+$c\
+$python\
+$rust\
+$nodejs\
+$julia\
+$typst\
+$line_break\
+$character"""
+# 1. Use the Tokyo Night Palette
+
+[palettes.tokyo_night]
+black = "#15161e"
+red = "#f7768e"
+green = "#9ece6a"
+yellow = "#e0af68"
+blue = "#7aa2f7"
+purple = "#bb9af7"
+cyan = "#7dcfff"
+white = "#a9b1d6"
+bg = "#1a1b26"
+
+# 2. Apply the palette
+palette = "tokyo_night"
+
+# 3. Configure the directory (Blue & Italic)
+[directory]
+style = "bold blue"
+truncation_length = 3
+truncation_symbol = "…/"
+
+# 4. Configure Git (Purple)
+[git_branch]
+style = "bold purple"
+
+# 5. Add the Time (Yellow, on the right side)
+[time]
+disabled = true
+style = "bold yellow"
+format = "[$time]($style) "
+
+
+# -------------------------------------------
+# 1. Built-in Languages (Corrected Names)
+# -------------------------------------------
+
+[python]
+symbol = " "
+
+[julia]
+symbol = " "
+
+# Starship uses [c] for both C and C++
+[c]
+symbol = " "
+
+[rust]
+symbol = " "
+
+[typst]
+symbol = " "
+
+[nodejs]
+symbol = " "
+

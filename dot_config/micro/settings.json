@@ -1,0 +1,27 @@
+{
+    "colorscheme": "tokyonight_storm",
+    "diffgutter": true,
+    "ft:json": {
+        "tabsize": 2
+    },
+    "ft:shell": {
+        "tabsize": 2
+    },
+    "ft:yaml": {
+        "tabsize": 2
+    },
+    "hlsearch": true,
+    "keepautoindent": true,
+    "mkparents": true,
+    "parsecursor": true,
+    "rmtrailingws": true,
+    "savecursor": true,
+    "saveundo": true,
+    "softwrap": true,
+    "statusformatl": "$(filename) $(modified)($(line),$(col))",
+    "statusformatr": "$(percentage) | $(opt:filetype)",
+    "tabhighlight": true,
+    "tabstospaces": true,
+    "useprimary": false,
+    "wordwrap": true
+}

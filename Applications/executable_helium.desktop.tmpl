@@ -1,0 +1,23 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Helium
+GenericName=Web Browser
+Comment=Access the Internet
+Exec={{ .chezmoi.homeDir }}/Applications/helium-0.13.3.1-x86_64.AppImage %U
+Icon={{ .chezmoi.homeDir }}/Applications/helium.png
+Terminal=false
+StartupNotify=true
+StartupWMClass=helium
+Categories=Network;WebBrowser;
+MimeType=application/pdf;application/rdf+xml;application/rss+xml;application/xhtml+xml;application/xhtml_xml;application/xml;image/gif;image/jpeg;image/png;image/webp;text/html;text/xml;x-scheme-handler/http;x-scheme-handler/https;
+Actions=new-window;new-private-window;
+X-AppImage-Version=0.13.3.1
+
+[Desktop Action new-window]
+Name=New Window
+Exec={{ .chezmoi.homeDir }}/Applications/helium-0.13.3.1-x86_64.AppImage
+
+[Desktop Action new-private-window]
+Name=New Incognito Window
+Exec={{ .chezmoi.homeDir }}/Applications/helium-0.13.3.1-x86_64.AppImage --incognito

@@ -1,0 +1,79 @@
+# Package manifest consumed by the run_once_* provisioning scripts.
+# Edit these lists to add/remove software; chezmoi re-runs the install
+# scripts automatically when this file changes (run_onchange semantics via
+# the hash of the rendered script).
+#
+# Package names are Linux Mint 22.3 / Ubuntu 24.04 (apt) names.
+
+[packages.apt]
+# PPAs added before the apt install pass (needed for packages not in the
+# default Mint/Ubuntu repos).
+ppas = [
+    "ppa:maveonair/helix-editor",   # helix editor
+]
+
+# Installed on every machine (CLI / dev tooling).
+# NOTE: on Debian/Ubuntu, `fd-find` -> `fdfind` and `bat` -> `batcat`;
+# the shell configs already alias these, so no extra symlinks are needed.
+common = [
+    "git", "git-lfs", "curl", "wget",
+    "build-essential", "gcc", "make", "cmake", "pkg-config",
+    "software-properties-common",
+    "zsh", "tmux", "micro", "nano", "vim",
+    "helix",
+    "bat", "btop", "htop", "fastfetch",
+    "fd-find", "fzf", "ripgrep", "jq", "tree",
+    "unzip", "zip", "7zip", "p7zip-full", "bzip2", "gzip",
+    "nodejs", "npm", "pipx",
+    "ranger", "taskwarrior-tui",
+]
+
+# Installed only when class == "desktop" (i3 / GUI stack).
+desktop = [
+    "i3", "i3status", "polybar", "picom", "rofi", "dunst",
+    "feh", "flameshot", "xdotool", "wmctrl", "xclip", "xsel",
+    "zathura", "zathura-pdf-poppler",
+    "thunar", "thunar-archive-plugin", "thunar-media-tags-plugin", "thunar-volman",
+    "pavucontrol", "blueman", "brightnessctl", "playerctl",
+    "network-manager-gnome",
+    "gimp", "vlc", "mpv",
+    # Display manager + screen locker for a standalone i3 login session.
+    # Installing lightdm may prompt you to pick the default display manager.
+    "lightdm", "lightdm-settings", "light-locker",
+]
+
+[packages.flatpak]
+# Installed only when class == "desktop", from Flathub.
+apps = [
+    "app.zen_browser.zen",
+    "md.obsidian.Obsidian",
+    "com.logseq.Logseq",
+    "com.super_productivity.SuperProductivity",
+    "org.inkscape.Inkscape",
+    "org.kde.okular",
+    "org.localsend.localsend_app",
+    "org.onlyoffice.desktopeditors",
+    "com.github.jeromerobert.pdfarranger",
+    "com.github.wwmm.easyeffects",
+    "org.prismlauncher.PrismLauncher",
+]
+
+[packages.cargo]
+# `cargo install --locked <name>` from crates.io.
+# eza = modern ls; the rest are Helix LSPs / formatters + utilities.
+# yazi-fm/yazi-cli provide the `yazi` file manager used by the shell configs.
+registry = [
+    "eza",
+    "yazi-fm", "yazi-cli",
+    "dprint", "taplo-cli", "typstyle",
+    "texlab", "harper-ls",
+    "watchexec-cli", "cargo-update",
+]
+
+# `cargo install --git <url> --locked` for crates not published to crates.io.
+git = [
+    "https://github.com/rtk-ai/rtk",                    # rtk (see RTK.md)
+    "https://github.com/Feel-ix-343/markdown-oxide.git", # markdown LSP
+    "https://github.com/Myriad-Dreamin/tinymist",        # typst LSP (tinymist)
+    "https://github.com/itsjunetime/tdf.git",            # tdf terminal PDF viewer
+]

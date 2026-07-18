@@ -1,0 +1,253 @@
+#!/bin/sh
+
+verbose=0
+day_index=all
+location=''
+source=ip
+
+usage() {
+    printf '%s\n' \
+        'Usage: weather [LAT,LON] [--today | -t | --tomorrow | --day-after-tomorrow]' \
+        '       weather [LAT,LON] -v [--today | -t | --tomorrow | --day-after-tomorrow]' \
+        '' \
+        'LAT,LON is a GPS coordinate pair, e.g. 48.8566,2.3522.' \
+        'With no LAT,LON the location is resolved from your IP address.' >&2
+}
+
+set_location() {
+    if [ -n "$location" ]; then
+        usage
+        exit 2
+    fi
+    location=$1
+    source=gps
+}
+
+select_day() {
+    if [ "$day_index" != all ]; then
+        usage
+        exit 2
+    fi
+    day_index=$1
+}
+
+while [ "$#" -gt 0 ]; do
+    case $1 in
+        -v)
+            verbose=1
+            ;;
+        --today)
+            select_day 0
+            ;;
+        -t | --tomorrow)
+            select_day 1
+            ;;
+        --day-after-tomorrow)
+            select_day 2
+            ;;
+        *)
+            # A GPS coordinate pair (LAT,LON); anything else is an error.
+            # Negative latitudes/longitudes begin with '-', so this must be
+            # matched here rather than swallowed by an unknown-option case.
+            if printf '%s' "$1" | grep -Eq '^[+-]?[0-9]+(\.[0-9]+)?,[+-]?[0-9]+(\.[0-9]+)?$'; then
+                set_location "$1"
+            else
+                usage
+                exit 2
+            fi
+            ;;
+    esac
+    shift
+done
+
+url="https://wttr.in/${location}?m"
+
+# The plain, day-less compact view comes straight from wttr.in; no jq needed.
+if [ "$verbose" -eq 0 ] && [ "$day_index" = all ]; then
+    exec curl --fail --silent --show-error --location \
+        "${url}&format=v2"
+fi
+
+# Everything else (verbose, or a single selected day) is rendered from the
+# full JSON feed. Colour only when writing to a terminal with NO_COLOR unset.
+if [ -t 1 ] && [ -z "${NO_COLOR-}" ]; then
+    color=1
+else
+    color=0
+fi
+
+# Helper definitions shared by the verbose and compact single-day renderers.
+jq_helpers='
+    def value($v):
+        if $v == null or $v == "" then "n/a" else ($v | tostring) end;
+    def unit($v; $u):
+        if $v == null or $v == "" then "n/a" else "\($v)\($u)" end;
+    def clean($v):
+        value($v) | gsub("^[[:space:]]+|[[:space:]]+$"; "");
+    def pad2:
+        tostring | if length < 2 then "0" + . else . end;
+    def clock:
+        tonumber as $t
+        | ((($t / 100) | floor) | pad2)
+          + ":" + (($t % 100) | pad2);
+    def paint($code; $text):
+        if $color == "1"
+        then "\u001b[\($code)m\($text)\u001b[0m"
+        else $text
+        end;
+    def accent($text): paint("38;5;45"; $text);
+    def muted($text): paint("38;5;244"; $text);
+    def warm($text): paint("38;5;214"; $text);
+    def wet($text): paint("38;5;75"; $text);
+    def heading($icon; $text):
+        accent("╭─ \($icon)  ") + paint("1;38;5;51"; $text)
+        + accent(" ─────────────────────────────────────────────");
+    def weather_icon($description):
+        ($description | ascii_downcase) as $d
+        | if $d | contains("thunder") then "󰖓"
+          elif $d | contains("heavy rain") then "󰖖"
+          elif ($d | contains("rain")) or ($d | contains("drizzle"))
+               or ($d | contains("shower")) then "󰖗"
+          elif ($d | contains("snow")) or ($d | contains("sleet"))
+               or ($d | contains("ice")) then "󰖘"
+          elif ($d | contains("fog")) or ($d | contains("mist"))
+               or ($d | contains("haze")) or ($d | contains("smok")) then "󰖑"
+          elif ($d | contains("partly")) then "󰖕"
+          elif ($d | contains("cloud")) or ($d | contains("overcast")) then "󰖐"
+          elif ($d | contains("clear")) or ($d | contains("sunny")) then "󰖙"
+          else "󰖐"
+          end;
+    def spark($values):
+        "▁▂▃▄▅▆▇█" as $bars
+        | ($values | min) as $low
+        | ($values | max) as $high
+        | [$values[]
+           | (if $high == $low then 3
+              else (((. - $low) * 7 / ($high - $low)) | floor)
+              end) as $index
+           | $bars[$index:$index + 1]]
+        | join("  ");
+    def percent_spark($values):
+        "▁▂▃▄▅▆▇█" as $bars
+        | [$values[]
+           | (((. * 7 / 100) | floor) | if . > 7 then 7 else . end) as $index
+           | $bars[$index:$index + 1]]
+        | join("  ");
+'
+
+verbose_program='
+    .nearest_area[0] as $location
+    | .current_condition[0] as $current
+    | ([
+        $location.areaName[0].value,
+        $location.region[0].value,
+        $location.country[0].value
+      ] | map(select(. != null and . != "")) | join(", ")) as $place
+    | clean($current.weatherDesc[0].value) as $now_description
+    | heading("󰖐"; "WEATHER  ·  \($place)"),
+      accent("│") + "  󰍎  "
+        + (if $source == "gps" then "Requested        " else "Coordinates      " end)
+        + (if $source == "gps"
+           then ($requested | gsub(","; ", "))
+           else "\(value($location.latitude)), \(value($location.longitude))"
+           end),
+      accent("│") + "  󰋼  "
+        + (if $source == "gps" then "Nearest area     " else "IP-resolved      " end)
+        + (if $source == "gps"
+           then "\(value($location.latitude)), \(value($location.longitude))"
+           else value(.request[0].query)
+           end),
+      (
+        if ($day_index == "all") or ($day_index == "0") then
+            accent("├──────────────────────────────────────────────────────────"),
+            accent("│  ") + paint("1;38;5;51"; "CURRENT CONDITIONS"),
+            accent("│"),
+            accent("│  ") + wet(weather_icon($now_description)) + "  "
+              + paint("1"; $now_description) + muted("  ·  observed \(value($current.observation_time))"),
+            accent("│  ") + "󰔏  Temperature: " + warm(unit($current.temp_C; "°C"))
+              + "  |  Feels like: \(unit($current.FeelsLikeC; "°C"))",
+            accent("│  ") + "󰖎  Humidity: \(unit($current.humidity; "%"))  |  Cloud cover: \(unit($current.cloudcover; "%"))  |  UV index: \(value($current.uvIndex))",
+            accent("│  ") + "󰖗  Precipitation: \(unit($current.precipMM; " mm"))  |  Pressure: \(unit($current.pressure; " hPa"))  |  Visibility: \(unit($current.visibility; " km"))",
+            accent("│  ") + "󰖝  Wind: \(value($current.winddir16Point)) \(unit($current.windspeedKmph; " km/h")) (\(unit($current.winddirDegree; "°")))",
+            accent("╰──────────────────────────────────────────────────────────")
+        else
+            accent("╰──────────────────────────────────────────────────────────")
+        end
+      ),
+      "",
+      (
+        (.weather
+         | if $day_index == "all"
+           then .[]
+           else .[($day_index | tonumber)]
+           end)
+        | . as $day
+        | $day.astronomy[0] as $astro
+        | ($day.hourly | map(.tempC | tonumber)) as $temperatures
+        | ($day.hourly | map(.chanceofrain | tonumber)) as $rain_chances
+        | ($day.hourly | map(.time | clock) | join("  ")) as $hours
+        | heading("󰃭"; "FORECAST  ·  \($day.date)"),
+          accent("│") + "  󰔏  Temperature: min \(unit($day.mintempC; "°C"))  |  avg \(unit($day.avgtempC; "°C"))  |  max \(unit($day.maxtempC; "°C"))",
+          accent("│") + "  󰖙  Daylight: sunrise \(value($astro.sunrise))  |  sunset \(value($astro.sunset))  |  sun \(unit($day.sunHour; " h"))  |  UV \(value($day.uvIndex))",
+          accent("│") + "  󰖔  Moon: \(value($astro.moon_phase)) (\(unit($astro.moon_illumination; "%")))  |  rise \(value($astro.moonrise))  |  set \(value($astro.moonset))",
+          accent("│") + "  󰖘  Snow total: \(unit($day.totalSnow_cm; " cm"))",
+          accent("│"),
+          accent("│") + muted("      \($hours)"),
+          accent("│") + "  󰔏  " + warm(spark($temperatures))
+            + muted("  temperature trend"),
+          accent("│") + "  󰖗  " + wet(percent_spark($rain_chances))
+            + muted("  rain chance"),
+          accent("╰──────────────────────────────────────────────────────────"),
+          "",
+          (
+            $day.hourly[]
+            | clean(.weatherDesc[0].value) as $description
+            | accent("╭─ ") + paint("1;38;5;51"; (.time | clock))
+              + "  " + wet(weather_icon($description)) + "  " + paint("1"; $description),
+              accent("│  ") + "󰔏  Temp \(unit(.tempC; "°C"))  |  Feels \(unit(.FeelsLikeC; "°C"))  |  Dew \(unit(.DewPointC; "°C"))  |  Heat index \(unit(.HeatIndexC; "°C"))  |  Wind chill \(unit(.WindChillC; "°C"))",
+              accent("│  ") + "󰖎  Humidity \(unit(.humidity; "%"))  |  Cloud \(unit(.cloudcover; "%"))  |  Visibility \(unit(.visibility; " km"))  |  Pressure \(unit(.pressure; " hPa"))  |  UV \(value(.uvIndex))",
+              accent("│  ") + "󰖗  Precip \(unit(.precipMM; " mm"))  |  Rain \(unit(.chanceofrain; "%"))  |  Snow \(unit(.chanceofsnow; "%"))  |  Fog \(unit(.chanceoffog; "%"))  |  Thunder \(unit(.chanceofthunder; "%"))",
+              accent("╰─ ") + "󰖝  Wind \(value(.winddir16Point)) \(unit(.windspeedKmph; " km/h")) (\(unit(.winddirDegree; "°")))  |  Gust \(unit(.WindGustKmph; " km/h"))",
+              ""
+          )
+      )
+'
+
+# Compact single-day summary: the forecast headline for the chosen day only.
+compact_program='
+    .nearest_area[0] as $location
+    | ([
+        $location.areaName[0].value,
+        $location.region[0].value,
+        $location.country[0].value
+      ] | map(select(. != null and . != "")) | join(", ")) as $place
+    | .weather[($day_index | tonumber)] as $day
+    | $day.astronomy[0] as $astro
+    | ($day.hourly | map(.tempC | tonumber)) as $temperatures
+    | ($day.hourly | map(.chanceofrain | tonumber)) as $rain_chances
+    | ($day.hourly | map(.time | clock) | join("  ")) as $hours
+    | heading("󰃭"; "FORECAST  ·  \($day.date)  ·  \($place)"),
+      accent("│") + "  󰔏  Temperature: min \(unit($day.mintempC; "°C"))  |  avg \(unit($day.avgtempC; "°C"))  |  max \(unit($day.maxtempC; "°C"))",
+      accent("│") + "  󰖙  Daylight: sunrise \(value($astro.sunrise))  |  sunset \(value($astro.sunset))  |  sun \(unit($day.sunHour; " h"))  |  UV \(value($day.uvIndex))",
+      accent("│"),
+      accent("│") + muted("      \($hours)"),
+      accent("│") + "  󰔏  " + warm(spark($temperatures)) + muted("  temperature trend"),
+      accent("│") + "  󰖗  " + wet(percent_spark($rain_chances)) + muted("  rain chance"),
+      accent("╰──────────────────────────────────────────────────────────")
+'
+
+if [ "$verbose" -eq 1 ]; then
+    jq_program=$verbose_program
+else
+    jq_program=$compact_program
+fi
+
+# Stream the full JSON feed into jq; nothing is written to disk.
+curl --fail --silent --show-error --location \
+    "${url}&format=j1" |
+    jq --raw-output \
+        --arg color "$color" \
+        --arg day_index "$day_index" \
+        --arg source "$source" \
+        --arg requested "$location" \
+        "$jq_helpers$jq_program"

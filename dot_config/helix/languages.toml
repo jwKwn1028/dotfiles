@@ -1,0 +1,155 @@
+# ---------------- C / C++ ----------------
+# Override Helix's built-in 2-space default with 4-space indentation.
+[[language]]
+name = "c"
+indent = { tab-width = 4, unit = "    " }
+
+[[language]]
+name = "cpp"
+indent = { tab-width = 4, unit = "    " }
+
+
+[[language]]
+name = "python"
+language-servers = ["basedpyright", "ruff"]
+auto-format = false
+formatter = { command = "ruff", args = ["format", "--stdin-filename", "stdin.py", "-"] }
+
+[language-server.basedpyright]
+command = "basedpyright-langserver"
+args = ["--stdio"]
+config = { python = { analysis = { typeCheckingMode = "basic", diagnosticSeverityOverrides = { reportOptionalMemberAccess = "none", reportOptionalSubscript = "none", reportOptionalCall = "none" } } } }
+
+[language-server.ruff]
+command = "ruff"
+args = ["server"]
+
+
+# ---------------- LaTeX ----------------
+[[language]]
+name = "latex"
+language-servers = ["texlab", "harper-ls"]
+auto-format = true
+formatter = { command = "latexindent", args = ["-"] }
+soft-wrap = { enable = true, wrap-at-text-width = true }
+
+[language-server.texlab]
+command = "texlab"
+
+[language-server.texlab.config.texlab]
+build = { onSave = false, forwardSearchAfter = false }
+chktex = { onOpenAndSave = true, onEdit = false }
+forwardSearch = { executable = "zathura", args = ["--synctex-forward", "%l:1:%f", "%p"] }
+
+# ---------------- BibTeX ----------------
+[[language]]
+name = "bibtex"
+language-servers = ["texlab"]
+auto-format = false
+
+
+# ---------------- Bash / Zsh ----------------
+[[language]]
+name = "bash"
+language-servers = ["bashls"]
+auto-format = true
+file-types = [
+  "sh", "bash", "ebuild", "eclass", "PKGBUILD",
+  { glob = ".bashrc" }, { glob = ".bash_profile" }, { glob = ".bash_aliases" },
+  "zsh", { glob = ".zshrc" }, { glob = ".zshenv" }, { glob = ".zprofile" }, { glob = ".zlogin" }, { glob = ".zlogout" },
+]
+formatter = { command = "shfmt", args = ["-ln", "bash", "-i", "2", "-ci", "-bn", "-sr", "-filename", "stdin.sh", "-"] }
+
+[language-server.bashls]
+command = "bash-language-server"
+args = ["start"]
+config = { bashIde = { shellcheck = { enable = true, executablePath = "shellcheck" }, globPattern = "**/*@(.sh|.inc|.bash|.command)" } }
+
+
+# ---------------- Typst ----------------
+[[language]]
+name = "typst"
+language-servers = ["tinymist", "harper-ls"]
+auto-format = true
+formatter = { command = "typstyle" }
+soft-wrap = { enable = true, wrap-at-text-width = true }
+
+[language-server.tinymist]
+command = "tinymist"
+# `exportPdf = "onSave"` means tinymist writes its own PDF on each save under
+# `target/`. hxp writes a separate PDF next to the source, so they don't fight.
+# If you'd rather hxp own the only PDF, set exportPdf = "never".
+config = { exportPdf = "onSave", outputPath = "$root/target/$dir/$name", formatterMode = "typstyle", previewFeature = "enable" }
+
+
+# ---------------- Julia ----------------
+[[language]]
+name = "julia"
+language-servers = ["julia-lsp"]
+auto-format = true
+formatter = { command = "julia", args = [
+  "--project=@helix-lsp",
+  "--startup-file=no",
+  "--history-file=no",
+  "-e",
+  "using JuliaFormatter; format_text(stdin)",
+] }
+
+[language-server.julia-lsp]
+command = "julia"
+args = [ "--project=@helix-lsp", "--startup-file=no", "--history-file=no", "-e", "using LanguageServer; LanguageServer.runserver()" ]
+
+
+# ---------------- Markdown ----------------
+[[language]]
+name = "markdown"
+# marksman: wiki-link nav + completion. zk: your notebook. harper-ls: grammar.
+language-servers = ["marksman", "zk", "harper-ls"]
+auto-format = true
+# `--prose-wrap preserve` keeps your manual line wrapping. Switch to "always"
+# if you want prettier to reflow at print-width.
+formatter = { command = "prettier", args = ["--parser", "markdown", "--prose-wrap", "preserve"] }
+soft-wrap = { enable = true, wrap-at-text-width = true }
+
+[language-server.marksman]
+command = "marksman"
+args = ["server"]
+
+[language-server.zk]
+command = "zk"
+args = ["lsp"]
+
+
+# ---------------- Plain text ----------------
+[[language]]
+name = "text"
+scope = "text.plain"
+file-types = ["txt"]
+language-servers = ["harper-ls"]
+soft-wrap = { enable = true, wrap-at-text-width = true }
+
+
+# ---------------- Grammar (harper-ls) ----------------
+# Pure-Rust, runs locally, no Java. Wired into markdown / latex / typst above.
+# To opt out for one filetype, just remove "harper-ls" from that entry's
+# language-servers array.
+[language-server.harper-ls]
+command = "harper-ls"
+args = ["--stdio"]
+
+[language-server.harper-ls.config.harper-ls]
+diagnosticSeverity = "warning"
+
+[language-server.harper-ls.config.harper-ls.linters]
+SpellCheck = true
+SentenceCapitalization = true
+AnA = true
+RepeatedWords = true
+LongSentences = false
+
+# If you ever want the heavier ltex-ls-plus alongside harper, install it
+# (see install notes) and add a block like:
+#
+# [language-server.ltex]
+# command = "ltex-ls-plus"
+# config = { ltex = { language = "en-US" } }

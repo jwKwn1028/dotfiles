@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Enable/disable the built-in touchpad without touching real mice.
+#
+# The ELAN touchpad exposes TWO X pointer nodes — a "Touchpad" node and a
+# shadow "Mouse" node — and BOTH belong to the same physical pad, so both must
+# be toggled or the surface stays alive. External mice and the TrackPoint are
+# left alone.
+#
+# Usage: touchpad [disable|enable|toggle|status|apply]
+#   disable  turn the touchpad off (DEFAULT action)
+#   enable   turn it on
+#   toggle   flip the current desired state
+#   status   print live + desired state
+#   apply    (re)apply the desired state from the state file — used by
+#            ~/.x-unstick.sh and by i3 autostart on login/reload.
+#
+# The desired state persists in $XDG_STATE_HOME/touchpad.state (default:
+# disabled), so login autostart and recovery scripts can re-assert it.
+
+set -u
+
+# Case-insensitive ERE matching the built-in touchpad's node names. Matches
+# "ELAN0688:00 04F3:320B Touchpad" and its shadow "... Mouse", but NOT external
+# mice or "TPPS/2 Elan TrackPoint". Override with TOUCHPAD_MATCH=... if hardware
+# changes.
+MATCH="${TOUCHPAD_MATCH:-ELAN0688}"
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
+STATE_FILE="$STATE_DIR/touchpad.state"
+DEFAULT_STATE=disabled          # touchpad off by default
+
+export DISPLAY="${DISPLAY:-:0}"
+if [ -z "${XAUTHORITY:-}" ] && [ -r "$HOME/.Xauthority" ]; then
+  export XAUTHORITY="$HOME/.Xauthority"
+fi
+
+have() { command -v "$1" > /dev/null 2>&1; }
+have xinput || { echo "touchpad: xinput not found" >&2; exit 1; }
+
+# IDs of every X node belonging to the built-in touchpad.
+touchpad_ids() {
+  xinput list 2> /dev/null | grep -iE "$MATCH" | grep -oE 'id=[0-9]+' | cut -d= -f2
+}
+
+# Device name -> pointers xfconf key, mirroring xfsettingsd's transform
+# (keep alphanumerics, space -> '_', drop everything else).
+xfconf_key() {
+  local n=$1
+  n=${n//[^[:alnum:] ]/}
+  n=${n// /_}
+  printf '/%s/Properties/Device_Enabled' "$n"
+}
+
+# Keep the XFCE setting in sync for whichever node actually has an xfconf entry
+# (the Touchpad node does; the shadow Mouse node does not, and is skipped).
+sync_xfconf() {                 # sync_xfconf 0|1
+  local want=$1 id name key
+  have xfconf-query || return 0
+  for id in $(touchpad_ids); do
+    name=$(xinput list --name-only "$id" 2> /dev/null) || continue
+    key=$(xfconf_key "$name")
+    if xfconf-query -c pointers -p "$key" > /dev/null 2>&1; then
+      xfconf-query -c pointers -p "$key" -s "$want" 2> /dev/null
+    fi
+  done
+}
+
+read_state() { [ -r "$STATE_FILE" ] && head -n1 "$STATE_FILE" || printf '%s\n' "$DEFAULT_STATE"; }
+write_state() { mkdir -p "$STATE_DIR"; printf '%s\n' "$1" > "$STATE_FILE"; }
+
+apply_nodes() {                 # apply_nodes disabled|enabled  (no state write)
+  local want=$1 xi ids id name
+  case "$want" in
+    disabled) xi=disable ;;
+    enabled)  xi=enable ;;
+    *) echo "touchpad: bad state '$want'" >&2; return 2 ;;
+  esac
+  ids=$(touchpad_ids)
+  if [ -z "$ids" ]; then
+    echo "touchpad: no device matching /$MATCH/ found" >&2
+    return 1
+  fi
+  for id in $ids; do
+    name=$(xinput list --name-only "$id" 2> /dev/null)
+    xinput "$xi" "$id" 2> /dev/null && printf '  %s: %s (id=%s)\n' "$want" "$name" "$id"
+  done
+  [ "$want" = disabled ] && sync_xfconf 0 || sync_xfconf 1
+}
+
+status() {
+  local id name en
+  printf 'desired: %s\n' "$(read_state)"
+  printf 'devices matching /%s/:\n' "$MATCH"
+  for id in $(touchpad_ids); do
+    name=$(xinput list --name-only "$id" 2> /dev/null)
+    en=$(xinput list-props "$id" 2> /dev/null | awk -F: '/Device Enabled/{gsub(/[ \t]/,"",$2);print $2;exit}')
+    printf '  id=%-3s live-enabled=%s  %s\n' "$id" "${en:-?}" "$name"
+  done
+}
+
+case "${1:-disable}" in
+  disable) apply_nodes disabled && write_state disabled ;;
+  enable)  apply_nodes enabled  && write_state enabled ;;
+  toggle)
+    if [ "$(read_state)" = disabled ]; then
+      apply_nodes enabled && write_state enabled
+    else
+      apply_nodes disabled && write_state disabled
+    fi
+    ;;
+  apply)   apply_nodes "$(read_state)" ;;
+  status)  status ;;
+  -h | --help | help) sed -n '2,19p' "$0" ;;
+  *) echo "usage: touchpad [disable|enable|toggle|status|apply]" >&2; exit 2 ;;
+esac

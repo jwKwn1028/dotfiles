@@ -1,0 +1,23 @@
+[".zsh/plugins/zsh-helix-mode"]
+type = "git-repo"
+url = "https://github.com/Multirious/zsh-helix-mode.git"
+refreshPeriod = "168h"
+
+[ ".zsh/plugins/zsh-helix-mode".clone ]
+args = ["--depth=1"]
+
+["helix.vim"]
+type = "git-repo"
+url = "https://github.com/chtenb/helix.vim.git"
+refreshPeriod = "168h"
+
+[ "helix.vim".clone ]
+args = ["--depth=1"]
+
+[".vim/pack/themes/opt/tokyonight-vim"]
+type = "git-repo"
+url = "https://github.com/ghifarit53/tokyonight-vim.git"
+refreshPeriod = "168h"
+
+[ ".vim/pack/themes/opt/tokyonight-vim".clone ]
+args = ["--depth=1"]

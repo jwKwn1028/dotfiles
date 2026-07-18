@@ -1,0 +1,75 @@
+# Font (trial: NewComputerModernMono10 Regular 16)
+font-family = NewComputerModernMono10
+font-family = NanumGothicCoding
+font-family = Noto Sans CJK KR
+# Private-use glyph fallback for CLI icons; regular text stays in NewCM above.
+font-family = Hack Nerd Font Mono
+font-style = Regular
+font-size = 18
+font-feature = -calt, -liga, -dlig
+
+# Initial window size in cells (matches xfce default-geometry 120x36)
+window-width = 120
+window-height = 36
+window-padding-x = 8
+window-padding-y = 8
+
+# Built-in TokyoNight Storm (matches Helix tokyonight_storm palette/aesthetic)
+theme = TokyoNight Storm
+
+# Override: match Helix's exact background (theme default is #24283b)
+background = #292d3e
+
+# Keep the green block cursor from the xfce setup
+cursor-style = block
+cursor-color = #86be43
+cursor-text = #1d202f
+
+# tmux compatibility: your ~/.tmux.conf has `terminal-overrides ",xterm-256color:RGB"`,
+# so set TERM=xterm-256color here to keep that override working without editing tmux.conf.
+term = xterm-256color
+
+# Shell integration (zsh auto-detected; this is explicit)
+shell-integration = zsh
+shell-integration-features = cursor,sudo,title
+
+# Disable bold rendering (matches xfce font-allow-bold = false)
+font-style-bold = false
+
+# Disable all window decorations: GTK header bar (tabs/controls panel)
+# AND the XFWM server-side titlebar (minimize/maximize/close).
+window-decoration = none
+
+# Belt-and-suspenders: explicitly hide the GTK headerbar/tabstrip even
+# when window-decoration would normally cover it.
+gtk-titlebar = false
+
+# Never show the tab bar, even with multiple tabs.
+# Switch tabs via keybind (ctrl+shift+left/right) or the tab overview.
+window-show-tab-bar = never
+
+# Disable the default Ctrl+Enter fullscreen toggle.
+keybind = ctrl+enter=unbind
+
+# Hide the scrollbar (still scrollable via wheel/keybinds)
+scrollbar = never
+
+# Quality-of-life
+mouse-hide-while-typing = true
+clipboard-trim-trailing-spaces = true
+confirm-close-surface = false
+copy-on-select = clipboard
+
+# Faster wheel scrolling (default discrete:3 felt slow vs Firefox/xfce4-terminal)
+mouse-scroll-multiplier = precision:3,discrete:5
+
+# Silence everything: no toasts, no bell side-effects, no command-finish pings,
+# no terminal-content-triggered desktop notifications (Claude Code OSC 9, etc.)
+app-notifications = no-clipboard-copy,no-config-reload
+bell-features = no-system,no-audio,no-attention,no-title,no-border
+notify-on-command-finish = never
+progress-style = false
+desktop-notifications = false
+
+# Don't dim the unfocused split
+unfocused-split-opacity = 1

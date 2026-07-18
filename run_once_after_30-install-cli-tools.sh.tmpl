@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Installs tooling that isn't packaged in apt: the Rust toolchain + cargo
+# crates, starship, zoxide, and Miniconda. Best-effort: a single failed
+# crate logs a warning and does not abort the rest of provisioning.
+set -euo pipefail
+
+echo "==> CLI tools provisioning"
+
+# --- Rust toolchain (rustup) ---
+if ! command -v cargo >/dev/null 2>&1; then
+    echo "  installing rustup..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+fi
+# shellcheck disable=SC1091
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+# --- cargo crates from crates.io ---
+{{- range .packages.cargo.registry }}
+cargo install --locked {{ . }} || echo "WARN: cargo install {{ . }} failed"
+{{- end }}
+
+# --- cargo crates from git ---
+{{- range .packages.cargo.git }}
+cargo install --git {{ . | quote }} --locked || echo "WARN: cargo install --git {{ . }} failed"
+{{- end }}
+
+# --- starship prompt ---
+if ! command -v starship >/dev/null 2>&1; then
+    echo "  installing starship..."
+    curl -sS https://starship.rs/install.sh | sh -s -- -y
+fi
+
+# --- zoxide (installs to ~/.local/bin, matching this machine) ---
+if ! command -v zoxide >/dev/null 2>&1; then
+    echo "  installing zoxide..."
+    curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh
+fi
+
+# --- Miniconda (shell configs expect ~/miniconda3) ---
+if [ ! -d "$HOME/miniconda3" ]; then
+    echo "  installing Miniconda to ~/miniconda3..."
+    tmp="$(mktemp -d)"
+    curl -fsSL "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" -o "$tmp/miniconda.sh"
+    bash "$tmp/miniconda.sh" -b -p "$HOME/miniconda3"
+    rm -rf "$tmp"
+fi
+
+echo "==> CLI tools provisioning done."

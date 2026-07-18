@@ -1,0 +1,15 @@
+# Starship-like Codex TUI status line setup.
+# Codex reads the active status line from ~/.codex/config.toml; this file keeps
+# the segment order easy to restore after cleanup or config rebuilds.
+
+[tui]
+status_line_use_colors = true
+status_line = [
+  "current-dir",
+  "git-branch",
+  "branch-changes",
+  "model-with-reasoning",
+  "fast-mode",
+  "context-used",
+  "context-remaining",
+]

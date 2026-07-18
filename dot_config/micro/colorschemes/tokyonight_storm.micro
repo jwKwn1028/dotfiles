@@ -1,0 +1,64 @@
+# TokyoNight Storm for Micro — matched to the local Helix theme.
+#
+# Mirrors ~/.config/helix/themes/tokyonight_storm.toml, which inherits Helix's
+# bundled `tokyonight` theme (/usr/lib/helix/runtime/themes/tokyonight.toml).
+# Storm palette overrides used below:
+#   bg #292d3e   bg-menu #1f2335   bg-cursorline #363d5c
+#   bg-selection #373d5a   bg-focus #2e3c64
+#   border #1d202f   fg #c0caf5   fg-dark #a9b1d6
+#   fg-gutter #3b4261   fg-linenr-selected #7dcfff (bold)
+#
+# The `scrollbar` group only renders when settings.json sets "scrollbar": true.
+# `cursor-line` is foreground-only on purpose: micro reads that group's fg and
+# applies it as the line's background.
+
+color-link default "#c0caf5,#292d3e"
+color-link comment "italic #565f89,#292d3e"
+
+color-link constant "#ff9e64,#292d3e"
+color-link constant.number "#ff9e64,#292d3e"
+color-link constant.bool "#2ac3de,#292d3e"
+color-link constant.string "#9ece6a,#292d3e"
+color-link constant.string.char "#9ece6a,#292d3e"
+color-link constant.specialChar "#bb9af7,#292d3e"
+
+color-link identifier "#7dcfff,#292d3e"
+color-link identifier.class "#7aa2f7,#292d3e"
+color-link identifier.var "#c0caf5,#292d3e"
+
+color-link statement "italic #bb9af7,#292d3e"
+color-link preproc "#7dcfff,#292d3e"
+color-link type "#2ac3de,#292d3e"
+color-link type.extended "#2ac3de,#292d3e"
+color-link type.keyword "italic #9d7cd8,#292d3e"
+color-link special "#7dcfff,#292d3e"
+color-link symbol "#89ddff,#292d3e"
+color-link symbol.brackets "#89ddff,#292d3e"
+color-link symbol.operator "#89ddff,#292d3e"
+color-link symbol.tag "#bb9af7,#292d3e"
+color-link underlined "underline #7aa2f7,#292d3e"
+
+color-link error "bold #db4b4b,#292d3e"
+color-link todo "bold #e0af68,#292d3e"
+color-link hlsearch "#1d202f,#e0af68"
+color-link match-brace "bold #ff9e64,#292d3e"
+
+color-link diff-added "#449dab"
+color-link diff-modified "#6183bb"
+color-link diff-deleted "#914c54"
+color-link gutter-error "#db4b4b,#292d3e"
+color-link gutter-warning "#e0af68,#292d3e"
+
+color-link line-number "#3b4261,#292d3e"
+color-link current-line-number "bold #7dcfff,#292d3e"
+color-link scrollbar "#7aa2f7,#292d3e"
+color-link cursor-line "#363d5c"
+color-link selection "#c0caf5,#373d5a"
+color-link color-column "#3b4261"
+color-link indent-char "#3b4261,#292d3e"
+color-link divider "#1d202f,#292d3e"
+
+color-link statusline "#a9b1d6,#1f2335"
+color-link statusline.inactive "#3b4261,#1f2335"
+color-link tabbar "#a9b1d6,#1f2335"
+color-link tabbar.active "#c0caf5,#2e3c64"

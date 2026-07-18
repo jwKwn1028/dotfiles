@@ -1,0 +1,20 @@
+# Agent scaffolding stays local — except AGENTS.md and CLAUDE.md, which are
+# tracked on purpose so a fresh clone gets the repo's working rules. AGENTS.md
+# holds the content; CLAUDE.md imports it. Keep both free of secrets.
+.AGENTS.md
+.claude
+.codex
+claude.md
+dot_config/**/dot_git/
+dot_config/**/dot_codex/
+dot_config/**/dot_agents/
+dot_config/i3/resurrect*
+dot_config/i3/MANUAL.pdf
+
+# Browser profiles contain bookmarks, account/sync identifiers, history-like
+# metadata, and other machine state. Keep the entire source trees local.
+dot_config/private_net.imput.helium/
+dot_var/app/app.zen_browser.zen/
+
+__pycache__/
+*.py[cod]

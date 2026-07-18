@@ -1,0 +1,45 @@
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+personality = "pragmatic"
+plan_mode_reasoning_effort = "xhigh"
+service_tier = "fast"
+
+[features]
+multi_agent = true
+
+[notice]
+"hide_gpt-5.1-codex-max_migration_prompt" = true
+
+[notice.model_migrations]
+"gpt-5.2" = "gpt-5.2-codex"
+
+[tui]
+animations = false
+theme = "tokyonight_storm"
+status_line_use_colors = true
+# Starship-style: cwd -> git -> model/speed -> context.
+status_line = ["current-dir", "git-branch", "branch-changes", "model-with-reasoning", "fast-mode", "context-used", "context-remaining"]
+
+[tui.model_availability_nux]
+"gpt-5.3-codex-spark" = 4
+"gpt-5.5" = 4
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
+
+[mcp_servers.context7.env]
+# Rendered from the chezmoi config value (prompted once at `chezmoi init`) or
+# from the CONTEXT7_API_KEY env var, whichever is set. Never stored in git.
+{{ $c7 := env "CONTEXT7_API_KEY" -}}
+{{ if and (not $c7) (hasKey . "context7ApiKey") }}{{ $c7 = .context7ApiKey }}{{ end -}}
+{{ if $c7 }}CONTEXT7_API_KEY = {{ $c7 | quote }}{{ end }}
+
+[mcp_servers.google_workspace]
+command = "node"
+args = ["scripts/start.js"]
+cwd = "{{ .chezmoi.homeDir }}/mcp/google-workspace"
+
+[mcp_servers.codex]
+command = "codex"
+args = ["mcp-server"]

@@ -1,0 +1,14 @@
+[user]
+	email = {{ if hasKey . "email" }}{{ .email }}{{ else }}217174958+jwKwn1028@users.noreply.github.com{{ end }}
+	name = {{ if hasKey . "name" }}{{ .name }}{{ else }}jwKwn1028{{ end }}
+[url "https://github.com/"]
+	insteadOf = git://github.com/
+[credential]
+	helper = /usr/share/doc/git/contrib/credential/libsecret/git-credential-libsecret
+[filter "lfs"]
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f
+[push]
+	autoSetupRemote = true

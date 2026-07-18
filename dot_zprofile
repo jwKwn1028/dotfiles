@@ -1,0 +1,19 @@
+typeset -U path PATH
+
+export TYPST_INSTALL="${TYPST_INSTALL:-$HOME/.typst}"
+
+path=(
+  "$HOME/miniconda3/condabin"
+  "$HOME/miniconda3/bin"
+  "/usr/local/go/bin"
+  "$HOME/.local/bin"
+  "$HOME/.local/npm-global/bin"
+  "$TYPST_INSTALL/bin"
+  "$HOME/Applications/FullProf_Suite"
+  "$HOME/.juliaup/bin"
+  "$HOME/Applications/qe-7.5/bin"
+  "${path[@]}"
+)
+export PATH
+
+[[ -r "$HOME/.zsh/conda-lazy.zsh" ]] && source "$HOME/.zsh/conda-lazy.zsh"

@@ -1,0 +1,19 @@
+# Patterns here match the TARGET path (relative to $HOME), gitignore-style.
+
+# ─── Repo documentation ───────────────────────────────────────────────────
+# These describe the source repo; they are not dotfiles. Without this block
+# `chezmoi apply` writes them to ~/README.md etc. (`chezmoi status` shows them
+# as `A`), littering $HOME. Leading slash anchors to $HOME so that a nested
+# README.md elsewhere in the target tree is still applied normally.
+/README.md
+/X11_TO_WAYLAND_TRANSITION.md
+/MACOS_PORTING_GUIDE.md
+/AGENTS.md
+/CLAUDE.md
+/LICENSE
+
+# ─── Browser profiles ──────────────────────────────────────────────────────
+# Browser profiles stay entirely local. They contain bookmarks, account/sync
+# identifiers, site-engagement records, and other machine-generated state.
+.config/net.imput.helium/
+.var/app/app.zen_browser.zen/

@@ -1,0 +1,86 @@
+# nano config -- mirrors ~/.config/helix/config.toml as closely as nano allows.
+# Things nano cannot do: modal editing (jk→normal), relative line numbers,
+# cursor-shape per mode, bufferline tabs, indent guides, wrap-indicator glyph,
+# current-line highlight (no cursorline option in any nano version).
+
+## --- editor behavior -------------------------------------------------------
+
+set linenumbers                # helix: line-number (relative not supported)
+# set guidestripe 100          # helix: text-width = 100 (disabled — vertical line was distracting)
+set softwrap                   # helix: soft-wrap.enable = true
+set atblanks                   #        wrap on word boundaries
+set mouse                      # helix: mouse = true
+set multibuffer                # helix: bufferline = "multiple" (closest)
+set trimblanks                 # helix: trim-trailing-whitespace (hard-wrap only)
+
+set tabsize 4
+set tabstospaces
+set autoindent
+set smarthome
+set afterends                  # ctrl-right stops past word end, not before
+set zap                        # backspace/delete kills the selection
+unset indicator                # disable right-edge scrollbar/position bar
+set minibar                    # one-line bottom status
+set stateflags                 # show modified/restricted flags
+set constantshow               # show line/column in minibar
+set positionlog                # remember cursor position per file
+set historylog                 # persist search/replace history
+set wordbounds                 # punctuation breaks words
+set colonparsing               # accept file:line[:column] arguments
+set locking                    # vim-style lock files for shared edits
+set nohelp                   # show default two-line shortcut/help bar
+
+## --- tokyonight storm palette ---------------------------------------------
+# nano only accepts 3-digit hex (#rgb), so these are quantized approximations.
+
+set titlecolor      bold,#cbf,#123
+set promptcolor     #cbf,#123
+set statuscolor     bold,#112,#7af
+set errorcolor      bold,#112,#f78
+set spotlightcolor  bold,#112,#ea6
+set selectedcolor   #cbf,#348
+set stripecolor     ,#234
+set scrollercolor   #7af
+set numbercolor     #346
+set keycolor        bold,#7cf
+set functioncolor   #9c6
+set minicolor       #cbf,#123
+
+## --- syntax highlighting --------------------------------------------------
+# nano 9.0 installs syntaxes under ~/.local/share/nano (user-build prefix).
+# Include both the main and extra syntax sets from the local nano install.
+
+include "~/.local/share/nano/*.nanorc"
+include "~/.local/share/nano/extra/*.nanorc"
+
+## --- keybindings ----------------------------------------------------------
+# Helix [keys.insert] alt-hjkl movement -- nano isn't modal so these are
+# always active.
+
+bind M-h left  main
+bind M-j down  main
+bind M-k up    main
+bind M-l right main
+bind M-q home  main
+bind M-e end   main
+bind M-w nextword main
+bind M-b prevword main
+bind M-, prevbuf main
+bind M-. nextbuf main
+
+# Convenience binds matching helix muscle memory.
+bind ^Q exit     main          # ctrl-q to quit (like :q)
+bind ^S savefile main          # ctrl-s to save (like :w)
+bind ^F whereis  main          # ctrl-f to find
+bind ^_ gotoline main          # ctrl-/ jump to line
+bind ^K cut      main          # restore default cut after rebinds
+bind M-v mark        main
+bind M-/ comment     main
+bind M-m findbracket main
+bind M-n findnext    main
+bind M-p findprevious main
+bind M-z undo        main
+bind M-r redo        main
+bind M-; nohelp      all       # toggle shortcut/help bar
+
+# Selection + Tab / Shift-Tab to indent/unindent is built-in -- no bind needed.

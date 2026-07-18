@@ -1,0 +1,66 @@
+#!/bin/sh
+set -eu
+
+find_pointer_ids() {
+	name=$1
+
+	xinput list --short 2>/dev/null | awk -v name="$name" '
+		index($0, name) && $0 ~ /\[slave[[:space:]]+pointer/ {
+			if (match($0, /id=[0-9]+/)) {
+				print substr($0, RSTART + 3, RLENGTH - 3)
+			}
+		}
+	'
+}
+
+disable_button_2() {
+	device_id=$1
+
+	current_map=$(xinput get-button-map "$device_id" 2>/dev/null || true)
+	[ -n "$current_map" ] || return 0
+
+	set -- $current_map
+	[ "$#" -ge 2 ] || return 0
+
+	index=1
+	new_map=
+	for button in "$@"; do
+		if [ "$index" -eq 2 ]; then
+			button=0
+		fi
+
+		if [ -n "$new_map" ]; then
+			new_map="$new_map $button"
+		else
+			new_map=$button
+		fi
+
+		index=$((index + 1))
+	done
+
+	if [ "$new_map" != "$current_map" ]; then
+		xinput set-button-map "$device_id" $new_map 2>/dev/null || true
+	fi
+}
+
+apply_maps() {
+	for device in \
+		'TPPS/2 Elan TrackPoint' \
+		'ELAN0688:00 04F3:320B Mouse' \
+		'Lenovo TrackPoint Keyboard II'
+	do
+		for device_id in $(find_pointer_ids "$device"); do
+			disable_button_2 "$device_id"
+		done
+	done
+}
+
+if [ "${1:-}" = "--once" ]; then
+	apply_maps
+	exit 0
+fi
+
+while :; do
+	apply_maps
+	sleep 2
+done

@@ -1,0 +1,22 @@
+{
+    "Alt-h": "CursorLeft",
+    "Alt-j": "CursorDown",
+    "Alt-k": "CursorUp",
+    "Alt-l": "CursorRight",
+    "Alt-q": "StartOfLine",
+    "Alt-e": "EndOfLine",
+    "Alt-w": "WordRight",
+    "Alt-b": "WordLeft",
+    "Alt-,": "PreviousTab",
+    "Alt-.": "NextTab",
+    "Alt-z": "Undo",
+    "Alt-r": "Redo",
+    "Alt-/": "lua:comment.comment",
+    "CtrlUnderscore": "lua:comment.comment",
+    "Ctrl-o": "lua:fzf.fzf",
+    "Ctrl-g": "command-edit:goto ",
+    "Alt-g": "CursorStart",
+    "Alt-G": "CursorEnd",
+    "Alt-m": "JumpToMatchingBrace",
+    "Alt-t": "lua:filemanager.toggle_tree"
+}

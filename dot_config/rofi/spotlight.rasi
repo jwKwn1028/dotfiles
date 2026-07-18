@@ -1,0 +1,89 @@
+/* Tokyo Night flavored rofi theme. drun mode, no prompt label, top-anchored. */
+
+configuration {
+    icon-theme: "Papirus";
+    sort: true;
+    sorting-method: "fzf";
+    matching: "fuzzy";
+}
+
+* {
+    /* Tokyo Night palette */
+    tn-bg:        #292d3e;
+    tn-bg-alt:    #24283b;
+    tn-bg-hl:     #283457;
+    tn-fg:        #c0caf5;
+    tn-fg-dim:    #565f89;
+    tn-blue:      #7aa2f7;
+    tn-border:    #292e42;
+
+    background-color: transparent;
+    text-color:       @tn-fg;
+    font: "NewComputerModernMono10 Regular 16";
+}
+
+window {
+    width: 640px;
+    location: north;
+    anchor: north;
+    y-offset: 15%;
+    background-color: @tn-bg;
+    border:          1px;
+    border-color:    @tn-border;
+    border-radius:   0;
+    padding:         12px;
+}
+
+mainbox {
+    children: [ inputbar, listview ];
+    spacing:  12px;
+}
+
+inputbar {
+    background-color: @tn-bg-alt;
+    border-radius:    0;
+    padding:          10px 14px;
+    children: [ entry ];
+}
+
+entry {
+    placeholder:       "Search";
+    placeholder-color: @tn-fg-dim;
+    background-color:  transparent;
+    text-color:        @tn-fg;
+}
+
+listview {
+    lines:        8;
+    spacing:      4px;
+    fixed-height: false;
+    scrollbar:    false;
+}
+
+element {
+    padding:       8px 12px;
+    border-radius: 0;
+    children: [ element-icon, element-text ];
+    spacing:       10px;
+}
+
+element-icon {
+    size:             22px;
+    background-color: transparent;
+    vertical-align:   0.5;
+}
+
+element-text {
+    background-color: transparent;
+    text-color:       inherit;
+    vertical-align:   0.5;
+}
+
+element selected {
+    background-color: @tn-bg-hl;
+    text-color:       @tn-fg;
+}
+
+element urgent {
+    text-color: #f7768e;
+}

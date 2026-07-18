@@ -1,0 +1,13 @@
+{{- /* Bootstrap config template. Runs on `chezmoi init`; the answers are
+       stored in ~/.config/chezmoi/chezmoi.toml (NOT in this git repo) and are
+       available to every other template as .name / .email / .class / etc. */ -}}
+{{- $name    := promptStringOnce . "name"  "Full name (git author)"        "jwKwn1028" -}}
+{{- $email   := promptStringOnce . "email" "Email (git author)"            "217174958+jwKwn1028@users.noreply.github.com" -}}
+{{- $class   := promptStringOnce . "class" "Machine class [desktop|server]" "desktop" -}}
+{{- $context7 := promptStringOnce . "context7ApiKey" "Context7 API key (blank to skip)" "" -}}
+
+[data]
+    name           = {{ $name | quote }}
+    email          = {{ $email | quote }}
+    class          = {{ $class | quote }}
+    context7ApiKey = {{ $context7 | quote }}

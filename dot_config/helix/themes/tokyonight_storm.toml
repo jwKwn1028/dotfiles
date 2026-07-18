@@ -1,0 +1,16 @@
+# Author: Paul Graydon <untimely.creation97@proton.me>
+
+inherits = "tokyonight"
+
+# Contrasting line number for the line the cursor is on.
+"ui.linenr.selected" = { fg = "cyan", modifiers = ["bold"] }
+
+[palette]
+border = "#1d202f"
+bg = "#292d3e"
+bg-cursorline = "#363d5c"
+bg-inlay = "#233745"
+bg-selection = "#3d59a1"
+bg-menu = "#1f2335"
+bg-focus = "#2e3c64"
+border-highlight = "#29a4bd"

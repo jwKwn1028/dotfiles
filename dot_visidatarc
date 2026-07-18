@@ -1,0 +1,101 @@
+from visidata import options, vd
+
+# Use Tokyo Night hex colors as the source of truth. VisiData 3.0 maps them to
+# the nearest xterm-256 color, so this is the closest it can get natively.
+_SYSTEM_COLORS = [
+    (0x00, 0x00, 0x00), (0x80, 0x00, 0x00), (0x00, 0x80, 0x00), (0x80, 0x80, 0x00),
+    (0x00, 0x00, 0x80), (0x80, 0x00, 0x80), (0x00, 0x80, 0x80), (0xc0, 0xc0, 0xc0),
+    (0x80, 0x80, 0x80), (0xff, 0x00, 0x00), (0x00, 0xff, 0x00), (0xff, 0xff, 0x00),
+    (0x00, 0x00, 0xff), (0xff, 0x00, 0xff), (0x00, 0xff, 0xff), (0xff, 0xff, 0xff),
+]
+_CUBE_STEPS = (0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff)
+_XTERM256 = (
+    _SYSTEM_COLORS
+    + [(r, g, b) for r in _CUBE_STEPS for g in _CUBE_STEPS for b in _CUBE_STEPS]
+    + [(8 + i * 10, 8 + i * 10, 8 + i * 10) for i in range(24)]
+)
+
+
+def hex256(hexcode, fallback):
+    hexcode = hexcode.lstrip('#')
+    rgb = tuple(int(hexcode[i:i + 2], 16) for i in (0, 2, 4))
+    idx = min(
+        range(256),
+        key=lambda i: sum((rgb[channel] - _XTERM256[i][channel]) ** 2 for channel in range(3)),
+    )
+    return f"{idx} {fallback}"
+
+
+palette = {
+    'bg': hex256('#292d3e', 'black'),
+    'bg_menu': hex256('#1f2335', 'black'),
+    'bg_selection': hex256('#373d5a', 'black'),
+    'fg': '153 white',
+    'fg_muted': '146 white',
+    'comment': '60 blue',
+    'gutter': '239 blue',
+    'cyan': '117 cyan',
+    'blue': '111 blue',
+    'magenta': '141 magenta',
+    'green': '149 green',
+    'yellow': '179 yellow',
+    'red': '167 red',
+}
+
+vd.themes['tokyonight_storm_like'] = dict(
+    # Base
+    color_default=f"{palette['fg']} on {palette['bg']}",
+    color_default_hdr=f"bold {palette['fg']} on {palette['bg_menu']}",
+    color_bottom_hdr=f"underline {palette['fg_muted']} on {palette['bg_menu']}",
+
+    # Cursor / selection
+    color_current_row=f"on {palette['bg_menu']}",
+    color_current_col=f"bold {palette['blue']}",
+    color_current_cell=f"bold 235 black on {palette['blue']}",
+    color_current_hdr=f"bold 235 black on {palette['blue']}",
+    color_selected_row=f"{palette['magenta']} on {palette['bg_selection']}",
+    color_edit_cell=f"235 black on {palette['green']}",
+
+    # Table structure
+    color_column_sep=palette['gutter'],
+    color_key_col=palette['cyan'],
+    color_hidden_col=palette['comment'],
+
+    # Notes / statuses
+    color_note_pending=f"bold {palette['magenta']}",
+    color_note_type=palette['yellow'],
+    color_note_row=palette['yellow'],
+    color_add_pending=palette['green'],
+    color_change_pending=f"bold {palette['yellow']} on {palette['bg_selection']}",
+    color_delete_pending=palette['red'],
+    color_error=palette['red'],
+    color_warning=palette['yellow'],
+
+    # Status / menu
+    color_status=f"bold {palette['fg_muted']} on {palette['bg_menu']}",
+    color_top_status=f"{palette['fg_muted']} on {palette['bg_menu']}",
+    color_active_status=f"bold 236 black on {palette['blue']}",
+    color_inactive_status=f"{palette['comment']} on {palette['bg_menu']}",
+    color_highlight_status=f"236 black on {palette['green']}",
+    color_keystrokes=f"bold {palette['cyan']} on {palette['bg_menu']}",
+    color_keys=f"bold {palette['cyan']}",
+    color_longname=f"{palette['cyan']} on {palette['bg_menu']}",
+    color_menu=f"{palette['fg']} on {palette['bg_menu']}",
+    color_menu_active=f"bold {palette['fg']} on {palette['bg_selection']}",
+    color_menu_spec=f"bold 235 black on {palette['magenta']}",
+    color_menu_help=f"{palette['fg_muted']} on {palette['bg_menu']}",
+
+    # Sidebar / graph
+    color_sidebar=f"{palette['fg']} on {palette['bg_menu']}",
+    color_sidebar_title=f"bold 235 black on {palette['blue']}",
+    color_graph_axis=palette['comment'],
+    color_graph_hidden=palette['comment'],
+    color_graph_selected=f"bold {palette['cyan']}",
+
+    # Secondary UI
+    color_clickable=f"underline {palette['blue']}",
+    color_heading=f"bold {palette['cyan']}",
+    plot_colors='111 141 149 179 117 210 80 215',
+)
+
+options.theme = 'tokyonight_storm_like'

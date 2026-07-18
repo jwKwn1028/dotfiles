@@ -1,0 +1,7 @@
+configuration {
+  modi: "drun,run,window";
+  show-icons: true;
+  drun-display-format: "{name}";
+  font: "NewComputerModernMono10 Regular 13";
+}
+@theme "/usr/share/rofi/themes/Arc-Dark.rasi"

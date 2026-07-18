@@ -1,0 +1,52 @@
+" --- Theme: match Helix (tokyonight_storm in ~/.config/helix/config.toml) -
+packadd! tokyonight-vim
+set termguicolors
+let g:tokyonight_style = 'storm'
+let g:tokyonight_enable_italic = 1
+colorscheme tokyonight
+
+" Display settings mirroring the Helix config
+set number relativenumber
+set cursorline
+set mouse=a
+set shortmess+=I
+
+" --- Minimal Helix-style mappings ---------------------------------------
+" Fallback layer: helix.vim (sourced below) redefines most of these with
+" fuller behavior. These only take effect if the source line is removed.
+nnoremap U <C-r>
+nnoremap gh 0
+nnoremap gs ^
+nnoremap gl $
+nnoremap ge G
+nnoremap x V
+xnoremap x j
+
+" --- Full Helix emulation (https://github.com/chtenb/helix.vim) ----------
+source ~/helix.vim/helix.vim
+
+" --- Clipboard to LOCAL machine over SSH via OSC 52 ---
+" Space-y pushes a selection to your laptop clipboard (Helix muscle memory)
+nmap <Space>y  <Plug>OSCYankOperator
+nmap <Space>yy <Space>y_
+xmap <Space>y  <Plug>OSCYankVisual
+
+" --- Cursor shape per mode (match Helix cursor-shape) -----------------
+" DECSCUSR codes: 1/2 = block, 3/4 = underline, 5/6 = bar  (even = steady)
+let &t_SI = "\e[6 q"   " INSERT  -> bar
+let &t_SR = "\e[4 q"   " REPLACE -> underline
+let &t_EI = "\e[2 q"   " NORMAL  -> block
+
+" Restore a block cursor when you quit vim (so your shell prompt isn't left as a bar)
+if exists('*echoraw')
+  autocmd VimLeave * call echoraw("\e[2 q")
+else
+  autocmd VimLeave * silent! execute "!printf '\\e[2 q'"
+endif
+
+" Helix 'select' mode = vim Visual: underline cursor (needs vim 9.0+; no-op otherwise)
+if exists('*echoraw') && exists('##ModeChanged')
+  autocmd ModeChanged *:[vV\x16] call echoraw("\e[4 q")   " entering visual  -> underline
+  autocmd ModeChanged [vV\x16]:n call echoraw("\e[2 q")   " visual -> normal -> block
+  autocmd ModeChanged [vV\x16]:i call echoraw("\e[6 q")   " visual -> insert -> bar
+endif

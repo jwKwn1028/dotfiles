@@ -1,0 +1,31 @@
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "auto"  // Keeps your previous preference for no ASCII art
+  },
+  "modules": [
+    "title",
+    "separator",
+    "os",
+    "kernel",
+    "uptime",
+    "packages",
+    "shell",
+    "de",
+    "wm",
+    // "wmtheme",   // Removed (Theme)
+    // "theme",     // Removed (Theme)
+    // "icons",     // Removed (Icons)
+    // "font",      // Removed (Font)
+    // "cursor",    // Removed (Cursor)
+    "terminal",
+    // "display",   // Removed (Display/Resolution)
+    "cpu",
+    "gpu",
+    "memory",
+    "disk",
+    "battery",
+    "break",
+    // "colors"
+  ]
+}

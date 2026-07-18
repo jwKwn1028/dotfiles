@@ -1,0 +1,90 @@
+theme = "tokyonight_storm"
+
+[editor]
+cursorline= true
+color-modes = true
+popup-border = "menu"
+text-width = 100
+trim-trailing-whitespace = true
+trim-final-newlines=true
+line-number = "relative"
+mouse = true
+bufferline = "multiple"
+
+[editor.gutters.line-numbers]
+min-width = 2
+
+[editor.statusline]
+left = ["mode", "spinner", "file-name", "read-only-indicator", "file-modification-indicator"]
+center = []
+right = ["diagnostics", "selections", "register", "position", "position-percentage", "file-type"]
+separator = "│"
+diagnostics = ["error", "warning"]
+mode.normal = "N"
+mode.insert = "I"
+mode.select = "S"
+
+[editor.cursor-shape]
+insert = "bar"
+normal = "block"
+select = "underline"
+
+[editor.inline-diagnostics]
+cursor-line = "warning"
+other-lines = "disable"
+
+# Soft wrapping: enabled globally. Per-language overrides in languages.toml
+# can still adjust wrapping for specific filetypes.
+[editor.soft-wrap]
+enable = true
+max-wrap = 25
+max-indent-retain = 0
+wrap-indicator = "↪ "
+wrap-at-text-width = true
+
+[editor.lsp]
+display-progress-messages = true
+display-inlay-hints = true
+
+
+[editor.file-picker]
+hidden = false
+parents = true
+
+[keys.normal]
+"ret" = ["open_below", "normal_mode"]
+# "C" = ":clipboard-yank"
+"V" = ":clipboard-paste-after"
+# SyncTeX forward-search: jump the running zathura/sioyek to the line under
+# the cursor. Works fully for .tex; partial for .md (synctex maps to the
+# pandoc-generated tex); typst has no synctex so this just raises the viewer.
+"C-l" = ":sh ~/.local/bin/hx-fwd-search '%{buffer_name}' %{cursor_line} %{cursor_column}"
+"C-y" = [
+  ':insert-output HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi run "%{buffer_name}"',
+  ':sh printf "\x1b[?1049h\x1b[?2004h\x1b[2 q" > /dev/tty',
+  ':cd %sh{HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi cwd "%{buffer_name}"}',
+  ':open %sh{HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi choice "%{buffer_name}"}',
+  ':sh HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi cleanup',
+  ':redraw',
+  ':echo " "',
+]
+
+[keys.insert]
+A-h = "move_char_left"
+A-j = "move_line_down"
+A-k = "move_line_up"
+A-l = "move_char_right"
+A-q = "goto_line_start"
+A-e = "goto_line_end_newline"
+j = { k = "normal_mode" }
+
+[keys.select]
+# "C" = ":clipboard-yank"
+"V" = ":clipboard-paste-replace"
+tab = "indent"
+S-tab = "unindent"
+
+[editor.indent-guides]
+render = true
+character = "|"
+skip-levels = 0

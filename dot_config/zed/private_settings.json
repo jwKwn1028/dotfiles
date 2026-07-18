@@ -1,0 +1,93 @@
+{
+  "outline_panel": {
+    "dock": "left"
+  },
+  "collaboration_panel": {
+    "dock": "left"
+  },
+  "git_panel": {
+    "dock": "left"
+  },
+  "helix_mode": true,
+  "vim": {
+    "toggle_relative_line_numbers": true,
+    "use_system_clipboard": "always"
+  },
+  "format_on_save": "off",
+  "current_line_highlight": "all",
+  "edit_predictions": {
+    "mode": "subtle",
+  },
+  "disable_ai": true,
+  "scrollbar": { "show": "never"},
+  "agent": {
+    "dock": "right",
+    "button": false,
+    "favorite_models": [],
+    "model_parameters": [],
+  },
+  "which_key": {
+    "enabled": false,
+  },
+  "auto_update": true,
+  "restore_on_startup": "empty_tab",
+  "session": {
+    "trust_all_worktrees": true,
+  },
+  "icon_theme": "Colored Zed Icons Theme Dark",
+  "context_servers": {
+    "mcp-server-context7": {
+      "enabled": true,
+      "remote": false,
+      "settings": {},
+    },
+  },
+  "project_panel": {
+    "default_width": 160.0,
+    "dock": "right",
+  },
+  "telemetry": {
+    "diagnostics": true,
+    "metrics": false,
+  },
+  "terminal": {
+    "shell": "system",
+    "font_size": 14.5,
+    "font_family": "NewComputerModernMono10",
+  },
+  "base_keymap": "VSCode",
+  "status_bar": {
+    "experimental.show": false,
+  },
+  "tab_bar": {
+    "show": false,
+  },
+  "minimap": {
+    "show": "never",
+  },
+  "cursor_blink": false,
+  "buffer_font_fallbacks": ["Ubuntu Mono"],
+  "buffer_font_family": "NewComputerModernMono10",
+  "soft_wrap": "editor_width",
+  "ui_font_size": 14.5,
+  "buffer_font_size": 14.5,
+  "theme": {
+    "mode": "dark",
+    "light": "One Light",
+    "dark": "Palenight Theme",
+  },
+  "theme_overrides": {
+    "Palenight Theme": {
+      "panel.background": "#232635",
+      "element.active": "#1d3b53",
+      "element.selected": "#1d3b53",
+      "terminal.background": "#292D3E",
+      "text.muted": "#DXE5F0",
+      "text": "#e6edf3",
+    },
+  },
+  "gutter": {
+    "min_line_number_digits": 2,
+    "line_numbers": true,
+  },
+}

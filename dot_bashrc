@@ -1,0 +1,476 @@
+# ~/.bashrc — ported to mirror ~/.zshrc behavior where bash allows.
+# No bash equivalent (intentionally omitted): zsh-helix-mode modal editing,
+# zsh-autosuggestions, zsh-syntax-highlighting, zcompile, and the
+# AUTO_PUSHD-based `cd --`/`cd +N` multi-dash trick.
+
+# Bash-only file. If a different shell (e.g. zsh) sources it, bail out at once
+# so it doesn't choke on shopt/bind/complete/etc.
+[ -n "$BASH_VERSION" ] || return 0 2>/dev/null
+
+# If not running interactively, don't do anything
+case $- in
+  *i*) ;;
+  *) return ;;
+esac
+
+# --------------------------------------------------------
+# Startup Banner (Random, Centered, Bold, Green)
+# --------------------------------------------------------
+__startup_banner() {
+  local messages=(
+    "Welcome Back"
+    "Hello"
+    "What's the Plan?"
+    "Have a Nice Day"
+    "Ready to Focus"
+    "One at a Time"
+  )
+  local size=${#messages[@]}
+  local banner_text="${messages[$(( RANDOM % size ))]}"
+  local current_time; current_time=$(date '+%Y-%m-%d %H:%M:%S')
+
+  local cols=${COLUMNS:-0}
+  [ "$cols" -gt 0 ] 2>/dev/null || cols=$(tput cols 2>/dev/null || echo 80)
+
+  local pb=$(( (cols - ${#banner_text}) / 2 )); (( pb < 0 )) && pb=0
+  local pt=$(( (cols - ${#current_time}) / 2 )); (( pt < 0 )) && pt=0
+  local ib it
+  printf -v ib '%*s' "$pb" ''
+  printf -v it '%*s' "$pt" ''
+
+  # #86BE43 -> rgb(134,190,67); time in 256-color grey 245
+  printf '\n\033[1;38;2;134;190;67m%s%s\033[0m\n' "$ib" "$banner_text"
+  printf '\033[38;5;245m%s%s\033[0m\n\n' "$it" "$current_time"
+}
+if (( SHLVL <= 2 )); then
+  __startup_banner
+fi
+unset -f __startup_banner
+
+# --------------------------------------------------------
+# Shell options
+# --------------------------------------------------------
+shopt -s autocd 2>/dev/null      # AUTO_CD: bare `dir` => `cd dir`
+shopt -s extglob                 # EXTENDED_GLOB-ish extended patterns
+shopt -s globstar 2>/dev/null    # ** recursive glob
+shopt -s checkwinsize            # keep LINES/COLUMNS updated
+shopt -s histappend              # append history, don't overwrite
+shopt -s histverify              # HIST_VERIFY: load expansion onto line, don't auto-run
+shopt -s cmdhist                 # multiline command -> single history entry
+set -o noclobber                 # NO_CLOBBER: refuse to clobber existing files with >
+
+# readline tweaks (~ zsh menu/colored completion + NO_BEEP).
+# Ctrl-X Ctrl-E edits the current line in $EDITOR (bash default, like edit-command-line).
+bind 'set completion-ignore-case on'
+bind 'set completion-map-case on'        # treat - and _ as equivalent
+bind 'set show-all-if-ambiguous on'      # single Tab shows the menu
+bind 'set colored-stats on'
+bind 'set colored-completion-prefix on'
+bind 'set bell-style none'
+
+# --------------------------------------------------------
+# History
+# --------------------------------------------------------
+HISTFILE="${XDG_STATE_HOME:-$HOME/.local/state}/bash/history"
+[ -d "${HISTFILE%/*}" ] || mkdir -p -- "${HISTFILE%/*}"
+# Seed the XDG history from the old ~/.bash_history once, if present.
+if [ ! -s "$HISTFILE" ] && [ -s "$HOME/.bash_history" ]; then
+  cp -- "$HOME/.bash_history" "$HISTFILE" 2>/dev/null
+fi
+HISTSIZE=10000
+HISTFILESIZE=10000
+HISTCONTROL=ignoreboth:erasedups          # ~ HIST_IGNORE_ALL_DUPS + ignore leading space
+# INC_APPEND_HISTORY + SHARE_HISTORY: flush and re-read history every prompt.
+__hist_sync() { history -a; history -n; }
+case ";${PROMPT_COMMAND:-};" in
+  *";__hist_sync;"*) ;;
+  *) PROMPT_COMMAND="__hist_sync${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;
+esac
+
+# --------------------------------------------------------
+# PATH
+# --------------------------------------------------------
+_path_prepend() {                 # move-to-front + dedup (~ zsh `typeset -U path`)
+  PATH=":${PATH}:"
+  PATH="${PATH//:$1:/:}"
+  PATH="${1}:${PATH#:}"
+  PATH="${PATH%:}"
+}
+
+export TYPST_INSTALL="$HOME/.typst"
+_path_dirs=(
+  "/usr/local/go/bin"
+  "$HOME/.local/bin"
+  "$HOME/.local/npm-global/bin"
+  "$TYPST_INSTALL/bin"
+  "$HOME/Applications/FullProf_Suite"
+  "$HOME/Applications/VESTA-gtk3"
+  "$HOME/.juliaup/bin"
+  "$HOME/Applications/qe-7.5/bin"
+)
+for (( _i=${#_path_dirs[@]}-1; _i>=0; _i-- )); do
+  _path_prepend "${_path_dirs[_i]}"
+done
+unset _path_dirs _i
+unset -f _path_prepend
+export PATH
+
+# --------------------------------------------------------
+# Editor / env
+# --------------------------------------------------------
+export EDITOR=hx
+export VISUAL=hx
+
+# --------------------------------------------------------
+# Aliases
+# --------------------------------------------------------
+alias twt='taskwarrior-tui'
+alias v='vim .'
+alias c='code .'
+alias h='hx .'
+alias z='zed .'
+alias vi='vim'
+alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
+command -v batcat >/dev/null 2>&1 && alias bat='batcat'
+type -P fdfind >/dev/null 2>&1 && alias fd='fdfind'
+alias hb='${EDITOR:-hx} ~/.bashrc'
+alias sb='source ~/.bashrc && echo "Bash config reloaded."'
+alias scpo='echo "shutting down..." && systemctl poweroff'
+alias scrb='echo "reboot ..." && systemctl reboot'
+
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias .....='cd ../../../..'
+
+# Ripgrep
+alias rg='rg --smart-case'
+
+# --------------------------------------------------------
+# Completion
+# --------------------------------------------------------
+if ! shopt -oq posix; then
+  if [ -f /usr/share/bash-completion/bash_completion ]; then
+    . /usr/share/bash-completion/bash_completion
+  elif [ -f /etc/bash_completion ]; then
+    . /etc/bash_completion
+  fi
+fi
+# Populate LS_COLORS so `colored-stats` completion is colorized.
+[ -x /usr/bin/dircolors ] && eval "$(dircolors -b)"
+
+# --------------------------------------------------------
+# zoxide  (note: zsh's multi-dash `cd --`/+N needs AUTO_PUSHD; not ported)
+# --------------------------------------------------------
+if command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init bash --cmd cd)"
+fi
+
+# --------------------------------------------------------
+# ranger
+# --------------------------------------------------------
+r() {
+  command -v ranger >/dev/null 2>&1 || { echo "r: ranger not found" >&2; return 127; }
+  local start_dir="${1:-$PWD}" tempfile dest
+  tempfile="$(mktemp "${TMPDIR:-/tmp}/ranger-cd.XXXXXX")" || return 1
+  command ranger --choosedir="$tempfile" -- "$start_dir"
+  dest="$(<"$tempfile")"
+  rm -f -- "$tempfile"
+  [ -n "$dest" ] && [ "$dest" != "$PWD" ] && builtin cd -- "$dest"
+}
+alias rp='r "$HOME/Documents/Workspace/Project"'
+
+# --------------------------------------------------------
+# Yazi
+# --------------------------------------------------------
+y() {
+  local tmp; tmp="$(mktemp -t yazi-cwd.XXXXXX)"
+  yazi "$@" --cwd-file="$tmp"
+  local cwd
+  if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+    builtin cd -- "$cwd"
+  fi
+  rm -f -- "$tmp"
+}
+alias yp='y "$HOME/Documents/Workspace/Project"'
+
+# --------------------------------------------------------
+# Universal Extract
+# --------------------------------------------------------
+ex () {
+  if [ -f "$1" ] ; then
+    case "$1" in
+      *.tar.bz2)   tar xjf "$1"   ;;
+      *.tar.gz)    tar xzf "$1"   ;;
+      *.bz2)       bunzip2 "$1"   ;;
+      *.rar)       unrar x "$1"   ;;
+      *.gz)        gunzip "$1"    ;;
+      *.tar)       tar xf "$1"    ;;
+      *.tbz2)      tar xjf "$1"   ;;
+      *.tgz)       tar xzf "$1"   ;;
+      *.zip)       unzip "$1"     ;;
+      *.Z)         uncompress "$1";;
+      *.7z)        7z x "$1"      ;;
+      *.tar.xz)    tar xJf "$1"   ;;
+      *.xz)        unxz "$1"      ;;
+      *)           echo "'$1' cannot be extracted via ex()" ;;
+    esac
+  else
+    echo "'$1' is not a valid file"
+  fi
+}
+
+# --------------------------------------------------------
+# fzf integration
+# --------------------------------------------------------
+if command -v fzf >/dev/null 2>&1; then
+  if type -P fd >/dev/null 2>&1; then
+    export FZF_DEFAULT_COMMAND='fd --hidden --follow --exclude .git --type f'
+    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+    export FZF_ALT_C_COMMAND='fd --hidden --follow --exclude .git --type d'
+    _fzf_compgen_path() { fd --hidden --follow --exclude .git . "$1"; }
+    _fzf_compgen_dir()  { fd --hidden --follow --exclude .git --type d . "$1"; }
+  elif type -P fdfind >/dev/null 2>&1; then
+    export FZF_DEFAULT_COMMAND='fdfind --hidden --follow --exclude .git --type f'
+    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+    export FZF_ALT_C_COMMAND='fdfind --hidden --follow --exclude .git --type d'
+    _fzf_compgen_path() { fdfind --hidden --follow --exclude .git . "$1"; }
+    _fzf_compgen_dir()  { fdfind --hidden --follow --exclude .git --type d . "$1"; }
+  elif type -P rg >/dev/null 2>&1; then
+    export FZF_DEFAULT_COMMAND='rg --files --no-ignore --hidden --glob "!.git/*"'
+    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+    export FZF_ALT_C_COMMAND='find . -type d -not -path "*/.git/*"'
+    _fzf_compgen_path() { rg --files --no-ignore --hidden --glob '!.git/*' "${1:-.}"; }
+    _fzf_compgen_dir()  { find "${1:-.}" -type d -not -path '*/.git/*'; }
+  else
+    export FZF_DEFAULT_COMMAND='find . -type f -not -path "*/.git/*"'
+    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+    export FZF_ALT_C_COMMAND='find . -type d -not -path "*/.git/*"'
+    _fzf_compgen_path() { find "${1:-.}" -not -path '*/.git/*'; }
+    _fzf_compgen_dir()  { find "${1:-.}" -type d -not -path '*/.git/*'; }
+  fi
+
+  _highlighter="cat"
+  if type -P bat >/dev/null 2>&1; then _highlighter="bat"
+  elif type -P batcat >/dev/null 2>&1; then _highlighter="batcat"; fi
+
+  _prev_cmd="
+    if [ -d {} ]; then
+      eza --tree --level=2 --color=always --icons --group-directories-first -- {};
+    elif echo {} | grep -iq '\.pdf\$'; then
+      pdftotext -f 1 -l 10 -- {} - 2>/dev/null;
+    else
+      ${_highlighter} --color=always --style=numbers --line-range=:500 -- {};
+    fi"
+
+  export FZF_DEFAULT_OPTS="
+    --height 60%
+    --layout=reverse
+    --border
+    --preview 'sh -c \"${_prev_cmd//$'\n'/ }\"'"
+  unset _highlighter _prev_cmd
+fi
+
+# Source fzf keybindings + completion (Ctrl-T, Ctrl-R, Alt-C, **<Tab>)
+if [[ $- == *i* ]]; then
+  if [ -f "$HOME/.fzf.bash" ]; then
+    source "$HOME/.fzf.bash"
+  elif [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
+    source /usr/share/doc/fzf/examples/key-bindings.bash
+  elif [ -f /usr/share/fzf/key-bindings.bash ]; then
+    source /usr/share/fzf/key-bindings.bash
+  fi
+  if [ -f /usr/share/bash-completion/completions/fzf ]; then
+    source /usr/share/bash-completion/completions/fzf
+  elif [ -f /usr/share/doc/fzf/examples/completion.bash ]; then
+    source /usr/share/doc/fzf/examples/completion.bash
+  fi
+fi
+
+# --------------------------------------------------------
+# Helix + FZF
+# --------------------------------------------------------
+hf() {
+  local file
+  file="$(fzf --prompt='Open with Helix> ')" || return 1
+  hx "$file"
+}
+
+# --------------------------------------------------------
+# PDF / EPUB openers (fzf)
+# --------------------------------------------------------
+so() {
+  local file viewer
+  command -v fzf >/dev/null 2>&1 || { echo "so: fzf not found" >&2; return 127; }
+  if command -v sioyek >/dev/null 2>&1; then viewer=sioyek
+  elif command -v zathura >/dev/null 2>&1; then viewer=zathura
+  else echo "so: neither sioyek nor zathura installed" >&2; return 127; fi
+
+  if type -P fd >/dev/null 2>&1; then
+    file="$(fd -e pdf --hidden --exclude .git | fzf --prompt='Open PDF> ')" || return 1
+  elif type -P fdfind >/dev/null 2>&1; then
+    file="$(fdfind -e pdf --hidden --exclude .git | fzf --prompt='Open PDF> ')" || return 1
+  else
+    file="$(find . -type f -iname '*.pdf' -not -path '*/.git/*' -print | sed 's|^\./||' | fzf --prompt='Open PDF> ')" || return 1
+  fi
+  [ -n "$file" ] || return 1
+
+  case "$viewer" in
+    sioyek)  nohup sioyek --new-window "$file" >/dev/null 2>&1 & ;;
+    zathura) nohup zathura "$file"             >/dev/null 2>&1 & ;;
+  esac
+}
+
+zo() {
+  local file viewer
+  command -v fzf >/dev/null 2>&1 || { echo "zo: fzf not found" >&2; return 127; }
+  if command -v sioyek >/dev/null 2>&1; then viewer=zathura
+  elif command -v zathura >/dev/null 2>&1; then viewer=sioyek
+  else echo "zo: neither sioyek nor zathura installed" >&2; return 127; fi
+
+  if type -P fd >/dev/null 2>&1; then
+    file="$(fd -e pdf --hidden --exclude .git | fzf --prompt='Open PDF> ')" || return 1
+  elif type -P fdfind >/dev/null 2>&1; then
+    file="$(fdfind -e pdf --hidden --exclude .git | fzf --prompt='Open PDF> ')" || return 1
+  else
+    file="$(find . -type f -iname '*.pdf' -not -path '*/.git/*' -print | sed 's|^\./||' | fzf --prompt='Open PDF> ')" || return 1
+  fi
+  [ -n "$file" ] || return 1
+
+  case "$viewer" in
+    sioyek)  nohup sioyek --new-window "$file" >/dev/null 2>&1 & ;;
+    zathura) nohup zathura "$file"             >/dev/null 2>&1 & ;;
+  esac
+}
+
+bo() {
+  local file
+  command -v fzf >/dev/null 2>&1 || { echo "bo: fzf not found" >&2; return 127; }
+  command -v ebook-viewer >/dev/null 2>&1 || { echo "bo: ebook-viewer not found" >&2; return 127; }
+
+  if type -P fd >/dev/null 2>&1; then
+    file="$(fd -e epub --hidden --exclude .git | fzf --prompt='Open EPUB> ')" || return 1
+  elif type -P fdfind >/dev/null 2>&1; then
+    file="$(fdfind -e epub --hidden --exclude .git | fzf --prompt='Open EPUB> ')" || return 1
+  else
+    file="$(find . -type f -iname '*.epub' -not -path '*/.git/*' -print | sed 's|^\./||' | fzf --prompt='Open EPUB> ')" || return 1
+  fi
+  [ -n "$file" ] || return 1
+  nohup ebook-viewer "$file" >/dev/null 2>&1 &
+}
+
+# --------------------------------------------------------
+# Zk
+# --------------------------------------------------------
+export ZK_EDITOR="hx"
+
+zn() {
+  local note _hl
+  _hl="$(type -P bat || type -P batcat || echo cat)"
+  note=$(zk list --format path --sort modified- --quiet | fzf \
+      --prompt='Notes> ' \
+      --preview "$_hl --color=always --style=header,grid --line-range :500 {}" \
+      --preview-window=right:50%:wrap \
+      --height=80% \
+      --layout=reverse \
+      --header="Enter to Edit | Ctrl-C to Cancel")
+  [ -n "$note" ] && hx "$note"
+}
+
+zs() {
+  local note _hl
+  _hl="$(type -P bat || type -P batcat || echo cat)"
+  note=$(zk grep "$1" --format path --quiet | fzf \
+      --prompt='Search Content> ' \
+      --preview "$_hl --color=always --style=header,numbers --line-range :500 {}" \
+      --preview-window=right:50%:wrap \
+      --header="Search: $1")
+  [ -n "$note" ] && hx "$note"
+}
+
+# hxp/wpdf (live editor + PDF preview) is implemented in zsh (~/.zsh/hxp-main.zsh)
+# and has no bash port, so it is intentionally not wired up here.
+
+# --------------------------------------------------------
+# Sensors watch
+# --------------------------------------------------------
+tcheck () {
+  local interval="${1:-2}"
+  watch -n "$interval" --color \
+    "sensors | egrep -i '(^core [0-9]+:|^package id [0-9]+:|^tctl:|^tdie:|^cpu temp|^fan[0-9]*:|fan.*rpm|rpm)'"
+}
+
+# --------------------------------------------------------
+# Clipboard helper: shared with tmux via ~/.local/bin/clipcopy
+# --------------------------------------------------------
+_clipcopy() {
+  if command -v clipcopy >/dev/null 2>&1; then
+    clipcopy
+  else
+    echo "_clipcopy: ~/.local/bin/clipcopy not found." >&2
+    return 127
+  fi
+}
+
+crpf() {
+  local p
+  p="$(fzf --prompt='file> ')" || return 130
+  printf '%s' "$p" | _clipcopy
+  printf '%s\n' "$p"
+}
+
+crpd() {
+  local p
+  if type -P fd >/dev/null 2>&1; then
+    p="$(fd --type d --hidden --strip-cwd-prefix --exclude .git | fzf --prompt='dir> ')" || return 130
+  elif type -P fdfind >/dev/null 2>&1; then
+    p="$(fdfind --type d --hidden --strip-cwd-prefix --exclude .git | fzf --prompt='dir> ')" || return 130
+  else
+    p="$(find . -type d -not -path '*/.git/*' -print | sed 's|^\./||' | fzf --prompt='dir> ')" || return 130
+  fi
+  printf '%s' "$p" | _clipcopy
+  printf '%s\n' "$p"
+}
+
+export BAT_THEME="tokyonight_storm"
+
+# make less friendlier for non-text input
+[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+
+# --------------------------------------------------------
+# Env / package managers
+# --------------------------------------------------------
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
+
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$("$HOME/miniconda3/bin/conda" 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "$HOME/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="$HOME/miniconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
+
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+# >>> juliaup initialize >>>
+# !! Contents within this block are managed by juliaup !!
+case ":$PATH:" in
+    *:"$HOME"/.juliaup/bin:*)
+        ;;
+    *)
+        export PATH="$HOME/.juliaup/bin${PATH:+:${PATH}}"
+        ;;
+esac
+# <<< juliaup initialize <<<
+
+# --------------------------------------------------------
+# Starship Prompt (must come last)
+# --------------------------------------------------------
+eval "$(starship init bash)"

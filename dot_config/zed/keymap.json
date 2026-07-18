@@ -1,0 +1,81 @@
+// Zed keymap
+//
+// For information on binding keys, see the Zed
+// documentation: https://zed.dev/docs/key-bindings
+//
+// To see the default key bindings run `zed: open default keymap`
+// from the command palette.
+[
+  {
+    "context": "Workspace",
+    "bindings": {
+      "shift shift": "file_finder::Toggle"
+    },
+  },
+  {
+    "context": "Editor && vim_mode == insert",
+    "bindings": {
+      "j k": ["workspace::SendKeystrokes", "escape"],
+      "alt-h": "editor::MoveLeft",
+      "alt-j": "editor::MoveDown",
+      "alt-k": "editor::MoveUp",
+      "alt-l": "editor::MoveRight",
+      "alt-q": "editor::MoveToBeginningOfLine",
+      "alt-e": "editor::MoveToEndOfLine"
+    },
+  },
+  {
+    "context": "VimControl && vim_mode == helix_normal && !menu",
+    "bindings": {
+      "enter": ["workspace::SendKeystrokes", "o escape"],
+    },
+  },
+  {
+    "context": "(vim_mode == helix_normal || vim_mode == helix_select) && !menu",
+    "bindings": {
+      "shift-v": "editor::Paste"
+    },
+  },
+  {
+    "context": "vim_mode == helix_select && !menu",
+    "bindings": {
+      "tab": "vim::Indent",
+      "shift-tab": "vim::Outdent"
+    },
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "ctrl-t ctrl-l": "workspace::ToggleRightDock"
+    }
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "ctrl-t ctrl-h": "workspace::ToggleLeftDock"
+    }
+  },
+  {
+    "bindings": {
+      "ctrl-h ctrl-m": "workspace::ToggleHelixMode"
+    }
+  },
+  {
+    "context": "VimControl && !menu",
+    "bindings": {
+      "ctrl-q": "zed::Quit"
+    }
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "ctrl-t ctrl-p": "terminal_panel::Toggle"
+    }
+  },
+  {
+    "context": "Workspace",
+    "unbind": {
+      "ctrl-`": "terminal_panel::Toggle"
+    }
+  }
+]

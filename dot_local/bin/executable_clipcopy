@@ -1,0 +1,22 @@
+#!/bin/sh
+# Pipe stdin to system clipboard.
+# Priority on this host (Mint XFCE / X11): xclip -> xsel -> Wayland -> macOS -> OSC 52.
+if [ -n "${DISPLAY:-}" ] && command -v xclip >/dev/null 2>&1; then
+  exec xclip -in -selection clipboard
+elif [ -n "${DISPLAY:-}" ] && command -v xsel >/dev/null 2>&1; then
+  exec xsel --clipboard --input
+elif [ -n "${WAYLAND_DISPLAY:-}" ] && command -v wl-copy >/dev/null 2>&1; then
+  exec wl-copy
+elif command -v xclip >/dev/null 2>&1; then
+  exec xclip -in -selection clipboard
+elif command -v xsel >/dev/null 2>&1; then
+  exec xsel --clipboard --input
+elif command -v wl-copy >/dev/null 2>&1; then
+  exec wl-copy
+elif command -v pbcopy >/dev/null 2>&1; then
+  exec pbcopy
+else
+  printf '\033]52;c;'
+  base64 | tr -d '\r\n'
+  printf '\a'
+fi

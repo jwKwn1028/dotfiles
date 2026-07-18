@@ -1,0 +1,60 @@
+#!/bin/sh
+
+set -eu
+
+id="${HELIX_YAZI_ID:-${PPID:-$$}}"
+state_dir="${TMPDIR:-/tmp}/helix-yazi"
+choice_file="$state_dir/$id.choice"
+cwd_file="$state_dir/$id.cwd"
+
+buffer_dir() {
+  if [ -n "${1-}" ]; then
+    if [ -d "$1" ]; then
+      printf '%s\n' "$1"
+    else
+      dirname -- "$1"
+    fi
+  else
+    printf '%s\n' "$PWD"
+  fi
+}
+
+mkdir -p -- "$state_dir"
+
+case "${1-}" in
+  run)
+    buffer_name="${2-}"
+    rm -f -- "$choice_file" "$cwd_file"
+
+    if [ -n "$buffer_name" ] && [ -e "$buffer_name" ]; then
+      target="$buffer_name"
+    else
+      target="$(buffer_dir "$buffer_name")"
+    fi
+
+    exec yazi "$target" --chooser-file="$choice_file" --cwd-file="$cwd_file"
+    ;;
+  cwd)
+    buffer_name="${2-}"
+    if [ -s "$cwd_file" ]; then
+      tr -d '\n' < "$cwd_file"
+    else
+      buffer_dir "$buffer_name" | tr -d '\n'
+    fi
+    ;;
+  choice)
+    buffer_name="${2-}"
+    if [ -s "$choice_file" ]; then
+      head -n 1 "$choice_file" | tr -d '\n'
+    else
+      printf '%s' "$buffer_name"
+    fi
+    ;;
+  cleanup)
+    rm -f -- "$choice_file" "$cwd_file"
+    ;;
+  *)
+    printf 'usage: %s {run|cwd|choice|cleanup} [buffer-name]\n' "$0" >&2
+    exit 2
+    ;;
+esac

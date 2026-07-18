@@ -1,0 +1,18 @@
+. "$HOME/.cargo/env"
+
+# Make `conda` available in non-interactive `zsh -lc` shells that do not read
+# ~/.zprofile or ~/.zshrc. Full lazy init remains in the interactive config.
+if [[ -x "$HOME/miniconda3/bin/conda" ]] && ! whence conda >/dev/null 2>&1; then
+  conda() {
+    emulate -L zsh
+    setopt localoptions no_aliases
+
+    local conda_root="$HOME/miniconda3"
+
+    unalias conda 2>/dev/null || true
+    unfunction conda 2>/dev/null || true
+
+    eval "$("$conda_root/bin/conda" shell.zsh hook 2>/dev/null)" || return 127
+    conda "$@"
+  }
+fi
