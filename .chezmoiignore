@@ -14,7 +14,9 @@
 /LICENSE
 
 # ─── Browser profiles ──────────────────────────────────────────────────────
-# Browser profiles stay entirely local. They contain bookmarks, account/sync
+# Browser-generated profiles stay local. They contain bookmarks, account/sync
 # identifiers, site-engagement records, and other machine-generated state.
+# The sanitized Zen user.js allowlist is installed by the profile-discovery
+# script without exposing or managing the rest of the profile.
 .config/net.imput.helium/
 .var/app/app.zen_browser.zen/

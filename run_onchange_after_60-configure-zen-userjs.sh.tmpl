@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+{{ $class := "desktop" -}}
+{{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
+{{ $profilesIni := joinPath .chezmoi.homeDir ".var/app/app.zen_browser.zen/.zen/profiles.ini" -}}
+# Installs the sanitized Zen user.js into Zen's installation-selected profile.
+# The generated profile itself remains local and ignored by chezmoi.
+# Profile selection state: {{ if lstat $profilesIni }}{{ include $profilesIni | sha256sum }}{{ else }}missing{{ end }}
+set -euo pipefail
+
+{{ if or (ne .chezmoi.os "linux") (ne $class "desktop") -}}
+echo "Non-Linux desktop; skipping Zen user.js."
+exit 0
+{{- else -}}
+readonly zen_root={{ joinPath .chezmoi.homeDir ".var/app/app.zen_browser.zen/.zen" | quote }}
+readonly profiles_ini={{ $profilesIni | quote }}
+
+if [[ ! -f "$profiles_ini" ]]; then
+    echo "Zen has not created a profile yet; skipping user.js."
+    exit 0
+fi
+
+# Candidate order is: installation-selected profile, profile marked default,
+# then every remaining profile. This mirrors how Firefox-family applications
+# select a profile while avoiding a machine-specific profile name in Git.
+profile_dir=""
+while IFS= read -r candidate; do
+    case "$candidate" in
+        "" | "." | ".." | /* | ../* | */../* | */..)
+            continue
+            ;;
+    esac
+
+    candidate_dir="${zen_root}/${candidate}"
+    if [[ -d "$candidate_dir" ]]; then
+        profile_dir="$candidate_dir"
+        break
+    fi
+done < <(
+    awk '
+        /^\[/ {
+            section = $0
+            sub(/\r$/, "", section)
+
+            if (section ~ /^\[Install[^]]*\]$/) {
+                mode = "install"
+                next
+            }
+            if (section ~ /^\[Profile[0-9]+\]$/) {
+                mode = "profile"
+                profile_count++
+                next
+            }
+
+            mode = ""
+            next
+        }
+
+        mode == "install" && /^Default=/ {
+            value = $0
+            sub(/^Default=/, "", value)
+            sub(/\r$/, "", value)
+            install_paths[++install_count] = value
+            next
+        }
+
+        mode == "profile" && /^Path=/ {
+            value = $0
+            sub(/^Path=/, "", value)
+            sub(/\r$/, "", value)
+            profile_paths[profile_count] = value
+            next
+        }
+
+        mode == "profile" && /^Default=1\r?$/ {
+            profile_defaults[profile_count] = 1
+        }
+
+        END {
+            for (i = 1; i <= install_count; i++) {
+                print install_paths[i]
+            }
+            for (i = 1; i <= profile_count; i++) {
+                if (profile_defaults[i]) {
+                    print profile_paths[i]
+                }
+            }
+            for (i = 1; i <= profile_count; i++) {
+                if (!profile_defaults[i]) {
+                    print profile_paths[i]
+                }
+            }
+        }
+    ' "$profiles_ini"
+)
+
+if [[ -z "$profile_dir" ]]; then
+    echo "No usable Zen profile found; skipping user.js."
+    exit 0
+fi
+
+readonly user_js="${profile_dir}/user.js"
+temp_user_js="$(mktemp "${profile_dir}/.user.js.XXXXXX")"
+trap 'rm -f -- "$temp_user_js"' EXIT
+
+cat >"$temp_user_js" <<'ZEN_USER_JS_EOF'
+{{ template "zen-user.js" . -}}
+ZEN_USER_JS_EOF
+chmod 0600 "$temp_user_js"
+
+if [[ -f "$user_js" ]] && cmp -s "$temp_user_js" "$user_js"; then
+    echo "Zen user.js is already up to date."
+    exit 0
+fi
+
+mv -f -- "$temp_user_js" "$user_js"
+trap - EXIT
+echo "Installed sanitized Zen user.js; restart Zen to load it."
+{{- end }}
