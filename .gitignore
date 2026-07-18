@@ -11,6 +11,10 @@ dot_config/**/dot_agents/
 dot_config/i3/resurrect*
 dot_config/i3/MANUAL.pdf
 
+# Local operator documentation. This is intentionally machine-local and is
+# also excluded from chezmoi's target state in .chezmoiignore.
+/CHEZMOI_UPDATE_WORKFLOW.md
+
 # Browser profiles contain bookmarks, account/sync identifiers, history-like
 # metadata, and other machine state. Keep the entire source trees local.
 dot_config/private_net.imput.helium/

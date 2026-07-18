@@ -11,6 +11,8 @@ DRY_RUN=1
 # session id -> "keep" | "delete", so a chat linked by several memory files is
 # previewed and decided only once.
 declare -A CHAT_DECISION=()
+# Codex thread id -> "keep" | "delete"; same idea for Codex session transcripts.
+declare -A CODEX_CHAT_DECISION=()
 
 usage() {
   cat <<'USAGE'
@@ -23,7 +25,6 @@ This preserves:
   ~/.codex/config.toml
   ~/.codex/statusline.toml
   ~/.codex/rules/
-  ~/.codex/memories/
   ~/.claude/.credentials.json
   ~/.claude/settings.json
   ~/.claude/settings.local.json
@@ -35,10 +36,22 @@ This preserves:
   ~/.claude/plugins/
   ~/.claude.json
 
-When a memory file (.../projects/*/memory/*.md) is erased, its originating chat
-transcript is previewed first. With --apply you are asked whether to delete that
-chat too; the default answer is "no", which keeps the transcript. Chat
-transcripts with no linked memory file are removed as before.
+Claude and Codex chat/memory get the same careful workflow: nothing under
+either tool's chat or memory store is erased without first showing a verbose
+preview and (with --apply) asking.
+
+Claude: when a memory file (.../projects/*/memory/*.md) is erased, its
+originating chat transcript is previewed first. With --apply you are asked
+whether to delete that chat too; the default answer is "no", which keeps the
+transcript. Chat transcripts with no linked memory file are removed as before.
+
+Codex: every session transcript (~/.codex/sessions/**/*.jsonl) is previewed --
+title, time span, message counts, opening prompt, and any memory summary Codex
+derived from it -- and with --apply you are asked, per chat, whether to delete
+it (default "no"). The chat index/logs (history.jsonl, state_*/logs_* DBs) are
+kept while any chat is kept and pruned to match your choices. Codex memory (the
+~/.codex/memories/ store, generated summaries in memories_*.sqlite, and goals in
+goals_*.sqlite) is previewed and, with --apply, only erased after you confirm.
 USAGE
 }
 
@@ -72,9 +85,6 @@ is_protected() {
     "$CODEX_DIR/rules"|"$CODEX_DIR/rules/"*)
       return 0
       ;;
-    "$CODEX_DIR/memories"|"$CODEX_DIR/memories/"*)
-      return 0
-      ;;
     "$CLAUDE_DIR/.credentials.json"|"$CLAUDE_DIR/settings.json"|"$CLAUDE_DIR/settings.local.json"|"$CLAUDE_DIR/statusline-command.sh"|"$CLAUDE_DIR/CLAUDE.md")
       return 0
       ;;
@@ -93,6 +103,26 @@ is_protected() {
   esac
 
   return 1
+}
+
+# Classify a top-level ~/.codex child as belonging to the interactively handled
+# "chat" or "memory" bucket, or "" for everything else. Buckets are owned by the
+# Codex functions below, so clean_directory_contents leaves them alone. Matching
+# is by prefix so a schema-version bump (state_5 -> state_6, ...) still lands in
+# the right bucket.
+codex_bucket() {
+  case "$(basename "$1")" in
+    sessions|history.jsonl)
+      printf 'chat' ;;
+    state_*.sqlite|state_*.sqlite-*|logs_*.sqlite|logs_*.sqlite-*)
+      printf 'chat' ;;
+    memories)
+      printf 'memory' ;;
+    memories_*.sqlite|memories_*.sqlite-*|goals_*.sqlite|goals_*.sqlite-*)
+      printf 'memory' ;;
+    *)
+      printf '' ;;
+  esac
 }
 
 remove_path() {
@@ -121,6 +151,10 @@ clean_directory_contents() {
   while IFS= read -r -d '' child; do
     # process_memory_files/sweep_projects_remainder own the projects tree.
     [[ "$child" == "$PROJECTS_DIR" ]] && continue
+    # The Codex chat/memory buckets are owned by the Codex functions below.
+    if [[ "$dir" == "$CODEX_DIR" && -n "$(codex_bucket "$child")" ]]; then
+      continue
+    fi
     remove_path "$child"
   done < <(find "$dir" -mindepth 1 -maxdepth 1 -print0)
 }
@@ -141,7 +175,7 @@ clean_other_marker_paths() {
   done < <(find "$HOME_DIR" -mindepth 1 -maxdepth 1 -print0)
 }
 
-# ---- Interactive memory + linked-chat handling ------------------------------
+# ---- Interactive memory + linked-chat handling (Claude) ---------------------
 # clean_directory_contents skips "$PROJECTS_DIR", so these two functions are the
 # sole authority over it: every memory file is erased, its linked chat is
 # previewed and (with --apply) offered for deletion, and any transcript with no
@@ -373,6 +407,407 @@ sweep_projects_remainder() {
   fi
 }
 
+# ---- Interactive chat + memory handling (Codex) -----------------------------
+# clean_directory_contents skips the Codex chat/memory buckets (see
+# codex_bucket), so these functions are the sole authority over them. They give
+# Codex the same courtesy as Claude: every session transcript is previewed and
+# offered for deletion (default keep), the chat index/logs follow those choices,
+# and the memory store is previewed and only erased after an explicit yes.
+
+# True when a string is a plausible session/thread id (safe to splice into SQL).
+codex_id_safe() {
+  [[ "$1" =~ ^[0-9a-fA-F-]+$ ]]
+}
+
+# Echo the session id for a rollout transcript (from session_meta, else the
+# UUID in the filename), or nothing.
+codex_session_id() {
+  python3 - "$1" 2>/dev/null <<'PY' || true
+import json, os, re, sys
+path = sys.argv[1]
+sid = ""
+try:
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            if rec.get("type") == "session_meta":
+                sid = (rec.get("payload", {}) or {}).get("session_id") or ""
+                break
+except OSError:
+    pass
+if not sid:
+    m = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", os.path.basename(path))
+    sid = m.group(0) if m else ""
+print(sid)
+PY
+}
+
+# Print a short, human-readable summary of a Codex rollout transcript.
+codex_chat_preview() {
+  if ! python3 - "$1" 2>/dev/null <<'PY'
+import datetime, json, os, sys
+path = sys.argv[1]
+first_user = None
+users = asst = 0
+ts_first = ts_last = None
+cwd = ""
+
+with open(path, encoding="utf-8", errors="replace") as fh:
+    for line in fh:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        ts = rec.get("timestamp")
+        if ts:
+            ts_first = ts_first or ts
+            ts_last = ts
+        kind = rec.get("type")
+        payload = rec.get("payload", {}) or {}
+        if kind == "session_meta":
+            cwd = payload.get("cwd", "") or cwd
+        elif kind == "event_msg":
+            ptype = payload.get("type")
+            if ptype == "user_message":
+                users += 1
+                msg = payload.get("message") or ""
+                if first_user is None and msg.strip() and not msg.lstrip().startswith(("<", "#")):
+                    first_user = msg
+            elif ptype == "agent_message":
+                asst += 1
+
+def when(ts):
+    try:
+        return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return ts or "?"
+
+def span():
+    try:
+        a = datetime.datetime.fromisoformat(ts_first.replace("Z", "+00:00"))
+        b = datetime.datetime.fromisoformat(ts_last.replace("Z", "+00:00"))
+        secs = int((b - a).total_seconds())
+    except Exception:
+        return "?"
+    if secs < 60:
+        return "%ds" % secs
+    if secs < 3600:
+        return "%dm" % (secs // 60)
+    return "%dh%dm" % (secs // 3600, (secs % 3600) // 60)
+
+def human(n):
+    size = float(n)
+    for unit in ("B", "K", "M", "G"):
+        if size < 1024:
+            return ("%d%s" % (size, unit)) if unit == "B" else ("%.1f%s" % (size, unit))
+        size /= 1024
+    return "%.1fT" % size
+
+opened = ""
+if first_user:
+    opened = " ".join(first_user.split())
+    if len(opened) > 100:
+        opened = opened[:99] + "…"
+print("    Title:    %s" % (opened or "(untitled)"))
+if ts_first:
+    print("    When:     %s → %s  (~%s)" % (when(ts_first), when(ts_last), span()))
+print("    Messages: %d from you / %d from Codex" % (users, asst))
+if cwd:
+    print("    Where:    %s" % cwd)
+if opened:
+    print("    Opened:   “%s”" % opened)
+print("    Size:     %s" % human(os.path.getsize(path)))
+PY
+  then
+    printf '    (transcript preview unavailable)\n'
+  fi
+}
+
+# Echo the base path of the first Codex bucket DB matching a prefix (e.g.
+# "memories_", "state_"), skipping -shm/-wal sidecars; nothing if none exist.
+codex_db_for() {
+  local prefix="$1" f
+  for f in "$CODEX_DIR/$prefix"*.sqlite; do
+    [[ -f "$f" ]] || continue
+    printf '%s' "$f"
+    return 0
+  done
+}
+
+# Remove a sqlite DB together with its -wal/-shm/-journal sidecars.
+codex_remove_db() {
+  local base="$1" f
+  for f in "$base" "$base"-wal "$base"-shm "$base"-journal; do
+    [[ -e "$f" ]] || continue
+    if (( DRY_RUN )); then
+      printf 'Would remove: %s\n' "$f"
+    else
+      rm -f -- "$f"
+      printf 'Removed: %s\n' "$f"
+    fi
+  done
+}
+
+# Print the memory summary Codex derived from a thread, if any (read-only).
+codex_linked_memory_line() {
+  local sid="$1" db summary
+  command -v sqlite3 >/dev/null 2>&1 || return 0
+  codex_id_safe "$sid" || return 0
+  db="$(codex_db_for memories_)"
+  [[ -n "$db" ]] || return 0
+  summary="$(sqlite3 "$db" "SELECT COALESCE(rollout_summary, raw_memory) FROM stage1_outputs WHERE thread_id='$sid' LIMIT 1;" 2>/dev/null | tr '\n' ' ')" || return 0
+  summary="$(printf '%s' "$summary" | sed 's/[[:space:]]\{1,\}/ /g; s/^ //; s/ $//')"
+  [[ -n "$summary" ]] || return 0
+  printf '    Memory:   Codex derived a summary from this chat — “%s%s”\n' \
+    "${summary:0:100}" "$([[ ${#summary} -gt 100 ]] && printf '…')"
+}
+
+# Preview a Codex session transcript and record whether to delete it.
+decide_codex_chat() {
+  local sid="$1" jsonl="$2" reply=""
+
+  if (( DRY_RUN )); then
+    printf '\nWould review chat transcript (%s):\n' "${sid:0:8}"
+  else
+    printf '\nReviewing chat transcript (%s):\n' "${sid:0:8}"
+  fi
+  codex_chat_preview "$jsonl"
+  codex_linked_memory_line "$sid"
+
+  if (( DRY_RUN )); then
+    printf '    -> --apply would ask whether to delete this chat (kept in dry run).\n'
+    CODEX_CHAT_DECISION[$sid]="keep"
+    return 0
+  fi
+
+  if [[ -r /dev/tty ]]; then
+    printf '    Delete this chat transcript? [y/N] '
+    read -r reply < /dev/tty || reply=""
+  else
+    printf '    (no terminal available; keeping chat by default)\n'
+  fi
+
+  case "$reply" in
+    y|Y|yes|YES|Yes)
+      rm -f -- "$jsonl"
+      CODEX_CHAT_DECISION[$sid]="delete"
+      printf '    Deleted chat transcript: %s\n' "$jsonl"
+      ;;
+    *)
+      CODEX_CHAT_DECISION[$sid]="keep"
+      printf '    Kept chat transcript: %s\n' "$jsonl"
+      ;;
+  esac
+}
+
+# Preview every Codex session transcript and decide each one.
+process_codex_chats() {
+  local sessions="$CODEX_DIR/sessions" found=0 jsonl sid
+
+  if [[ -d "$sessions" ]]; then
+    while IFS= read -r -d '' jsonl; do
+      found=1
+      sid="$(codex_session_id "$jsonl")"
+      [[ -n "$sid" ]] || sid="$(basename "$jsonl" .jsonl)"
+      decide_codex_chat "$sid" "$jsonl"
+    done < <(find "$sessions" -type f -name '*.jsonl' -print0 2>/dev/null | sort -z)
+
+    if (( ! DRY_RUN )); then
+      find "$sessions" -depth -mindepth 1 -type d -empty -delete 2>/dev/null || true
+      rmdir "$sessions" 2>/dev/null || true
+    fi
+  fi
+
+  (( found )) || printf 'No Codex chat transcripts found.\n'
+}
+
+# Reconcile the chat index/logs (history.jsonl, state_*/logs_* DBs) with the
+# per-chat decisions: keep them while any chat is kept (pruning history to the
+# kept ids), otherwise offer to remove the now-orphaned chat state.
+finalize_codex_chat_side() {
+  local any_kept=0 sid
+  local kept=()
+  if (( ${#CODEX_CHAT_DECISION[@]} )); then
+    for sid in "${!CODEX_CHAT_DECISION[@]}"; do
+      if [[ "${CODEX_CHAT_DECISION[$sid]}" == "keep" ]]; then
+        any_kept=1
+        kept+=("$sid")
+      fi
+    done
+  fi
+
+  local hist="$CODEX_DIR/history.jsonl"
+  local -a chat_dbs=()
+  local db
+  db="$(codex_db_for state_)" && [[ -n "$db" ]] && chat_dbs+=("$db")
+  db="$(codex_db_for logs_)" && [[ -n "$db" ]] && chat_dbs+=("$db")
+
+  if (( any_kept )); then
+    if [[ -f "$hist" ]]; then
+      if (( DRY_RUN )); then
+        printf '\nWould prune history.jsonl to the kept chats.\n'
+      else
+        local n
+        n="$(python3 - "$hist" "${kept[@]}" <<'PY'
+import json, os, sys
+path = sys.argv[1]
+kept = set(sys.argv[2:])
+out = []
+try:
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            s = line.strip()
+            if not s:
+                continue
+            try:
+                rec = json.loads(s)
+            except ValueError:
+                continue
+            if rec.get("session_id") in kept:
+                out.append(s)
+except OSError:
+    print(0)
+    raise SystemExit
+if out:
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(out) + "\n")
+else:
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+print(len(out))
+PY
+)" || n="?"
+        printf '\nPruned history.jsonl to %s kept entr%s.\n' "$n" "$([[ "$n" == 1 ]] && printf y || printf ies)"
+      fi
+    fi
+    if (( ${#chat_dbs[@]} )); then
+      printf 'Kept chat index/logs (still referenced by kept chats): %s\n' "${chat_dbs[*]##*/}"
+    fi
+    return 0
+  fi
+
+  # No chats kept: history.jsonl + the index/log DBs are now orphaned state.
+  local -a orphans=()
+  [[ -f "$hist" ]] && orphans+=("$hist")
+  local base
+  for base in "${chat_dbs[@]:-}"; do
+    [[ -n "$base" ]] && orphans+=("$base")
+  done
+  (( ${#orphans[@]} )) || return 0
+
+  local reply=""
+  if (( DRY_RUN )); then
+    printf '\nNo Codex chats kept; --apply would ask to remove the orphaned chat state:\n'
+    printf '  %s\n' "${orphans[@]##*/}"
+    printf '  -> kept in dry run.\n'
+    return 0
+  fi
+
+  printf '\nNo Codex chats kept. Orphaned chat state remains:\n'
+  printf '  %s\n' "${orphans[@]##*/}"
+  if [[ -r /dev/tty ]]; then
+    printf '  Remove this orphaned chat index/logs? [y/N] '
+    read -r reply < /dev/tty || reply=""
+  else
+    printf '  (no terminal available; keeping chat state by default)\n'
+  fi
+
+  case "$reply" in
+    y|Y|yes|YES|Yes)
+      [[ -f "$hist" ]] && { rm -f -- "$hist"; printf '  Removed: %s\n' "$hist"; }
+      for base in "${chat_dbs[@]:-}"; do
+        [[ -n "$base" ]] && codex_remove_db "$base"
+      done
+      ;;
+    *)
+      printf '  Kept orphaned chat state.\n'
+      ;;
+  esac
+}
+
+# Preview the Codex memory store and, with --apply, only erase after a yes.
+process_codex_memory() {
+  [[ -d "$CODEX_DIR" ]] || return 0
+
+  local memdir="$CODEX_DIR/memories"
+  local pfiles=0 mrows=0 grows=0 mdb gdb
+  mdb="$(codex_db_for memories_)" || mdb=""
+  gdb="$(codex_db_for goals_)" || gdb=""
+
+  if [[ -d "$memdir" ]]; then
+    pfiles="$(find "$memdir" -type f -not -path '*/.git/*' 2>/dev/null | wc -l | tr -d ' ')"
+  fi
+  if command -v sqlite3 >/dev/null 2>&1; then
+    [[ -n "$mdb" ]] && mrows="$(sqlite3 "$mdb" 'SELECT COUNT(*) FROM stage1_outputs;' 2>/dev/null || printf 0)"
+    [[ -n "$gdb" ]] && grows="$(sqlite3 "$gdb" 'SELECT COUNT(*) FROM thread_goals;' 2>/dev/null || printf 0)"
+  fi
+  [[ "$mrows" =~ ^[0-9]+$ ]] || mrows=0
+  [[ "$grows" =~ ^[0-9]+$ ]] || grows=0
+
+  # Nothing that counts as memory exists at all.
+  if [[ ! -d "$memdir" && -z "$mdb" && -z "$gdb" ]]; then
+    printf 'No Codex memory stored (nothing to erase).\n'
+    return 0
+  fi
+
+  printf 'Codex memory store:\n'
+  printf '  Persistent store: %s file%s under ~/.codex/memories/\n' \
+    "$pfiles" "$([[ "$pfiles" == 1 ]] && printf '' || printf s)"
+  printf '  Generated summaries: %s\n' "$mrows"
+  printf '  Recorded goals: %s\n' "$grows"
+
+  if command -v sqlite3 >/dev/null 2>&1 && [[ -n "$mdb" && "$mrows" -gt 0 ]]; then
+    printf '  Sample summaries:\n'
+    sqlite3 -separator $'\t' "$mdb" \
+      "SELECT substr(thread_id,1,8), substr(replace(replace(COALESCE(rollout_summary,raw_memory),char(10),' '),char(13),' '),1,90) FROM stage1_outputs LIMIT 5;" 2>/dev/null \
+      | while IFS=$'\t' read -r tid summary; do
+          printf '    - %s: %s…\n' "$tid" "$summary"
+        done
+  fi
+
+  if [[ "$pfiles" -eq 0 && "$mrows" -eq 0 && "$grows" -eq 0 ]]; then
+    printf '  (memory is empty; only regenerable store/db scaffolding is present)\n'
+  fi
+
+  local reply=""
+  if (( DRY_RUN )); then
+    printf '  -> --apply would ask whether to erase the Codex memory store (kept in dry run).\n'
+    return 0
+  fi
+
+  if [[ -r /dev/tty ]]; then
+    printf '  Erase the Codex memory store above? [y/N] '
+    read -r reply < /dev/tty || reply=""
+  else
+    printf '  (no terminal available; keeping memory by default)\n'
+  fi
+
+  case "$reply" in
+    y|Y|yes|YES|Yes)
+      if [[ -d "$memdir" ]]; then
+        rm -rf -- "$memdir"
+        printf '  Removed: %s\n' "$memdir"
+      fi
+      [[ -n "$mdb" ]] && codex_remove_db "$mdb"
+      [[ -n "$gdb" ]] && codex_remove_db "$gdb"
+      ;;
+    *)
+      printf '  Kept the Codex memory store.\n'
+      ;;
+  esac
+}
+
 if (( DRY_RUN )); then
   printf 'Dry run. Re-run with --apply to delete.\n\n'
 else
@@ -380,9 +815,18 @@ else
 fi
 
 if [[ -d "$PROJECTS_DIR" ]]; then
-  printf '== Memory files and linked chat history ==\n'
+  printf '== Claude memory files and linked chat history ==\n'
   process_memory_files
   sweep_projects_remainder
+  printf '\n'
+fi
+
+if [[ -d "$CODEX_DIR" ]]; then
+  printf '== Codex chat transcripts ==\n'
+  process_codex_chats
+  finalize_codex_chat_side
+  printf '\n== Codex memory ==\n'
+  process_codex_memory
   printf '\n'
 fi
 
