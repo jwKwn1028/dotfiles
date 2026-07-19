@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Shared CPU-load calculator used by BOTH polybar's cpu module and the zsh
+# `sysmon` monitor, so the two always compute the number the same way.
+#
+# Definition (matches top/htop/mpstat): load% = 100 * busy / total, where
+#   busy = total - (idle + iowait)      # iowait counts as idle, NOT as load
+#
+# Stateful and non-blocking: each call diffs /proc/stat against this caller's
+# previous snapshot, so the % is the average load over the real time since the
+# last call (~the caller's refresh interval). No sleep on the hot path.
+#
+# Usage: cpu-load.sh [instance]
+#   instance  state key, so independent callers (e.g. "polybar", "sysmon") keep
+#             separate snapshots and don't corrupt each other's delta.
+#             Default: "default".
+
+instance="${1:-default}"
+state="${XDG_RUNTIME_DIR:-/tmp}/cpu-load.${instance}.state"
+
+# Read the aggregate cpu line; fields after "cpu" are:
+#   user nice system idle iowait irq softirq steal guest guest_nice
+# Emit two running totals: "<total_jiffies> <idle_jiffies>".
+snapshot() {
+  local _ user nice system idle iowait irq softirq steal
+  read -r _ user nice system idle iowait irq softirq steal _ < /proc/stat
+  printf '%d %d' \
+    "$(( user + nice + system + idle + iowait + irq + softirq + steal ))" \
+    "$(( idle + iowait ))"
+}
+
+read -r cur_total cur_idle <<< "$(snapshot)"
+
+if [[ -r $state ]]; then
+  read -r prev_total prev_idle < "$state"
+else
+  # No prior snapshot: take one short self-contained sample so the very first
+  # call still returns a meaningful number instead of 0.
+  prev_total=$cur_total prev_idle=$cur_idle
+  sleep 0.3
+  read -r cur_total cur_idle <<< "$(snapshot)"
+fi
+
+printf '%s %s\n' "$cur_total" "$cur_idle" > "$state"
+
+dt=$(( cur_total - prev_total ))
+di=$(( cur_idle - prev_idle ))
+if (( dt <= 0 )); then
+  echo 0
+  exit 0
+fi
+
+load=$(( (100 * (dt - di) + dt / 2) / dt ))   # round to nearest percent
+(( load < 0 ))   && load=0
+(( load > 100 )) && load=100
+echo "$load"

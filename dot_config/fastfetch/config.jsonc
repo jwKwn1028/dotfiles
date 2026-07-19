@@ -1,31 +1,60 @@
 {
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
   "logo": {
-    "type": "auto"  // Keeps your previous preference for no ASCII art
+    "type": "auto"
+  },
+  "display": {
+    "temp": {
+      "unit": "C",
+      "color": {
+        "green": "green",
+        "yellow": "light_yellow",
+        "red": "light_red"
+      }
+    }
   },
   "modules": [
     "title",
     "separator",
     "os",
+    "host",
     "kernel",
     "uptime",
     "packages",
     "shell",
+    {
+      "type": "display",
+      "key": "Resolution"
+    },
     "de",
     "wm",
-    // "wmtheme",   // Removed (Theme)
-    // "theme",     // Removed (Theme)
-    // "icons",     // Removed (Icons)
-    // "font",      // Removed (Font)
-    // "cursor",    // Removed (Cursor)
+    "wmtheme",
+    "theme",
+    "icons",
     "terminal",
-    // "display",   // Removed (Display/Resolution)
-    "cpu",
-    "gpu",
+    "terminalfont",
+    {
+      "type": "cpu",
+      "temp": {
+        "green": 70,
+        "yellow": 90
+      }
+    },
+    {
+      "type": "gpu",
+      "temp": {
+        "green": 65,
+        "yellow": 85
+      }
+    },
+    {
+      "type": "command",
+      "key": "Fan",
+      "text": "for h in /sys/class/hwmon/*/; do [ \"$(cat \"$h/name\" 2>/dev/null)\" = thinkpad ] || continue; out=\"\"; for f in \"$h\"fan*_input; do [ -e \"$f\" ] || continue; r=$(cat \"$f\"); out=\"${out:+$out / }${r} RPM\"; done; echo \"${out:-N/A}\"; done"
+    },
     "memory",
-    "disk",
     "battery",
     "break",
-    // "colors"
+    "colors"
   ]
 }
