@@ -15,6 +15,36 @@ language-servers = ["basedpyright", "ruff"]
 auto-format = false
 formatter = { command = "ruff", args = ["format", "--stdin-filename", "stdin.py", "-"] }
 
+# Debugger (DAP): debugpy, launched via `uv run --with debugpy`. This runs the
+# adapter *inside the current project's venv* (so the program under test sees its
+# dependencies) and overlays debugpy without a per-project install. We invoke
+# `uv` (a real binary on PATH) rather than `python`, because on this machine
+# `python` is a zsh shell function Helix cannot spawn. Verify with `hx --health
+# python`; keybindings live under Alt-d in config.toml.
+[language.debugger]
+name = "debugpy"
+transport = "stdio"
+command = "uv"
+args = ["run", "--with", "debugpy", "python", "-m", "debugpy.adapter"]
+
+# Debug the file you name (filename completion, defaults to main.py). justMyCode
+# = false lets you step into library/stdlib code; set true to stay in your own.
+[[language.debugger.templates]]
+name = "launch (file)"
+request = "launch"
+completion = [ { name = "entrypoint", completion = "filename", default = "main.py" } ]
+args = { program = "{0}", console = "internalConsole", justMyCode = false }
+
+# Attach to an already-running process started with:
+#   python -m debugpy --listen 5678 --wait-for-client your_app.py
+# Helix's template args are a flat string map (no nested tables), so use
+# debugpy's top-level host/port form rather than a nested `connect` object.
+[[language.debugger.templates]]
+name = "attach (port)"
+request = "attach"
+completion = [ { name = "port", default = "5678" } ]
+args = { host = "127.0.0.1", port = "{0}" }
+
 [language-server.basedpyright]
 command = "basedpyright-langserver"
 args = ["--stdio"]

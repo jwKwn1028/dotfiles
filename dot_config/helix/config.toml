@@ -69,6 +69,19 @@ parents = true
   ':echo " "',
 ]
 
+# DAP / debug submenu. Helix ships no default debug keys, so these are ours.
+# Leader = Alt-d; drives the debugpy adapter configured in languages.toml.
+[keys.normal.A-d]
+t = "dap_toggle_breakpoint"
+d = "dap_launch"          # start a session (prompts you to pick a template)
+c = "dap_continue"
+n = "dap_next"            # step over
+i = "dap_step_in"
+o = "dap_step_out"
+v = "dap_variables"       # inspect variables (popup)
+r = "dap_restart"
+k = "dap_terminate"       # kill the session
+
 [keys.insert]
 A-h = "move_char_left"
 A-j = "move_line_down"
