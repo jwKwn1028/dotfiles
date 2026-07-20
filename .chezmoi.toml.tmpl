@@ -5,9 +5,15 @@
 {{- $email   := promptStringOnce . "email" "Email (git author)"            "217174958+jwKwn1028@users.noreply.github.com" -}}
 {{- $class   := promptStringOnce . "class" "Machine class [desktop|server]" "desktop" -}}
 {{- $context7 := promptStringOnce . "context7ApiKey" "Context7 API key (blank to skip)" "" -}}
+{{- $sshRemoteUser := promptStringOnce . "sshRemoteUser" "Remote SSH username" "" -}}
+{{- $sshGpuHost := promptStringOnce . "sshGpuHost" "GPU SSH host alias" "" -}}
+{{- $sshHpcHost := promptStringOnce . "sshHpcHost" "HPC SSH host alias" "" -}}
 
 [data]
     name           = {{ $name | quote }}
     email          = {{ $email | quote }}
     class          = {{ $class | quote }}
     context7ApiKey = {{ $context7 | quote }}
+    sshRemoteUser  = {{ $sshRemoteUser | quote }}
+    sshGpuHost     = {{ $sshGpuHost | quote }}
+    sshHpcHost     = {{ $sshHpcHost | quote }}

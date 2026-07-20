@@ -1,0 +1,123 @@
+# --- Remote Access Tools ---
+# Values are prompted by .chezmoi.toml.tmpl and stored only in the local
+# chezmoi config. Environment variables can still override them per session.
+GPU_REMOTE_USER=${GPU_REMOTE_USER:-{{ .sshRemoteUser | quote }}}
+GPU_REMOTE_HOST=${GPU_REMOTE_HOST:-{{ .sshGpuHost | quote }}}
+
+# 1. Quick SFTP Connect
+# Usage: just type 'cluster-fs' to browse your server files
+cdcluster() {
+  emulate -L zsh
+  sftp "${GPU_REMOTE_USER}@${GPU_REMOTE_HOST}"
+}
+
+# 2. "Get" Function (Smart Download)
+# Usage: get-remote path/to/file
+
+grem() {
+  emulate -L zsh
+
+  if (( $# < 1 )); then
+    print -u2 "Usage:"
+    print -u2 "  grem <remote_path...>"
+    print -u2 "  grem [rsync_opts...] -- <remote_path...>"
+    return 1
+  fi
+
+  local -a rsync_opts remotes
+  rsync_opts=(-aPzh --info=progress2 --protect-args)
+
+  # If the first argument starts with '-', treat leading args as rsync options.
+  if [[ $1 == -* ]]; then
+    while (( $# )) && [[ $1 != -- ]]; do
+      rsync_opts+=("$1")
+      shift
+      case "${rsync_opts[-1]}" in
+        --exclude|--include|--filter|--exclude-from|--files-from|-e|--rsh)
+          (( $# )) || { print -u2 "grem: missing argument for ${rsync_opts[-1]}"; return 2; }
+          rsync_opts+=("$1")
+          shift
+          ;;
+      esac
+    done
+
+    # consume optional `--`
+    [[ $1 == -- ]] && shift
+  fi
+
+  if (( $# < 1 )); then
+    print -u2 "Usage: grem <remote_path...>  (or: grem [opts...] -- <remote_path...>)"
+    return 1
+  fi
+
+  local remote="${GPU_REMOTE_USER}@${GPU_REMOTE_HOST}"
+  remotes=("${(@)argv/#/${remote}:}")
+  rsync "${rsync_opts[@]}" -- "${remotes[@]}" ./
+}
+
+# 3. "Put" Function (Upload)
+# Usage: put-remote local_file.py
+prem() {
+  if (( $# < 1 )); then
+    print -u2 "Usage: prem <local_path...> [remote_dest]"
+    return 1
+  fi
+
+  local dst="~/"
+  local last="${argv[-1]}"
+  local -a srcs
+  integer i
+
+  # If last arg looks like a remote destination, treat it as destination
+  if (( $# >= 2 )) && [[ "$last" == /* || "$last" == ~* ]]; then
+    dst="$last"
+    for i in {1..$(( $# - 1 ))}; do
+      srcs+=("${argv[$i]}")
+    done
+  else
+    srcs=("$@")
+  fi
+
+  local remote="${GPU_REMOTE_USER}@${GPU_REMOTE_HOST}"
+
+  # Ensure directory semantics on the remote by forcing trailing slash
+  rsync -aPzh --info=progress2 --protect-args -- \
+    "${srcs[@]}" "${remote}:${dst%/}/"
+}
+
+# Host-specific remote transfer wrappers.
+grem-gpu() {
+  emulate -L zsh
+  local GPU_REMOTE_HOST={{ .sshGpuHost | quote }}
+  grem "$@"
+}
+
+grem-hpc() {
+  emulate -L zsh
+  local GPU_REMOTE_HOST={{ .sshHpcHost | quote }}
+  grem "$@"
+}
+
+prem-gpu() {
+  emulate -L zsh
+  local GPU_REMOTE_HOST={{ .sshGpuHost | quote }}
+  prem "$@"
+}
+
+prem-hpc() {
+  emulate -L zsh
+  local GPU_REMOTE_HOST={{ .sshHpcHost | quote }}
+  prem "$@"
+}
+
+sftp-gpu() {
+  emulate -L zsh
+  local GPU_REMOTE_HOST={{ .sshGpuHost | quote }}
+  cdcluster
+}
+
+sftp-hpc() {
+  emulate -L zsh
+  local GPU_REMOTE_HOST={{ .sshHpcHost | quote }}
+  cdcluster
+}
