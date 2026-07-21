@@ -15,11 +15,12 @@
     "CtrlUnderscore": "lua:comment.comment",
     "Ctrl-o": "lua:fzf.fzf",
     "Ctrl-g": "command-edit:goto ",
+    "\u001b[27;5;13~": "InsertNewline",
     "Alt-g": "CursorStart",
     "Alt-G": "CursorEnd",
     "Alt-m": "JumpToMatchingBrace",
     "Alt-t": "lua:filemanager.toggle_tree",
-    "Ali-;": "ToggleKeyMenu",
+    "Alt-;": "ToggleKeyMenu",
     "Alt-d": "command-edit:jump +",
     "Alt-u": "command-edit:jump -"
 }
