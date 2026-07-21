@@ -1,26 +1,29 @@
 # --------------------------------------------------------
 # Universal Extract
 # --------------------------------------------------------
-ex () {
-  if [ -f "$1" ] ; then
+ex() {
+  emulate -L zsh
+  [[ -n "$1" ]] || { print -u2 "usage: ex <archive>"; return 2; }
+  if [[ -f "$1" ]]; then
     case "$1" in
-      *.tar.bz2)   tar xjf "$1"   ;;
-      *.tar.gz)    tar xzf "$1"   ;;
-      *.bz2)       bunzip2 "$1"   ;;
-      *.rar)       unrar x "$1"   ;;
-      *.gz)        gunzip "$1"    ;;
-      *.tar)       tar xf "$1"    ;;
-      *.tbz2)      tar xjf "$1"   ;;
-      *.tgz)       tar xzf "$1"   ;;
-      *.zip)       unzip "$1"     ;;
-      *.Z)         uncompress "$1";;
-      *.7z)        7z x "$1"      ;;
-      *.tar.xz)    tar xJf "$1"   ;;
-      *.xz)        unxz "$1"      ;;
-      *)           echo "'$1' cannot be extracted via ex()" ;;
+      *.tar.bz2)   tar xjf "$1"    ;;
+      *.tar.gz)    tar xzf "$1"    ;;
+      *.bz2)       bunzip2 "$1"    ;;
+      *.rar)       unrar x "$1"    ;;
+      *.gz)        gunzip "$1"     ;;
+      *.tar)       tar xf "$1"     ;;
+      *.tbz2)      tar xjf "$1"    ;;
+      *.tgz)       tar xzf "$1"    ;;
+      *.zip)       unzip "$1"      ;;
+      *.Z)         uncompress "$1" ;;
+      *.7z)        7z x "$1"       ;;
+      *.tar.xz)    tar xJf "$1"    ;;
+      *.xz)        unxz "$1"       ;;
+      *)           print -u2 "ex: don't know how to extract '$1'"; return 1 ;;
     esac
   else
-    echo "'$1' is not a valid file"
+    print -u2 "ex: '$1' is not a valid file"
+    return 1
   fi
 }
 
@@ -38,14 +41,14 @@ _zsh_open_pdf() {
   local prefer="$1" viewer v file
   local -a order
 
-  command -v fzf >/dev/null 2>&1 || { print -u2 "$caller: fzf not found"; return 127; }
+  _have fzf || { print -u2 "$caller: fzf not found"; return 127; }
 
   case "$prefer" in
     zathura) order=(zathura sioyek) ;;
     *)       order=(sioyek zathura) ;;
   esac
   for v in "${order[@]}"; do
-    if command -v "$v" >/dev/null 2>&1; then
+    if _have "$v"; then
       viewer="$v"
       break
     fi
@@ -74,8 +77,8 @@ bo() {
   emulate -L zsh
   local file
 
-  command -v fzf >/dev/null 2>&1 || { print -u2 "bo: fzf not found"; return 127; }
-  command -v ebook-viewer >/dev/null 2>&1 || { print -u2 "bo: ebook-viewer not found"; return 127; }
+  _have fzf || { print -u2 "bo: fzf not found"; return 127; }
+  _have ebook-viewer || { print -u2 "bo: ebook-viewer not found"; return 127; }
 
   file="$(_zsh_ls_files epub | fzf --prompt='Open EPUB> ')" || return 1
   [[ -n "$file" ]] || return 1

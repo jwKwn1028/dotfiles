@@ -3,20 +3,25 @@
 # --------------------------------------------------------
 # Sourced by ~/.zshrc before the numbered modules.
 
+# _have <cmd>  ->  succeeds if <cmd> is an external command on PATH.
+# Centralizes the `command -v x >/dev/null 2>&1` / `whence -p x` guard that the
+# numbered modules would otherwise repeat for every optional tool.
+_have() { whence -p -- "$1" >/dev/null 2>&1; }
+
 # Resolve tool variants once so every module agrees on the same binary.
 #   _zsh_fd  -> fd | fdfind | ''    (Debian/Ubuntu package fd as fdfind)
 #   _zsh_bat -> bat | batcat | cat
-if whence -p fd >/dev/null; then
+if _have fd; then
   _zsh_fd=fd
-elif whence -p fdfind >/dev/null; then
+elif _have fdfind; then
   _zsh_fd=fdfind
 else
   _zsh_fd=
 fi
 
-if whence -p bat >/dev/null; then
+if _have bat; then
   _zsh_bat=bat
-elif whence -p batcat >/dev/null; then
+elif _have batcat; then
   _zsh_bat=batcat
 else
   _zsh_bat=cat

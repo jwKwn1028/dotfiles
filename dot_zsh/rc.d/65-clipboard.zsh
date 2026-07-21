@@ -2,7 +2,7 @@
 # Clipboard helper: shared with tmux via ~/.local/bin/clipcopy
 # --------------------------------------------------------
 _clipcopy() {
-  if command -v clipcopy >/dev/null 2>&1; then
+  if _have clipcopy; then
     clipcopy
   else
     print -u2 "_clipcopy: ~/.local/bin/clipcopy not found."

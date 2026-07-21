@@ -5,14 +5,14 @@ GPU_REMOTE_USER=${GPU_REMOTE_USER:-{{ .sshRemoteUser | quote }}}
 GPU_REMOTE_HOST=${GPU_REMOTE_HOST:-{{ .sshGpuHost | quote }}}
 
 # 1. Quick SFTP Connect
-# Usage: just type 'cluster-fs' to browse your server files
+# Usage: just type 'cdcluster' to browse your server files
 cdcluster() {
   emulate -L zsh
   sftp "${GPU_REMOTE_USER}@${GPU_REMOTE_HOST}"
 }
 
 # 2. "Get" Function (Smart Download)
-# Usage: get-remote path/to/file
+# Usage: grem path/to/file
 
 grem() {
   emulate -L zsh
@@ -56,14 +56,16 @@ grem() {
 }
 
 # 3. "Put" Function (Upload)
-# Usage: put-remote local_file.py
+# Usage: prem local_file.py [remote_dest]
 prem() {
+  emulate -L zsh
+
   if (( $# < 1 )); then
     print -u2 "Usage: prem <local_path...> [remote_dest]"
     return 1
   fi
 
-  local dst="~/"
+  local dst=""
   local last="${argv[-1]}"
   local -a srcs
   integer i
@@ -80,9 +82,11 @@ prem() {
 
   local remote="${GPU_REMOTE_USER}@${GPU_REMOTE_HOST}"
 
-  # Ensure directory semantics on the remote by forcing trailing slash
+  # Empty dst -> "host:" -> the remote home dir (rsync's default), so we do not
+  # depend on the remote shell to expand a literal "~". An explicit dst keeps
+  # directory semantics via a forced trailing slash.
   rsync -aPzh --info=progress2 --protect-args -- \
-    "${srcs[@]}" "${remote}:${dst%/}/"
+    "${srcs[@]}" "${remote}:${dst:+${dst%/}/}"
 }
 
 # Host-specific remote transfer wrappers.

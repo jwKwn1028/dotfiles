@@ -4,7 +4,7 @@
 # Default/CTRL-T/ALT-C commands, preview, keybindings, hf.
 # Uses $_zsh_fd / $_zsh_bat (resolved once in _lib.zsh) instead of the
 # old per-block fd -> fdfind -> rg -> find ladder.
-if command -v fzf >/dev/null 2>&1; then
+if _have fzf; then
 
   if [[ -n $_zsh_fd ]]; then
     export FZF_DEFAULT_COMMAND="$_zsh_fd --hidden --follow --exclude .git --type f"
@@ -13,7 +13,7 @@ if command -v fzf >/dev/null 2>&1; then
 
     _fzf_compgen_path() { "$_zsh_fd" --hidden --follow --exclude .git . "$1"; }
     _fzf_compgen_dir()  { "$_zsh_fd" --hidden --follow --exclude .git --type d . "$1"; }
-  elif whence -p rg >/dev/null; then
+  elif _have rg; then
     export FZF_DEFAULT_COMMAND='rg --files --no-ignore --hidden --glob "!.git/*"'
     export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
     export FZF_ALT_C_COMMAND='find . -type d -not -path "*/.git/*"'

@@ -1,7 +1,7 @@
 # --------------------------------------------------------
 # zoxide
 # --------------------------------------------------------
-if command -v zoxide >/dev/null 2>&1; then
+if _have zoxide; then
   eval "$(zoxide init zsh --cmd cd)"
 fi
 
@@ -28,7 +28,7 @@ r() {
   tempfile="$(mktemp "${TMPDIR:-/tmp}/ranger-cd.XXXXXX")" || return 1
   trap 'rm -f -- "$tempfile"' EXIT
 
-  command -v ranger >/dev/null 2>&1 || { print -u2 "r: ranger not found"; return 127; }
+  _have ranger || { print -u2 "r: ranger not found"; return 127; }
 
   command ranger --choosedir="$tempfile" -- "$start_dir" || return
 
@@ -42,12 +42,19 @@ alias rp='r "$HOME/Documents/Workspace/Project"'
 # Yazi
 # --------------------------------------------------------
 y() {
-  local tmp="$(mktemp -t "yazi-cwd.XXXXXX")"
+  emulate -L zsh
+  setopt localoptions localtraps
+
+  local tmp cwd
+  tmp="$(mktemp "${TMPDIR:-/tmp}/yazi-cwd.XXXXXX")" || return 1
+  trap 'rm -f -- "$tmp"' EXIT
+
+  _have yazi || { print -u2 "y: yazi not found"; return 127; }
+
   yazi "$@" --cwd-file="$tmp"
-  if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
-    builtin cd -- "$cwd"
-  fi
-  rm -f -- "$tmp"
+
+  cwd="$(<"$tmp")"
+  [[ -n "$cwd" && "$cwd" != "$PWD" ]] && builtin cd -- "$cwd"
 }
 
 alias yp='y "$HOME/Documents/Workspace/Project"'

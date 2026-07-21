@@ -1,6 +1,36 @@
-. "$HOME/.cargo/env"
+# --------------------------------------------------------
+# Environment shared by EVERY zsh invocation (interactive
+# shells, scripts, plain `zsh -c`). Interactive-only config
+# lives in ~/.zshrc -> ~/.zsh/rc.d/; login-shell extras
+# (miniconda PATH, lazy conda wrappers) in ~/.zprofile.
+# --------------------------------------------------------
+export EDITOR=hx
+export VISUAL=hx
+export MICRO_TRUECOLOR=1
+export BAT_THEME="tokyonight_storm"
+export ZK_EDITOR="hx"
+export TYPST_INSTALL="$HOME/.typst"
 
-# Make `conda` available in non-interactive `zsh -lc` shells that do not read
+typeset -U path PATH
+path=(
+  "/usr/local/go/bin"
+  "$HOME/.local/bin"
+  "$HOME/.local/npm-global/bin"
+  "$TYPST_INSTALL/bin"
+  "$HOME/Applications/FullProf_Suite"
+  "$HOME/Applications/VESTA-gtk3"
+  "$HOME/.juliaup/bin"
+  "$HOME/Applications/qe-7.5/bin"
+  "$HOME/.cargo/bin"
+  "${path[@]}"
+)
+export PATH
+
+# Platform compatibility loads before ~/.zshrc and its rc.d modules.
+[[ -r "$HOME/.zsh/macos/compat.zsh" ]] &&
+  source "$HOME/.zsh/macos/compat.zsh"
+
+# Make `conda` available in non-interactive `zsh -c` shells that do not read
 # ~/.zprofile or ~/.zshrc. Full lazy init remains in the interactive config.
 if [[ -x "$HOME/miniconda3/bin/conda" ]] && ! whence conda >/dev/null 2>&1; then
   conda() {
