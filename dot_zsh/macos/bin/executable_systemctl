@@ -1,0 +1,23 @@
+#!/bin/sh
+# Minimal compatibility for the two aliases in rc.d/30-aliases.zsh.
+# Deliberately reject every other systemctl verb rather than guessing.
+
+case ${1:-} in
+  poweroff)
+    set -- /usr/bin/sudo /sbin/shutdown -h now
+    ;;
+  reboot)
+    set -- /usr/bin/sudo /sbin/shutdown -r now
+    ;;
+  *)
+    printf '%s\n' 'systemctl compatibility supports only poweroff and reboot' >&2
+    exit 64
+    ;;
+esac
+
+if [ "${MACOS_SYSTEMCTL_DRY_RUN:-0}" = 1 ]; then
+  printf '%s\n' "$*"
+  exit 0
+fi
+
+exec "$@"

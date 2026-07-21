@@ -1,0 +1,12 @@
+#!/bin/sh
+# Native clipboard writer expected by rc.d/65-clipboard.zsh.
+
+if command -v pbcopy >/dev/null 2>&1; then
+  exec pbcopy
+fi
+
+# Retain a terminal-safe fallback for unusual Darwin environments without
+# pasteboard access (for example, some remote sessions).
+printf '\033]52;c;'
+base64 | tr -d '\r\n'
+printf '\a'

@@ -1,0 +1,25 @@
+#!/bin/sh
+# GNU wc -L measures terminal display width. Apple's wc -L measures bytes, so
+# prefer the Homebrew coreutils implementation for Unicode banner centering.
+
+if [ -n "${MACOS_COREUTILS_GNUBIN:-}" ] &&
+   [ -x "$MACOS_COREUTILS_GNUBIN/wc" ]; then
+  exec "$MACOS_COREUTILS_GNUBIN/wc" "$@"
+fi
+
+for candidate in \
+  /opt/homebrew/opt/coreutils/libexec/gnubin/wc \
+  /usr/local/opt/coreutils/libexec/gnubin/wc
+do
+  if [ -x "$candidate" ]; then
+    exec "$candidate" "$@"
+  fi
+done
+
+if command -v gwc >/dev/null 2>&1; then
+  exec gwc "$@"
+fi
+
+# Preserve normal wc behavior if coreutils is not installed. doctor.zsh marks
+# this fallback as incomplete because non-ASCII display widths may differ.
+exec "${MACOS_NATIVE_WC:-/usr/bin/wc}" "$@"
