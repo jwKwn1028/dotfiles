@@ -26,3 +26,47 @@ include /home/kjw1028/.config/task/tokyonight-storm.theme
 #include solarized-light-256.theme
 #include no-color.theme
 
+# =====================================================================
+# Custom views / reports   (work in the CLI *and* in taskwarrior-tui)
+#   task today  ·  task agenda  ·  task week  ·  task upcoming  ·  task stuck
+# =====================================================================
+
+# GLOBAL: prefix report dates with the weekday, e.g. "Mon 2026-07-20".
+# Affects every report (list, next, all, ...). Delete this line for plain ISO.
+dateformat.report=a Y-M-D
+
+# today   — fires now: overdue, due today, or scheduled for today. Urgency-ranked.
+report.today.description=Due/scheduled today + overdue
+report.today.columns=id,due.relative,scheduled.relative,priority,project,tags,description,urgency
+report.today.labels=ID,Due,Sched,P,Proj,Tags,Desc,Urg
+report.today.filter=+PENDING and (+OVERDUE or +TODAY or scheduled.before:tomorrow)
+report.today.sort=urgency-
+
+# agenda  — deadline pressure: overdue + everything due through end of week.
+report.agenda.description=Overdue + due through end of week
+report.agenda.columns=id,due.relative,scheduled.relative,priority,project,tags,description,urgency
+report.agenda.labels=ID,Due,Sched,P,Proj,Tags,Desc,Urg
+report.agenda.filter=+PENDING and (+OVERDUE or due.before:eow+1d)
+report.agenda.sort=urgency-
+
+# week    — this week's timeline: anything due OR scheduled Mon-Sun (+ overdue).
+report.week.description=This week: due or scheduled
+report.week.columns=id,due,scheduled,priority,project,tags,description
+report.week.labels=ID,Due,Sched,P,Proj,Tags,Desc
+report.week.filter=+PENDING and (+OVERDUE or +WEEK or (scheduled.after:sow and scheduled.before:eow))
+report.week.sort=due+,scheduled+
+
+# upcoming — the horizon: dated items beyond this week, soonest first.
+report.upcoming.description=Future-dated, beyond this week
+report.upcoming.columns=id,due,scheduled,priority,project,tags,description
+report.upcoming.labels=ID,Due,Sched,P,Proj,Tags,Desc
+report.upcoming.filter=+PENDING and (due.after:eow or scheduled.after:eow)
+report.upcoming.sort=due+,scheduled+
+
+# stuck   — parked work you might forget: blocked (unmet deps) or waiting.
+report.stuck.description=Blocked or waiting
+report.stuck.columns=id,due.relative,depends,wait,project,description
+report.stuck.labels=ID,Due,Deps,Wait,Proj,Desc
+report.stuck.filter=(+PENDING and +BLOCKED) or +WAITING
+report.stuck.sort=urgency-
+

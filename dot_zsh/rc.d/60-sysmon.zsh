@@ -89,20 +89,81 @@ _sysmon_frame () {           # render one snapshot
   print -P " %F{blue}%BFAN%b%f  fan1   %F{white}${f1} RPM%f   fan2   %F{white}${f2} RPM%f"
 }
 
+_sysmon_draw () {            # center and draw an already-collected snapshot
+  emulate -L zsh
+  setopt extended_glob
+
+  local frame="$1" line plain
+  local -a frame_lines
+  local -i frame_width=0 line_width
+  local -i frame_height cols rows left top row
+
+  frame_lines=("${(@f)frame}")
+  frame_height=${#frame_lines}
+
+  # print -P emits SGR color sequences.  Ignore those non-printing bytes when
+  # finding the width so that the visible frame, rather than its escapes, is
+  # centered.  The frame contains no tabs or double-width characters.
+  for line in "${frame_lines[@]}"; do
+    plain=${line//$'\e'\[[0-9;]##m/}
+    line_width=${#plain}
+    (( line_width > frame_width )) && frame_width=$line_width
+  done
+
+  cols=${COLUMNS:-80}
+  rows=${LINES:-24}
+  (( left = cols > frame_width  ? (cols - frame_width) / 2 + 1 : 1 ))
+  (( top  = rows > frame_height ? (rows - frame_height) / 2 + 1 : 1 ))
+
+  # Erase the old placement after a resize, then clear each destination line
+  # on ordinary refreshes so shorter values cannot leave trailing characters.
+  (( $2 )) && printf '\e[2J'
+  row=$top
+  for line in "${frame_lines[@]}"; do
+    printf '\e[%d;%dH\e[2K%s' "$row" "$left" "$line"
+    (( ++row ))
+  done
+}
+
 sysmon () {
   emulate -L zsh
+  setopt local_traps no_monitor
+
   local interval="${1:-2}"
+  local frame
+  local -i interrupted=0 resized=1 clear_frame timer_pid
+
+  # Keep the invoking shell intact and make signal handlers local to sysmon.
+  tput smcup 2>/dev/null                                   # alternate screen
   tput civis 2>/dev/null                                   # hide cursor
-  trap 'tput cnorm 2>/dev/null; return 0' INT TERM
-  clear
-  while :; do
-    printf '\e[H'                                          # cursor home (flicker-free redraw)
-    # Clear each line to EOL (\e[K) while redrawing: a field that shrank since
-    # the previous frame (e.g. load 12% -> 8%, or 100% -> 2%) would otherwise
-    # leave the old trailing digit/'%' on screen, showing up as "8%%".
-    _sysmon_frame | while IFS= read -r line; do printf '%s\e[K\n' "$line"; done
-    printf '\e[0J'                                         # clear anything below the frame
-    sleep "$interval" || break
+  trap 'interrupted=1' HUP INT TERM
+  trap 'resized=1' WINCH
+
+  while (( ! interrupted )); do
+    frame="$(_sysmon_frame)"
+    (( interrupted )) && break
+    (( clear_frame = resized, resized = 0 ))
+    _sysmon_draw "$frame" "$clear_frame"
+
+    # A foreground sleep delays WINCH traps until it exits.  Waiting on a
+    # background timer lets a resize interrupt wait, so the cached frame can
+    # be repositioned immediately without collecting the sensors again.
+    sleep "$interval" &
+    timer_pid=$!
+    while kill -0 "$timer_pid" 2>/dev/null; do
+      wait "$timer_pid" 2>/dev/null
+      if (( interrupted )); then
+        kill "$timer_pid" 2>/dev/null
+        wait "$timer_pid" 2>/dev/null
+        break
+      fi
+      (( clear_frame = resized, resized = 0 ))
+      if (( clear_frame )); then
+        _sysmon_draw "$frame" 1
+      fi
+    done
   done
+
   tput cnorm 2>/dev/null                                   # restore cursor
+  tput rmcup 2>/dev/null                                   # restore shell screen
 }
