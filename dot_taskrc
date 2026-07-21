@@ -1,5 +1,5 @@
 # [Created by task 3.4.2 3/2/2026 12:49:55]
-data.location=~/.task
+data.location=/home/kjw1028/.task
 news.version=3.4.2
 
 # To use the default location of the XDG directories,
@@ -20,7 +20,9 @@ news.version=3.4.2
 #include dark-violets-256.theme
 #include dark-yellow-green.theme
 #include dark-gray-256.theme
-include dark-gray-blue-256.theme
+#include dark-gray-blue-256.theme
+include /home/kjw1028/.config/task/tokyonight-storm.theme
 #include solarized-dark-256.theme
 #include solarized-light-256.theme
 #include no-color.theme
+

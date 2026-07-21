@@ -1,0 +1,93 @@
+###############################################################################
+# TokyoNight Storm — Taskwarrior color theme
+#
+# Matches Helix (theme = "tokyonight_storm") and the Ghostty terminal
+# (theme = "TokyoNight Storm").
+#
+# HOW IT STAYS EXACT: Taskwarrior only speaks the 16/256-color palette, not
+# 24-bit hex. But Ghostty's TokyoNight Storm theme *remaps* the terminal's
+# ANSI palette (indices 0-15) to the real TokyoNight hex values. So every
+# rule below sticks to color0-color15 / named colors, which the terminal
+# then paints as the genuine TokyoNight colors — pixel-identical to Helix.
+# (Avoid rgbRGB / grayN here: those hit the fixed 256-cube, which is NOT
+#  themed and would only approximate the palette.)
+#
+#   color0  #1d202f (bg-dark)   color8   #414868 (comment / bright-black)
+#   red     #f7768e             green    #9ece6a
+#   yellow  #e0af68             blue     #7aa2f7
+#   magenta #bb9af7             cyan     #7dcfff
+#   white   #a9b1d6 (fg-dark)   color15  #c0caf5 (fg)
+###############################################################################
+
+rule.precedence.color=deleted,completed,active,keyword.,tag.,project.,overdue,scheduled,due.today,due,blocked,blocking,recurring,tagged,uda.
+
+# General decoration
+color.label=
+color.label.sort=
+color.alternate=on color0
+color.header=color4
+color.footnote=color8
+color.warning=color3
+color.error=color1
+color.debug=color5
+
+# Task state
+color.completed=color8
+color.deleted=color8
+color.active=color15 on color8
+color.recurring=color5
+color.scheduled=color6
+color.until=color6
+color.blocked=color8
+color.blocking=color4
+
+# Project
+color.project.none=
+
+# Priority
+color.uda.priority.H=color15
+color.uda.priority.M=white
+color.uda.priority.L=color8
+
+# Tags
+color.tag.next=color2
+color.tag.none=
+color.tagged=color2
+
+# Due
+color.due=color3
+color.due.today=color0 on color3
+color.overdue=color0 on color1
+
+# Report: burndown
+color.burndown.pending=color0 on color1
+color.burndown.started=color0 on color3
+color.burndown.done=color0 on color2
+
+# Report: history
+color.history.add=color0 on color2
+color.history.delete=color0 on color1
+color.history.done=color0 on color4
+
+# Report: summary
+color.summary.bar=on color2
+color.summary.background=on color8
+
+# Command: calendar
+color.calendar.due=color0 on color3
+color.calendar.due.today=color0 on color1
+color.calendar.holiday=color0 on color5
+color.calendar.overdue=color15 on color1
+color.calendar.scheduled=
+color.calendar.today=color0 on color15
+color.calendar.weekend=on color8
+color.calendar.weeknumber=color8
+
+# Command: sync
+color.sync.added=color2
+color.sync.changed=color3
+color.sync.rejected=color1
+
+# Command: undo
+color.undo.before=color1
+color.undo.after=color2
