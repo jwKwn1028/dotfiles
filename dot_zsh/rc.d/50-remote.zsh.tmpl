@@ -61,7 +61,36 @@ prem() {
   emulate -L zsh
 
   if (( $# < 1 )); then
-    print -u2 "Usage: prem <local_path...> [remote_dest]"
+    print -u2 "Usage:"
+    print -u2 "  prem <local_path...> [remote_dest]"
+    print -u2 "  prem [rsync_opts...] -- <local_path...> [remote_dest]"
+    return 1
+  fi
+
+  local -a rsync_opts
+  rsync_opts=(-aPzh --info=progress2 --protect-args)
+
+  # Keep rsync filter globs quoted so zsh passes them through unchanged, e.g.
+  # prem --exclude='*.safetensors' -- model-dir/ /remote/dest
+  if [[ $1 == -* ]]; then
+    while (( $# )) && [[ $1 != -- ]]; do
+      rsync_opts+=("$1")
+      shift
+      case "${rsync_opts[-1]}" in
+        --exclude|--include|--filter|--exclude-from|--files-from|-e|--rsh)
+          (( $# )) || { print -u2 "prem: missing argument for ${rsync_opts[-1]}"; return 2; }
+          rsync_opts+=("$1")
+          shift
+          ;;
+      esac
+    done
+
+    # consume optional `--`
+    [[ $1 == -- ]] && shift
+  fi
+
+  if (( $# < 1 )); then
+    print -u2 "Usage: prem <local_path...> [remote_dest]  (or: prem [opts...] -- <local_path...> [remote_dest])"
     return 1
   fi
 
@@ -85,7 +114,7 @@ prem() {
   # Empty dst -> "host:" -> the remote home dir (rsync's default), so we do not
   # depend on the remote shell to expand a literal "~". An explicit dst keeps
   # directory semantics via a forced trailing slash.
-  rsync -aPzh --info=progress2 --protect-args -- \
+  rsync "${rsync_opts[@]}" -- \
     "${srcs[@]}" "${remote}:${dst:+${dst%/}/}"
 }
 

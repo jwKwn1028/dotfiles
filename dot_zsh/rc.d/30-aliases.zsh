@@ -12,6 +12,7 @@ alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 (( $+commands[batcat] )) && alias bat='batcat'
 alias hz='${EDITOR:-hx} ~/.zsh/rc.d'   # config now lives in modules (was ~/.zshrc)
 alias sz='print "reloading zsh..." && exec zsh'   # full restart: re-reads .zshenv + rc.d without double-wrapping ZLE widgets
+alias ':q'='exit'
 if _have fdfind; then
   alias fd='fdfind'
 fi
