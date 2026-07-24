@@ -25,7 +25,6 @@ client.focused_inactive #16161e #16161e #565f89 #16161e   #16161e
 bindsym $mod+Return           exec --no-startup-id ghostty
 bindsym $mod+Shift+Return     exec --no-startup-id xfce4-terminal
 # keyd emits Linux F16, exposed by this X11 keymap as XF86Launch7/keycode 194.
-bindsym XF86Launch7           exec --no-startup-id /usr/bin/ghostty -e /home/kjw1028/.juliaup/bin/julia
 # bindsym Control+Mod1+t         exec --no-startup-id ghostty  # disabled so XFCE can use Ctrl+Alt+T
 # $mod+d repurposed for XFWM-style tile-right. Use $mod+space for rofi.
 bindsym $mod+space            exec --no-startup-id env XDG_CURRENT_DESKTOP=XFCE:i3 rofi -show drun -theme spotlight
@@ -240,7 +239,7 @@ bindsym $mod+m exec --no-startup-id ~/.config/i3/show-desktop.sh
 bindsym $mod+Control+m move scratchpad
 # --- autostart ---
 exec --no-startup-id /usr/bin/gnome-keyring-daemon --start --components=secrets
-exec_always --no-startup-id sh -c 'pgrep -u "$USER" -f "[p]olkit-gnome-authentication-agent-1" >/dev/null || /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 &'
+exec_always --no-startup-id sh -c 'pgrep -u "$USER" polkit-gnome >/dev/null || /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/focus-tracker\.sh$"; setsid ~/.config/i3/focus-tracker.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/snap-watcher\.sh$"; setsid ~/.config/i3/snap-watcher.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/kakaotalk-float-watcher\.sh$"; setsid ~/.config/i3/kakaotalk-float-watcher.sh </dev/null >/dev/null 2>&1 &'
