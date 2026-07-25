@@ -14,8 +14,10 @@ fontdir="$HOME/.local/share/fonts"
 mkdir -p "$fontdir"
 
 # New Computer Modern (polybar `font: "NewComputerModernMono10 ..."`).
-sudo apt-get install -y fonts-newcomputermodern 2>/dev/null \
-    || echo "NOTE: fonts-newcomputermodern unavailable via apt; install it manually if polybar text looks wrong."
+if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get install -y fonts-newcomputermodern 2>/dev/null \
+        || echo "NOTE: fonts-newcomputermodern unavailable via apt; install it manually if polybar text looks wrong."
+fi
 
 # JetBrainsMono Nerd Font for icon glyphs.
 if ! fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd Font"; then

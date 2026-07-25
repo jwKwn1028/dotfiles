@@ -1,4 +1,15 @@
 # Patterns here match the TARGET path (relative to $HOME), gitignore-style.
+{{- $desktopProfile := "none" -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{-     $desktopProfile = "linuxmint-i3-x11" -}}
+{{-   else if eq .chezmoi.osRelease.id "cachyos" -}}
+{{-     $desktopProfile = "cachyos-niri-noctalia" -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey . "desktopProfile" -}}
+{{-   $desktopProfile = .desktopProfile -}}
+{{- end }}
 
 # ─── Repo documentation ───────────────────────────────────────────────────
 # These describe the source repo; they are not dotfiles. Without this block
@@ -7,6 +18,7 @@
 # README.md elsewhere in the target tree is still applied normally.
 /README.md
 /X11_TO_WAYLAND_TRANSITION.md
+/CACHYOS_TRANSFER_GUIDE.md
 /MACOS_PORTING_GUIDE.md
 /CHEZMOI_UPDATE_WORKFLOW.md
 /AGENTS.md
@@ -30,3 +42,27 @@
 /.zsh/*.bak.*
 /.zsh/hxp-lib.zsh
 /.zsh/hxp-main.zsh
+
+# ─── Desktop profiles ─────────────────────────────────────────────────────
+# Mint's i3 tree is a known-good X11 fallback. CachyOS uses the independently
+# installed Niri + Noctalia desktop and must not receive any of the X11
+# session files or helpers.
+{{ if ne $desktopProfile "linuxmint-i3-x11" -}}
+/.config/i3/
+/.config/polybar/
+/.config/picom/
+/.config/rofi/
+/.x-unstick.sh
+/.toggle-touchpad.sh
+/.local/bin/touchpad
+/.local/bin/disable-trackpoint-middle-click
+{{ end -}}
+
+# Niri and curated Noctalia configuration belong only to the CachyOS profile.
+# Noctalia's runtime state and cache remain local on every profile.
+{{ if ne $desktopProfile "cachyos-niri-noctalia" -}}
+/.config/niri/
+/.config/noctalia/
+{{ end -}}
+/.local/state/noctalia/
+/.cache/noctalia/

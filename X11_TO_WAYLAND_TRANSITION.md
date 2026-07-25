@@ -1,5 +1,9 @@
 # X11 to Wayland Transition Notes
 
+> This document is the plan for adding a Sway-style Wayland session beside i3
+> on the Mint/Ubuntu profile. CachyOS uses a separate Niri/Noctalia profile;
+> follow `CACHYOS_TRANSFER_GUIDE.md` for that machine.
+
 This repository currently contains a working X11/i3 desktop profile. Future
 agents should treat it as a known-good fallback and add a parallel Wayland
 profile instead of editing the i3/X11 files in place.
@@ -40,17 +44,17 @@ config file is inert until the packages behind it exist. Provisioning comes
 first, before any `sway/config` is written.
 
 Package lists live in `.chezmoidata/packages.toml` and are consumed by the
-`run_once_*` scripts. `packages.apt.desktop` is currently pure X11 — i3,
+`run_once_*` scripts. `packages.apt.i3_x11` is currently pure X11 — i3,
 polybar, picom, rofi, feh, flameshot, xdotool, wmctrl, xclip, xsel, lightdm,
-light-locker — and is gated on `class == "desktop"`, prompted in
-`.chezmoi.toml.tmpl`.
+light-locker — and is gated on `class == "desktop"` plus
+`desktopProfile == "linuxmint-i3-x11"`, prompted in `.chezmoi.toml.tmpl`.
 
-During the transition, add the Wayland packages to the **same** `desktop` list
-rather than creating a new one. Having both stacks installed at once is what
-makes the X11 fallback real:
+During this Mint-only transition, add the Wayland packages to the same
+`i3_x11` list rather than the CachyOS pacman list. Having both stacks installed
+at once is what makes the X11 fallback real:
 
 ```toml
-# .chezmoidata/packages.toml, appended to [packages.apt] desktop
+# .chezmoidata/packages.toml, appended to [packages.apt] i3_x11
 "sway", "swaybg", "swayidle", "swaylock",
 "waybar", "wl-clipboard", "grim", "slurp", "kanshi", "fuzzel",
 "xdg-desktop-portal-wlr",
@@ -69,15 +73,13 @@ apt list:
 Re-check availability rather than trusting this list after a distro upgrade;
 these three are the ones most likely to change.
 
-Only split these into a separate `wayland` list — and add a `session` prompt
-next to `class` in `.chezmoi.toml.tmpl` — at step 9 below, once X11 is actually
-being retired. Splitting earlier costs the fallback for no gain.
+Only split these into a separate Mint `wayland` list if the user decides to
+make Sway independently selectable or to retire the combined fallback.
 
 Further notes:
 
-- `.chezmoiignore` does no class gating, so new `dot_config/sway/` files get
-  written on every machine exactly as `dot_config/i3/` already is. That matches
-  the current design; no change needed.
+- `.chezmoiignore` already routes i3 and Niri trees by desktop profile. Any
+  future Sway tree needs an explicit Mint-profile rule before it is added.
 - `light-locker` is X11-only and pairs with lightdm. Sway uses
   `swayidle`/`swaylock` instead. Leave light-locker installed for the fallback.
 - A Sway session needs a greeter entry. The `sway` package ships a
@@ -386,7 +388,7 @@ Keep X11 variables too so tmux remains usable in the fallback session.
 
 ## Suggested Implementation Order
 
-1. Add the Wayland packages to `packages.apt.desktop` in
+1. Add the Wayland packages to `packages.apt.i3_x11` in
    `.chezmoidata/packages.toml` and `chezmoi apply` so the install script
    re-runs. Nothing below this line works until the software exists, and a
    fresh machine gets no Wayland stack at all today.

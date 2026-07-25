@@ -1,9 +1,11 @@
-# Package manifest consumed by the run_once_* provisioning scripts.
+# Package manifest consumed by the distro-specific run_once_* provisioning
+# scripts.
 # Edit these lists to add/remove software; chezmoi re-runs the install
 # scripts automatically when this file changes (run_onchange semantics via
 # the hash of the rendered script).
 #
-# Package names are Linux Mint 22.3 / Ubuntu 24.04 (apt) names.
+# apt names target Linux Mint 22.3 / Ubuntu 24.04. pacman names target
+# CachyOS with its normal CachyOS and Arch repositories enabled.
 
 [packages.apt]
 # PPAs added before the apt install pass (needed for packages not in the
@@ -28,8 +30,8 @@ common = [
     "ranger", "taskwarrior-tui",
 ]
 
-# Installed only when class == "desktop" (i3 / GUI stack).
-desktop = [
+# Installed only for class == "desktop" and profile == "linuxmint-i3-x11".
+i3_x11 = [
     "i3", "i3status", "polybar", "picom", "rofi", "dunst",
     "feh", "flameshot", "xdotool", "wmctrl", "xclip", "xsel",
     "zathura", "zathura-pdf-poppler",
@@ -40,6 +42,36 @@ desktop = [
     # Display manager + screen locker for a standalone i3 login session.
     # Installing lightdm may prompt you to pick the default display manager.
     "lightdm", "lightdm-settings", "light-locker",
+]
+
+[packages.pacman]
+# Shared CLI and development tools. Names intentionally use pacman naming
+# rather than attempting to share the apt list: fd-find -> fd,
+# pkg-config -> pkgconf, and pipx -> python-pipx.
+common = [
+    "git", "git-lfs", "curl", "wget",
+    "base-devel", "cmake", "pkgconf",
+    "zsh", "tmux", "micro", "nano", "vim",
+    "helix",
+    "eza", "bat", "btop", "htop", "fastfetch",
+    "fd", "fzf", "ripgrep", "jq", "tree",
+    "unzip", "zip", "7zip", "bzip2", "gzip",
+    "nodejs", "npm", "python-pipx",
+    "ranger", "taskwarrior-tui",
+    "yazi", "starship", "zoxide",
+]
+
+# CachyOS owns the base Niri/Noctalia session through its packages. The meta
+# package preserves that supported stack; chezmoi adds user configuration only
+# after it has been reviewed as described in CACHYOS_TRANSFER_GUIDE.md.
+niri_noctalia = [
+    "cachyos-niri-noctalia",
+    "flatpak",
+    "wl-clipboard", "cliphist",
+    "brightnessctl", "playerctl", "pavucontrol", "blueman",
+    "zathura", "zathura-pdf-poppler",
+    "gimp", "vlc", "mpv",
+    "ttf-jetbrains-mono-nerd",
 ]
 
 [packages.flatpak]

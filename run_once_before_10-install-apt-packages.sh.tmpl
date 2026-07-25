@@ -1,6 +1,12 @@
+{{- if eq .chezmoi.os "linux" -}}
+{{- $distro := .chezmoi.osRelease.id -}}
+{{- if or (eq $distro "linuxmint") (eq $distro "ubuntu") (eq $distro "debian") -}}
 #!/usr/bin/env bash
 {{ $class := "desktop" -}}
 {{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
+{{ $desktopProfile := "none" -}}
+{{ if or (eq $distro "linuxmint") (eq $distro "ubuntu") }}{{ $desktopProfile = "linuxmint-i3-x11" }}{{ end -}}
+{{ if hasKey . "desktopProfile" }}{{ $desktopProfile = .desktopProfile }}{{ end -}}
 # Installs apt packages listed in .chezmoidata/packages.toml.
 # Runs once; re-runs automatically if the rendered content changes.
 set -euo pipefail
@@ -29,15 +35,17 @@ sudo apt-get install -y \
 {{- end }}
     ;
 
-{{ if eq $class "desktop" -}}
+{{ if and (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
 # --- desktop / i3 stack ---
 sudo apt-get install -y \
-{{- range .packages.apt.desktop }}
+{{- range .packages.apt.i3_x11 }}
     {{ . }} \
 {{- end }}
     ;
 {{- else -}}
-echo "Non-desktop class; skipping the i3/GUI package set."
+echo "Profile is not linuxmint-i3-x11; skipping the i3/X11 package set."
 {{- end }}
 
 echo "==> apt provisioning done."
+{{- end }}
+{{- end }}

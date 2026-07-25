@@ -1,0 +1,495 @@
+/* ===========================================================================
+   Ghostty-TokyoNight — a GTK3 theme that makes Thunar read like a Ghostty
+   window.  Derived from ~/.config/ghostty/config (theme = TokyoNight Storm,
+   background override #292d3e, cursor #86be43, window-padding 8, square
+   undecorated frame, no scrollbar).
+
+   Scoped, not global: nothing here applies until an app is launched with
+   GTK_THEME=Ghostty-TokyoNight.  See ~/.themes/Ghostty-TokyoNight/README.
+
+   _adwaita-recolored.css is GTK's own Adwaita-dark with every color remapped
+   onto the TokyoNight Storm palette, so widgets this file never mentions still
+   land in-palette.  Regenerate it with the recolor script if GTK is upgraded.
+   =========================================================================== */
+
+@import url("_adwaita-recolored.css");
+
+/* --- palette ------------------------------------------------------------- */
+@define-color gt_bg        #292d3e;  /* ghostty `background` */
+@define-color gt_bg_dim    #1d202f;  /* palette 0 / cursor-text */
+@define-color gt_lift      #2f3447;  /* hover: one step off the surface */
+@define-color gt_lift2     #363b52;  /* active/pressed */
+@define-color gt_fg        #c0caf5;  /* foreground / palette 15 */
+@define-color gt_fg_dim    #a9b1d6;  /* palette 7 */
+@define-color gt_muted     #4e5575;  /* palette 8 — borders, disabled text */
+@define-color gt_line      #1a1d2a;  /* etched separators */
+@define-color gt_sel       #364a82;  /* selection-background */
+@define-color gt_accent    #86be43;  /* ghostty cursor-color */
+@define-color gt_accent_fg #1d202f;  /* ghostty cursor-text */
+@define-color gt_red       #f7768e;
+@define-color gt_green     #9ece6a;
+@define-color gt_yellow    #e0af68;
+@define-color gt_blue      #7aa2f7;
+@define-color gt_magenta   #bb9af7;
+@define-color gt_cyan      #7dcfff;
+
+/* --- typography ----------------------------------------------------------
+   Ghostty's font stack, in its own fallback order.  Ghostty runs this at 18pt;
+   that is oversized for a file manager, so the UI sits at 12pt.  Change the
+   two font-size lines below together if you want to go bigger or smaller.     */
+* {
+  font-family: "NewComputerModernMono10", "NanumGothicCoding",
+               "Noto Sans CJK KR", "Hack Nerd Font Mono", monospace;
+  font-size: 12pt;
+  font-weight: normal;              /* ghostty: font-style-bold = false */
+
+  /* Terminal geometry: Ghostty is a square, flat, shadowless rectangle.
+     Corners are squared off by the flatten block at the end of this file —
+     GTK3's parser rejects `!important` on the border-radius shorthand, so
+     that has to be done with selectors rather than priority. */
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+  box-shadow: none;
+  outline-offset: -2px;
+
+  /* The XSETTINGS icon theme (ubuntu-mono-light) is unreadable on a dark
+     surface; Papirus-Dark is scoped to this theme only. */
+  -gtk-icon-theme: "Papirus-Dark";
+}
+
+/* Adwaita bolds a handful of labels; Ghostty renders no bold at all. */
+label, .title, .subtitle, headerbar .title { font-weight: normal; }
+
+/* --- the surface ---------------------------------------------------------
+   One uniform color, edge to edge — sidebar, view, toolbar and statusbar are
+   all the same plane, the way a terminal is.                                 */
+window, window.background, .background,
+paned, box, grid, viewport, scrolledwindow, notebook, stack,
+frame, frame > border {
+  background-color: @gt_bg;
+  background-image: none;
+  color: @gt_fg;
+  border-color: @gt_line;
+}
+
+frame, frame > border { border: none; }
+
+/* Ghostty's window-padding-x/y = 8, applied to the window's content edge. */
+window.background > box,
+window.background > grid { padding: 0; }
+scrolledwindow > viewport > widget,
+scrolledwindow > treeview.view,
+scrolledwindow > iconview { padding: 8px; }
+
+/* --- menubar and menus ---------------------------------------------------- */
+menubar, .menubar {
+  background-color: @gt_bg;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 0 4px;
+  color: @gt_fg_dim;
+}
+
+menubar > menuitem {
+  padding: 4px 10px;
+  color: @gt_fg_dim;
+  border: none;
+}
+
+menubar > menuitem:hover {
+  background-color: @gt_sel;
+  background-image: none;
+  color: @gt_fg;
+  box-shadow: none;
+}
+
+menubar > menuitem:disabled { color: @gt_muted; }
+
+/* Adwaita declares `.background.popup { background-color: transparent; }` and
+   leans on a compositor to blend the popup in.  xfwm4 compositing is off on
+   this machine (xfconf-query -c xfwm4 -p /general/use_compositing = false), so
+   stock menus render see-through — the file list shows straight through them.
+   Painting the popup toplevel opaque fixes that, and matches Ghostty, which is
+   a solid surface with no transparency of its own. */
+window.popup, window.background.popup, .background.popup,
+.csd.popup decoration, .popup decoration {
+  background-color: @gt_bg;
+}
+
+menu, .menu, popover, popover.background, .context-menu {
+  background-color: @gt_bg;
+  background-image: none;
+  border: 1px solid @gt_muted;
+  margin: 0;                        /* Adwaita's 4px shadow gutter, removed */
+  padding: 2px 0;
+  color: @gt_fg;
+}
+
+menu menuitem, .menu menuitem {
+  padding: 4px 10px;
+  min-height: 20px;
+  color: @gt_fg;
+  background-image: none;
+}
+
+menu menuitem:hover, .menu menuitem:hover {
+  background-color: @gt_sel;
+  color: @gt_fg;
+}
+
+menu menuitem:disabled, .menu menuitem:disabled { color: @gt_muted; }
+menu separator, .menu separator, separator {
+  background-color: @gt_line;
+  color: @gt_line;
+  min-height: 1px;
+  min-width: 1px;
+  border: none;
+}
+
+/* --- toolbar / location bar ----------------------------------------------- */
+toolbar, .toolbar, headerbar, .titlebar {
+  background-color: @gt_bg;
+  background-image: none;
+  border: none;
+  border-bottom: 1px solid @gt_line;
+  box-shadow: none;
+  padding: 3px 5px;
+  min-height: 0;
+  color: @gt_fg;
+}
+
+/* --- buttons: flat until touched, like a terminal's own chrome ------------- */
+button, button.flat, button.toggle, toolbutton > button {
+  background-color: transparent;
+  background-image: none;
+  border: 1px solid transparent;
+  box-shadow: none;
+  padding: 3px 8px;
+  min-height: 20px;
+  min-width: 20px;
+  color: @gt_fg_dim;
+  transition: none;                 /* terminals do not animate */
+}
+
+button:hover, button.flat:hover, toolbutton > button:hover {
+  background-color: @gt_lift;
+  background-image: none;
+  border-color: @gt_line;
+  color: @gt_fg;
+}
+
+button:active, button:checked,
+button.toggle:checked, toolbutton > button:active {
+  background-color: @gt_sel;
+  background-image: none;
+  border-color: @gt_sel;
+  color: @gt_fg;
+}
+
+button:disabled, toolbutton > button:disabled {
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+  color: @gt_muted;
+}
+
+button:focus, button:focus-visible {
+  outline: 1px solid @gt_accent;
+  outline-offset: -2px;
+}
+
+/* Dialog buttons keep a visible edge so OK/Cancel stay findable. */
+dialog button, messagedialog button, .dialog-action-box button {
+  border-color: @gt_muted;
+}
+
+/* Destructive / suggested actions borrow the terminal's red and green. */
+button.destructive-action {
+  background-color: transparent;
+  border-color: @gt_red;
+  color: @gt_red;
+}
+button.destructive-action:hover { background-color: @gt_red; color: @gt_bg_dim; }
+
+button.suggested-action {
+  background-color: transparent;
+  border-color: @gt_accent;
+  color: @gt_accent;
+}
+button.suggested-action:hover { background-color: @gt_accent; color: @gt_accent_fg; }
+
+/* --- entries: the path bar reads like a shell prompt ---------------------- */
+entry, entry.flat, spinbutton {
+  background-color: @gt_bg;
+  background-image: none;
+  border: 1px solid @gt_muted;
+  box-shadow: none;
+  padding: 3px 7px;
+  min-height: 20px;
+  color: @gt_fg;
+  caret-color: @gt_accent;          /* ghostty cursor-color */
+}
+
+entry:focus, spinbutton:focus {
+  border-color: @gt_accent;
+  box-shadow: none;
+  background-color: @gt_bg;
+}
+
+entry:disabled { color: @gt_muted; border-color: @gt_line; }
+entry selection, entry:focus selection {
+  background-color: @gt_sel;
+  color: @gt_fg;
+}
+entry progress { background-color: @gt_accent; border: none; }
+
+/* --- item views: file list, icon view, sidebar ---------------------------- */
+treeview.view, iconview, .view, textview, textview text, list, list row {
+  background-color: @gt_bg;
+  background-image: none;
+  border: none;
+  color: @gt_fg;
+}
+
+treeview.view { -GtkTreeView-grid-line-width: 0; }
+
+/* Ghostty's selection-background / selection-foreground, exactly. */
+treeview.view:selected, treeview.view:selected:focus,
+iconview:selected, iconview:selected:focus,
+.view:selected, list row:selected, textview text selection {
+  background-color: @gt_sel;
+  background-image: none;
+  color: @gt_fg;
+  border: none;
+  outline: none;
+}
+
+treeview.view:hover, iconview:hover, list row:hover {
+  background-color: @gt_lift;
+  background-image: none;
+}
+
+/* Keyboard cursor row: a green rule, matching the block cursor's color. */
+treeview.view:focus, iconview:focus, list row:focus {
+  outline: 1px solid @gt_accent;
+  outline-offset: -1px;
+}
+
+treeview.view:drop(active) {
+  border-color: @gt_accent;
+  box-shadow: inset 0 0 0 1px @gt_accent;
+}
+
+/* Column headers, kept minimal. */
+treeview.view header button,
+treeview.view header button:hover,
+treeview.view header button:active {
+  background-color: @gt_bg;
+  background-image: none;
+  border: none;
+  border-bottom: 1px solid @gt_line;
+  border-right: 1px solid @gt_line;
+  box-shadow: none;
+  padding: 3px 7px;
+  color: @gt_muted;
+  font-weight: normal;
+}
+treeview.view header button:hover { color: @gt_fg_dim; }
+
+/* Expander triangles in the tree pane. */
+treeview.view expander, expander arrow { color: @gt_muted; }
+treeview.view expander:hover, expander arrow:hover { color: @gt_fg; }
+
+/* --- sidebar / shortcuts pane --------------------------------------------- */
+.sidebar, placessidebar, placessidebar list,
+paned > scrolledwindow, paned > scrolledwindow > viewport {
+  background-color: @gt_bg;
+  border: none;
+  color: @gt_fg_dim;
+}
+
+placessidebar row:selected, .sidebar:selected {
+  background-color: @gt_sel;
+  color: @gt_fg;
+}
+
+/* The split between sidebar and view: one etched line, not a raised bar. */
+paned > separator {
+  background-color: @gt_line;
+  background-image: none;
+  border: none;
+  min-width: 1px;
+  min-height: 1px;
+}
+paned > separator:hover { background-color: @gt_muted; }
+
+/* --- scrollbars ----------------------------------------------------------
+   Ghostty sets `scrollbar = never`.  A file manager still needs the position
+   cue, so this is the closest honest equivalent: a thin, unobtrusive slider
+   on the same surface, with no trough or stepper chrome.                     */
+scrollbar, scrollbar.vertical, scrollbar.horizontal {
+  background-color: @gt_bg;
+  background-image: none;
+  border: none;
+}
+
+scrollbar trough {
+  background-color: @gt_bg;
+  background-image: none;
+  border: none;
+  margin: 0;
+}
+
+scrollbar slider {
+  background-color: @gt_muted;
+  background-image: none;
+  border: 3px solid transparent;    /* transparent border = the slider inset */
+  min-width: 8px;
+  min-height: 8px;
+}
+
+scrollbar slider:hover  { background-color: @gt_fg_dim; }
+scrollbar slider:active { background-color: @gt_accent; }
+scrollbar slider:disabled { background-color: transparent; }
+scrollbar button { min-width: 0; min-height: 0; padding: 0; border: none; }
+
+/* --- statusbar ------------------------------------------------------------ */
+statusbar, .statusbar {
+  background-color: @gt_bg;
+  background-image: none;
+  border: none;
+  border-top: 1px solid @gt_line;
+  padding: 2px 8px;
+  color: @gt_fg_dim;
+  min-height: 0;
+}
+
+/* --- notebook tabs (Thunar's split tabs) ---------------------------------- */
+notebook > header {
+  background-color: @gt_bg;
+  background-image: none;
+  border: none;
+  border-bottom: 1px solid @gt_line;
+  box-shadow: none;
+  padding: 0;
+}
+
+notebook > header > tabs > tab {
+  background-color: @gt_bg;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 4px 12px;
+  min-height: 0;
+  color: @gt_muted;
+}
+
+notebook > header > tabs > tab:hover { color: @gt_fg_dim; }
+
+notebook > header > tabs > tab:checked {
+  background-color: @gt_bg;
+  color: @gt_fg;
+  box-shadow: inset 0 -2px @gt_accent;   /* underline in the cursor color */
+}
+
+/* --- progress, spinners, misc feedback ------------------------------------ */
+progressbar > trough { background-color: @gt_bg_dim; border: 1px solid @gt_line; }
+progressbar > trough > progress {
+  background-color: @gt_accent;
+  background-image: none;
+  border: none;
+}
+levelbar block.filled { background-color: @gt_accent; border-color: @gt_accent; }
+spinner { color: @gt_accent; }
+
+check, radio {
+  background-color: @gt_bg;
+  background-image: none;
+  border: 1px solid @gt_muted;
+  color: @gt_fg;
+}
+check:checked, radio:checked {
+  background-color: @gt_accent;
+  background-image: none;
+  border-color: @gt_accent;
+  color: @gt_accent_fg;
+}
+
+switch { background-color: @gt_bg_dim; border: 1px solid @gt_muted; }
+switch:checked { background-color: @gt_accent; border-color: @gt_accent; }
+switch slider { background-color: @gt_fg_dim; border: none; }
+
+/* --- tooltips ------------------------------------------------------------- */
+tooltip, tooltip.background {
+  background-color: @gt_bg_dim;
+  background-image: none;
+  border: 1px solid @gt_muted;
+  color: @gt_fg;
+}
+tooltip label { color: @gt_fg; padding: 2px 4px; }
+
+/* --- infobars / dialogs --------------------------------------------------- */
+infobar, infobar > revealer > box {
+  background-color: @gt_bg;
+  background-image: none;
+  border-bottom: 1px solid @gt_line;
+  color: @gt_fg;
+}
+infobar.warning { box-shadow: inset 3px 0 @gt_yellow; }
+infobar.error   { box-shadow: inset 3px 0 @gt_red; }
+infobar.info    { box-shadow: inset 3px 0 @gt_blue; }
+
+dialog, messagedialog, messagedialog.background, window.dialog {
+  background-color: @gt_bg;
+  color: @gt_fg;
+  border: 1px solid @gt_muted;
+}
+
+/* --- links and accelerator text ------------------------------------------- */
+link, *:link { color: @gt_blue; }
+*:visited { color: @gt_magenta; }
+accelerator, menuitem accelerator, label.accelerator { color: @gt_muted; }
+
+/* --- selection anywhere else ---------------------------------------------- */
+selection, *:selected, *:selected:focus {
+  background-color: @gt_sel;
+  color: @gt_fg;
+}
+
+/* --- flatten -------------------------------------------------------------
+   Ghostty draws square corners and casts no shadow.  Adwaita rounds nearly
+   everything, so square it back off.  This block is last on purpose: it ties
+   Adwaita's specificity and wins on source order, which is what `!important`
+   would have done had GTK3 accepted it on the border-radius shorthand.       */
+window, decoration, popover, popover.background, menu, .menu, .context-menu,
+button, button.flat, button.toggle, button.circular, toolbutton > button,
+entry, entry.flat, spinbutton, searchbar, combobox, combobox button,
+notebook, notebook > header, notebook > header > tabs > tab,
+scrollbar, scrollbar slider, scrolledwindow, frame, frame > border,
+treeview.view, treeview.view header button, iconview, list, list row,
+infobar, dialog, messagedialog, tooltip, tooltip.background,
+progressbar, progressbar > trough, progressbar > trough > progress,
+levelbar, levelbar block, check, radio, switch, switch slider,
+menubar, menubar > menuitem, menu menuitem, statusbar, toolbar, headerbar,
+paned > separator, separator, image, label, box, grid, viewport, stack {
+  border-radius: 0;
+}
+
+/* Shadows on their own — several of these are drawn as box-shadow, and the
+   flatten list above deliberately leaves the few we still use (the active
+   tab underline, infobar rules, drop targets) alone. */
+window, decoration, popover, menu, .menu, .context-menu, button, entry,
+spinbutton, tooltip, dialog, messagedialog, notebook, frame, scrollbar,
+scrollbar slider, headerbar, toolbar, menubar, statusbar {
+  box-shadow: none;
+}
+
+/* Window edge: a single hairline instead of Adwaita's drop shadow, so an
+   undecorated-looking Thunar still has a crisp boundary. */
+decoration {
+  border: 1px solid @gt_line;
+  background-color: @gt_bg;
+  margin: 0;
+}
+decoration:backdrop { border-color: @gt_bg_dim; }
