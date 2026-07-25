@@ -1,0 +1,213 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT="$(dirname "$(dirname "$(readlink -f "$0")")")"
+TEST_TMP="$(mktemp -d)"
+MOCK_BIN="$TEST_TMP/bin"
+MOCK_STATE="$TEST_TMP/mock-state"
+
+cleanup() {
+  rm -rf "$TEST_TMP"
+}
+trap cleanup EXIT
+
+mkdir -p "$MOCK_BIN" "$MOCK_STATE/runtime" "$MOCK_STATE/state-home" "$MOCK_STATE/home"
+
+export POLYBAR_TEST_STATE_DIR="$MOCK_STATE"
+export XDG_RUNTIME_DIR="$MOCK_STATE/runtime"
+export XDG_STATE_HOME="$MOCK_STATE/state-home"
+export HOME="$MOCK_STATE/home"
+export I3_POLYBAR_PEEK_MS=240
+export PATH="$MOCK_BIN:/usr/bin:/bin"
+
+cat > "$MOCK_BIN/xdotool" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  search)
+    printf '4242\n'
+    ;;
+  windowraise)
+    printf 'raise\n' >> "$POLYBAR_TEST_STATE_DIR/x-events"
+    ;;
+esac
+EOF
+
+cat > "$MOCK_BIN/xwininfo" <<'EOF'
+#!/usr/bin/env bash
+if [ "$(cat "$POLYBAR_TEST_STATE_DIR/visibility")" = visible ]; then
+  printf 'Map State: IsViewable\n'
+else
+  printf 'Map State: IsUnMapped\n'
+fi
+EOF
+
+cat > "$MOCK_BIN/polybar-msg" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$POLYBAR_TEST_STATE_DIR/polybar-events"
+case "${2:-}" in
+  show) printf 'visible\n' > "$POLYBAR_TEST_STATE_DIR/visibility" ;;
+  hide) printf 'hidden\n' > "$POLYBAR_TEST_STATE_DIR/visibility" ;;
+  *) exit 1 ;;
+esac
+EOF
+
+cat > "$MOCK_BIN/i3-msg" <<'EOF'
+#!/usr/bin/env bash
+if [ "${1:-}" = -t ] && [ "${2:-}" = get_tree ]; then
+  printf 'get_tree\n' >> "$POLYBAR_TEST_STATE_DIR/i3-events"
+  printf '{"nodes":[]}\n'
+else
+  printf '%s\n' "$*" >> "$POLYBAR_TEST_STATE_DIR/i3-events"
+  printf '[{"success":true}]\n'
+fi
+EOF
+
+chmod +x "$MOCK_BIN/xdotool" "$MOCK_BIN/xwininfo" \
+  "$MOCK_BIN/polybar-msg" "$MOCK_BIN/i3-msg"
+
+fail() {
+  printf 'FAIL: %s\n' "$*" >&2
+  exit 1
+}
+
+assert_state() {
+  local expected="$1"
+  local actual
+  actual=$(cat "$MOCK_STATE/visibility")
+  [ "$actual" = "$expected" ] ||
+    fail "expected Polybar state '$expected', got '$actual'"
+}
+
+wait_for_state() {
+  local expected="$1"
+
+  for _ in $(seq 1 80); do
+    if [ "$(cat "$MOCK_STATE/visibility")" = "$expected" ]; then
+      return 0
+    fi
+    sleep 0.025
+  done
+  fail "timed out waiting for Polybar state '$expected'"
+}
+
+wait_for_peek_exit() {
+  for _ in $(seq 1 80); do
+    [ ! -e "$XDG_RUNTIME_DIR/i3-polybar-peek.owner" ] && return 0
+    sleep 0.025
+  done
+  fail "timed out waiting for the peek worker"
+}
+
+reset_case() {
+  local initial="$1"
+
+  wait_for_peek_exit
+  printf '%s\n' "$initial" > "$MOCK_STATE/visibility"
+  : > "$MOCK_STATE/polybar-events"
+  : > "$MOCK_STATE/i3-events"
+  : > "$MOCK_STATE/x-events"
+}
+
+# Hidden bars are shown after the workspace changes, then hidden by the worker.
+reset_case hidden
+"$ROOT/workspace-action.sh" switch 3
+assert_state visible
+grep -Fqx 'workspace number 3' "$MOCK_STATE/i3-events" ||
+  fail "workspace switch was not sent to i3"
+wait_for_state hidden
+wait_for_peek_exit
+grep -Fqx 'cmd show' "$MOCK_STATE/polybar-events" ||
+  fail "hidden bar was not shown"
+grep -Fqx 'cmd hide' "$MOCK_STATE/polybar-events" ||
+  fail "peeked bar was not hidden"
+if grep -Fqx 'get_tree' "$MOCK_STATE/i3-events"; then
+  fail "transient peek unexpectedly ran resnap.sh"
+fi
+
+# A bar that was visible before the binding remains untouched.
+reset_case visible
+"$ROOT/workspace-action.sh" switch 4
+sleep 0.3
+assert_state visible
+[ ! -s "$MOCK_STATE/polybar-events" ] ||
+  fail "an already-visible bar received an IPC visibility command"
+
+# A second workspace press renews the single inactivity deadline.
+reset_case hidden
+"$ROOT/workspace-action.sh" switch 1
+sleep 0.14
+"$ROOT/workspace-action.sh" switch 2
+sleep 0.14
+assert_state visible
+wait_for_state hidden
+wait_for_peek_exit
+[ "$(grep -Fc 'cmd show' "$MOCK_STATE/polybar-events")" -eq 1 ] ||
+  fail "repeated keypress launched more than one show"
+[ "$(grep -Fc 'cmd hide' "$MOCK_STATE/polybar-events")" -eq 1 ] ||
+  fail "repeated keypress launched more than one hide"
+
+# Concurrent i3 exec processes also converge on one owned show/hide cycle.
+reset_case hidden
+for workspace in 1 2 3 4 5 6; do
+  "$ROOT/workspace-action.sh" switch "$workspace" &
+done
+wait
+assert_state visible
+wait_for_state hidden
+wait_for_peek_exit
+[ "$(grep -Fc 'cmd show' "$MOCK_STATE/polybar-events")" -eq 1 ] ||
+  fail "concurrent keypresses launched more than one show"
+[ "$(grep -Fc 'cmd hide' "$MOCK_STATE/polybar-events")" -eq 1 ] ||
+  fail "concurrent keypresses launched more than one hide"
+
+# Previous/next workspace actions use the same transient feedback.
+reset_case hidden
+"$ROOT/workspace-action.sh" prev
+grep -Fqx 'workspace prev' "$MOCK_STATE/i3-events" ||
+  fail "previous-workspace action was not sent to i3"
+wait_for_state hidden
+wait_for_peek_exit
+
+reset_case hidden
+"$ROOT/workspace-action.sh" next
+grep -Fqx 'workspace next' "$MOCK_STATE/i3-events" ||
+  fail "next-workspace action was not sent to i3"
+wait_for_state hidden
+wait_for_peek_exit
+
+# The move path preserves the existing guarded move command and also peeks.
+reset_case hidden
+"$ROOT/workspace-action.sh" move 2
+grep -Fqx 'move container to workspace number 2; workspace number 2' \
+  "$MOCK_STATE/i3-events" ||
+  fail "move action did not delegate to move-to-workspace.sh"
+wait_for_state hidden
+wait_for_peek_exit
+
+# An explicit toggle cancels ownership, so its hide is not repeated later.
+reset_case hidden
+"$ROOT/workspace-action.sh" switch 5
+assert_state visible
+"$ROOT/toggle-polybar-resnap.sh"
+assert_state hidden
+[ ! -e "$XDG_RUNTIME_DIR/i3-polybar-peek.owner" ] ||
+  fail "explicit toggle did not cancel peek ownership"
+sleep 0.35
+[ "$(grep -Fc 'cmd hide' "$MOCK_STATE/polybar-events")" -eq 1 ] ||
+  fail "peek worker hid the bar after the explicit toggle"
+
+# Entering kill-workspace mode promotes a current peek to persistent visibility.
+reset_case hidden
+"$ROOT/workspace-action.sh" switch 6
+assert_state visible
+"$ROOT/show-polybar-or-kill-workspace.sh"
+assert_state visible
+[ ! -e "$XDG_RUNTIME_DIR/i3-polybar-peek.owner" ] ||
+  fail "kill-workspace mode did not cancel peek ownership"
+grep -Fqx 'get_tree' "$MOCK_STATE/i3-events" ||
+  fail "promoting a peek to persistent visibility did not resnap"
+sleep 0.35
+assert_state visible
+
+printf 'PASS: Polybar workspace peek behavior\n'

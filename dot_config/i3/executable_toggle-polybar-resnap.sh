@@ -4,58 +4,24 @@
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"
-. "$DIR/_snap-common.sh"
+. "$DIR/_polybar-common.sh"
 
 if command -v flock >/dev/null 2>&1; then
-  exec 9>"$SNAP_RUNTIME_DIR/i3-polybar-toggle.lock"
+  exec 9>"$POLYBAR_CONTROL_LOCK"
   flock -w 2 9 || {
     snap_log "polybar toggle skipped: lock busy"
     exit 0
   }
 fi
 
-polybar_windows() {
-  xdotool search --class '^[Pp]olybar$' 2>/dev/null || true
-}
+# An explicit toggle owns the final state. Cancelling the transient ownership
+# prevents its delayed worker from applying a second, stale hide.
+if [ -e "$POLYBAR_PEEK_OWNER" ]; then
+  polybar_cancel_peek
+  snap_log "polybar peek cancelled by explicit toggle"
+fi
 
-window_viewable() {
-  local info
-  info=$(xwininfo -id "$1" 2>/dev/null) || return 1
-  [[ "$info" == *"IsViewable"* ]]
-}
-
-polybar_visible() {
-  local win
-  for win in $(polybar_windows); do
-    window_viewable "$win" && { echo 1; return; }
-  done
-  echo 0
-}
-
-raise_polybar() {
-  local win
-  for win in $(polybar_windows); do
-    window_viewable "$win" || continue
-    xdotool windowraise "$win" >/dev/null 2>&1 || true
-  done
-}
-
-set_polybar_state() {
-  local cmd="$1"
-  local wanted="$2"
-
-  polybar-msg cmd "$cmd" >/dev/null 2>&1 && return 0
-
-  if [ "$wanted" = 1 ] && [ -x "$HOME/.config/polybar/launch.sh" ]; then
-    snap_log "polybar IPC unavailable; relaunching"
-    "$HOME/.config/polybar/launch.sh" >/dev/null 2>&1
-    polybar-msg cmd show >/dev/null 2>&1 && return 0
-  fi
-
-  return 1
-}
-
-before=$(polybar_visible)
+before=$(polybar_visible_value)
 if [ "$before" = 1 ]; then
   wanted=0
   cmd=hide
@@ -64,23 +30,21 @@ else
   cmd=show
 fi
 
-set_polybar_state "$cmd" "$wanted" || true
-
-# Poll for the requested state. Exits as soon as the state is visible in X.
-for _ in $(seq 1 80); do
-  after=$(polybar_visible)
-  [ "$after" = "$wanted" ] && break
-  sleep 0.025
-done
+polybar_set_state "$cmd" "$wanted" || true
+after=$(polybar_wait_for_state "$wanted") || true
 
 if [ "${after:-$before}" = 1 ]; then
   # The polybar log shows wm-restack is ignored with override-redirect=false.
   # Raising here makes the keybinding deterministic even when i3 keeps an old
   # workspace stack where existing windows still cover the bar area.
-  raise_polybar
+  polybar_raise
 fi
 
 snap_log "polybar $cmd $before -> ${after:-?}"
 "$DIR/resnap.sh"
 
-[ "${after:-$before}" = 1 ] && raise_polybar
+if [ "${after:-$before}" = 1 ]; then
+  polybar_raise
+fi
+
+exit 0

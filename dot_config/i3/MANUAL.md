@@ -122,15 +122,17 @@ There are numbered workspaces `1` through `10`.
 
 | Binding | Action |
 | --- | --- |
-| `Super+1` ... `Super+0` | Switch to workspace `1` ... `10`. |
+| `Super+1` ... `Super+0` | Switch to workspace `1` ... `10`; briefly peek at Polybar if hidden. |
+| `Super+Alt+1` ... `Super+Alt+0` | Also switch to workspace `1` ... `10` with the same Polybar peek. |
 | `Ctrl+Alt+1` ... `Ctrl+Alt+0` | Also switch to workspace `1` ... `10`. |
-| `Super+Shift+number-row` | Move focused window to workspace and follow it. |
-| `Super+Alt+H` | Previous workspace. |
-| `Super+Alt+L` | Next workspace. |
+| `Super+Shift+number-row` | Move focused window to workspace, follow it, and briefly peek at Polybar if hidden. |
+| `Super+Alt+H` | Switch to the previous workspace with the same Polybar peek. |
+| `Super+Alt+L` | Switch to the next workspace with the same Polybar peek. |
 
 Shifted number-row moves are implemented with keycodes so keyboard layout does
-not change which workspace receives the window. These moves call
-`move-to-workspace.sh`.
+not change which workspace receives the window. Super-number switching and
+shifted moves call `workspace-action.sh`; its move path delegates the output
+guard to `move-to-workspace.sh`.
 
 Workspace output policy:
 
@@ -363,6 +365,10 @@ Polybar is launched from:
 ~/.config/polybar/launch.sh
 ```
 
+The launcher uses a per-user runtime `flock`. Concurrent requests wait for the
+active launch and reuse its Polybar process, preventing duplicate bars during
+an i3 reload and workspace-peek fallback race.
+
 The i3 config starts it after `display-setup.sh` on every reload/restart.
 
 `toggle-polybar-resnap.sh`, bound to `Super+Shift+B`, handles bar visibility:
@@ -378,6 +384,21 @@ The i3 config starts it after `display-setup.sh` on every reload/restart.
 
 `show-polybar-or-kill-workspace.sh` ensures Polybar is visible before entering
 kill-workspace mode.
+
+`polybar-peek.sh` provides transient workspace feedback for the Super-number
+bindings:
+
+- It shows Polybar only when it was hidden before the workspace action.
+- It hides the bar after 0.25 seconds; repeated workspace keys extend the same
+  deadline instead of starting competing timers.
+- The duration is controlled by `I3_POLYBAR_PEEK_MS` in milliseconds and
+  defaults to `250`.
+- A runtime ownership file ensures it never hides a bar that was already
+  visible.
+- `Super+Shift+B` cancels any pending peek before performing its explicit
+  visibility toggle.
+- The brief show/hide skips `resnap.sh`, avoiding two snapped-window geometry
+  changes for every workspace action.
 
 ## Monitor and Wallpaper Setup
 
@@ -860,10 +881,13 @@ Inside this directory:
 
 - `config`: main i3 configuration.
 - `_snap-common.sh`: shared snap/focus helpers.
+- `_polybar-common.sh`: shared Polybar visibility, IPC, and peek-state helpers.
 - `tile-snap.sh`: manual snap and unsnap implementation.
 - `snap-watcher.sh`: automatic snap fill/rebalance watcher.
 - `resnap.sh`: reapplies current snap regions.
 - `toggle-polybar-resnap.sh`: toggles Polybar and resnaps.
+- `polybar-peek.sh`: owner-aware, debounced transient Polybar display.
+- `workspace-action.sh`: numbered workspace switch/move wrapper that requests a peek.
 - `show-polybar-or-kill-workspace.sh`: shows Polybar before kill mode.
 - `toggle-titles.sh`: toggles title bars globally.
 - `toggle-titles-resnap.sh`: toggles title bars and resnaps.

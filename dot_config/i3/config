@@ -158,16 +158,26 @@ workspace $ws8  output HDMI-A-0 DP-1 DP-2 nonprimary
 workspace $ws9  output HDMI-A-0 DP-1 DP-2 nonprimary
 workspace $ws10 output HDMI-A-0 DP-1 DP-2 nonprimary
 
-bindsym $mod+1 workspace $ws1
-bindsym $mod+2 workspace $ws2
-bindsym $mod+3 workspace $ws3
-bindsym $mod+4 workspace $ws4
-bindsym $mod+5 workspace $ws5
-bindsym $mod+6 workspace $ws6
-bindsym $mod+7 workspace $ws7
-bindsym $mod+8 workspace $ws8
-bindsym $mod+9 workspace $ws9
-bindsym $mod+0 workspace $ws10
+bindsym $mod+1 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 1
+bindsym $mod+2 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 2
+bindsym $mod+3 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 3
+bindsym $mod+4 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 4
+bindsym $mod+5 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 5
+bindsym $mod+6 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 6
+bindsym $mod+7 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 7
+bindsym $mod+8 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 8
+bindsym $mod+9 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 9
+bindsym $mod+0 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 10
+bindsym $mod+Mod1+1 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 1
+bindsym $mod+Mod1+2 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 2
+bindsym $mod+Mod1+3 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 3
+bindsym $mod+Mod1+4 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 4
+bindsym $mod+Mod1+5 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 5
+bindsym $mod+Mod1+6 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 6
+bindsym $mod+Mod1+7 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 7
+bindsym $mod+Mod1+8 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 8
+bindsym $mod+Mod1+9 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 9
+bindsym $mod+Mod1+0 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 10
 bindsym Control+Mod1+1 workspace $ws1
 bindsym Control+Mod1+2 workspace $ws2
 bindsym Control+Mod1+3 workspace $ws3
@@ -180,16 +190,16 @@ bindsym Control+Mod1+9 workspace $ws9
 bindsym Control+Mod1+0 workspace $ws10
 
 # Use keycodes for shifted number-row moves so shifted keysyms do not depend on layout.
-bindcode $mod+Shift+10 exec --no-startup-id ~/.config/i3/move-to-workspace.sh 1
-bindcode $mod+Shift+11 exec --no-startup-id ~/.config/i3/move-to-workspace.sh 2
-bindcode $mod+Shift+12 exec --no-startup-id ~/.config/i3/move-to-workspace.sh 3
-bindcode $mod+Shift+13 exec --no-startup-id ~/.config/i3/move-to-workspace.sh 4
-bindcode $mod+Shift+14 exec --no-startup-id ~/.config/i3/move-to-workspace.sh 5
-bindcode $mod+Shift+15 exec --no-startup-id ~/.config/i3/move-to-workspace.sh 6
-bindcode $mod+Shift+16 exec --no-startup-id ~/.config/i3/move-to-workspace.sh 7
-bindcode $mod+Shift+17 exec --no-startup-id ~/.config/i3/move-to-workspace.sh 8
-bindcode $mod+Shift+18 exec --no-startup-id ~/.config/i3/move-to-workspace.sh 9
-bindcode $mod+Shift+19 exec --no-startup-id ~/.config/i3/move-to-workspace.sh 10
+bindcode $mod+Shift+10 exec --no-startup-id ~/.config/i3/workspace-action.sh move 1
+bindcode $mod+Shift+11 exec --no-startup-id ~/.config/i3/workspace-action.sh move 2
+bindcode $mod+Shift+12 exec --no-startup-id ~/.config/i3/workspace-action.sh move 3
+bindcode $mod+Shift+13 exec --no-startup-id ~/.config/i3/workspace-action.sh move 4
+bindcode $mod+Shift+14 exec --no-startup-id ~/.config/i3/workspace-action.sh move 5
+bindcode $mod+Shift+15 exec --no-startup-id ~/.config/i3/workspace-action.sh move 6
+bindcode $mod+Shift+16 exec --no-startup-id ~/.config/i3/workspace-action.sh move 7
+bindcode $mod+Shift+17 exec --no-startup-id ~/.config/i3/workspace-action.sh move 8
+bindcode $mod+Shift+18 exec --no-startup-id ~/.config/i3/workspace-action.sh move 9
+bindcode $mod+Shift+19 exec --no-startup-id ~/.config/i3/workspace-action.sh move 10
 
 # Kill all windows on a selected workspace: Super+N, then 1-0.
 # If polybar is hidden, Super+N shows it before entering this mode.
@@ -211,8 +221,8 @@ mode "kill workspace" {
 }
 bindsym $mod+n exec --no-startup-id ~/.config/i3/show-polybar-or-kill-workspace.sh
 
-bindsym $mod+Mod1+h workspace prev
-bindsym $mod+Mod1+l workspace next
+bindsym $mod+Mod1+h exec --no-startup-id ~/.config/i3/workspace-action.sh prev
+bindsym $mod+Mod1+l exec --no-startup-id ~/.config/i3/workspace-action.sh next
 
 # --- media / brightness / screenshot ---
 bindsym XF86AudioRaiseVolume exec --no-startup-id pactl set-sink-volume @DEFAULT_SINK@ +5%
