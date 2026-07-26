@@ -255,6 +255,22 @@ niri --version
 niri validate
 ```
 
+This machine's Niri source state is already captured under `dot_config/niri/`.
+`config.kdl` is a bare list of `include` lines and the real content lives in
+`cfg/*.kdl`, which is what the repository tracks.
+
+`cfg/display.kdl` is the deliberate exception. Niri treats a **missing include
+as a hard config error**, so display.kdl cannot simply be left unmanaged — a
+fresh checkout would fail to start. It is therefore stored as
+`create_display.kdl`: chezmoi's `create_` attribute writes the file once on a
+machine that lacks it and never rewrites it afterwards. A new machine gets a
+valid, fully commented stub; this machine keeps its own layout; and no
+connector name or monitor position is ever committed. Verify with:
+
+```sh
+chezmoi status ~/.config/niri   # must print nothing once applied
+```
+
 Review `~/.config/niri/config.kdl` for machine-local values before adding it:
 
 - output connector names, modes, scale, and physical placement;
@@ -288,6 +304,11 @@ pacman -Q | rg 'noctalia|quickshell'
 command -v noctalia
 command -v qs
 ```
+
+As of this writing CachyOS ships **Noctalia v4** (`noctalia-shell 4.7.7`,
+`noctalia-qs 0.0.12`). There is no `noctalia` binary, only `qs`, so the v5
+`noctalia config export` flow below does not apply — follow the v4 section.
+Re-check after a major upgrade rather than assuming either generation.
 
 ### Noctalia v5
 
@@ -333,6 +354,96 @@ chezmoi status
 
 The resulting `dot_config/noctalia/` source state is applied only by the
 CachyOS profile.
+
+## Distro packaging differences
+
+These are cases where the *same* configuration needs different packaging on
+Arch than on Debian/Ubuntu. Fix them in the manifest or with a narrowly gated
+file; do not fork a whole config by hostname.
+
+### Helix is `helix` on Arch, `hx` everywhere else
+
+Arch and CachyOS install the binary as `/usr/bin/helix` and ship **no** `hx`.
+Debian/Ubuntu — including the `maveonair` PPA the Mint profile uses — and the
+upstream tarball ship `hx`. Every call site in this repo says `hx`:
+`EDITOR`/`VISUAL`/`ZK_EDITOR` in `.zshenv` and `.bashrc`, the `h`/`hz`/`hb`
+aliases, `55-notes.zsh`, `40-fzf.zsh`, and the `hx-yazi` bindings in
+`dot_config/helix/config.toml`.
+
+Rather than rewrite all of them per distro, `dot_local/bin/symlink_hx.tmpl`
+puts `hx` on `PATH` where the distro omits it, and `.chezmoiignore` drops that
+target on non-Arch systems, where it would shadow the real binary. Helix
+canonicalizes its own executable path, so the symlink still resolves
+`/usr/lib/helix/runtime`. The gate uses an `$archFamily` flag derived from
+`.chezmoi.osRelease.id` / `idLike`, not the desktop profile — it is a packaging
+fact, not a desktop one.
+
+### Fonts named by the Ghostty config
+
+`dot_config/ghostty/config` names four families, provisioned two different
+ways because only half of them exist in the Arch repositories:
+
+| Family | Source on CachyOS | Notes |
+| --- | --- | --- |
+| `Hack Nerd Font Mono` | `ttf-hack-nerd` (pacman) | Icon glyphs for starship and CLI tools |
+| `Noto Sans CJK KR` | `noto-fonts-cjk` (pacman) | Korean fallback |
+| `NewComputerModernMono10` | CTAN archive, via the fonts script | AUR-only as a package; Mint uses `fonts-newcomputermodern` |
+| `NanumGothicCoding` | Naver GitHub release, via the fonts script | AUR-only as a package |
+
+The AUR-only pair is fetched into `~/.local/share/fonts` by
+`run_once_after_50-install-fonts.sh.tmpl`, which needs no distro packaging and
+so behaves identically on Mint and CachyOS. That respects the no-AUR rule
+without leaving the fonts uninstalled.
+
+Ghostty silently skips families it cannot resolve, which makes a missing font
+easy to overlook: the primary face falls back to Noto Sans Mono, still
+monospace, so the terminal merely looks slightly wrong rather than broken.
+**The fallback carries no Nerd Font glyphs, so every icon renders as tofu** —
+that is the symptom to recognise.
+
+Two font sources look right and are not:
+
+- the `ttf-nanumgothic_coding` AUR package downloads from `dev.naver.com`,
+  which Naver retired, so it cannot build;
+- the `chrissimpkins/codeface` build registers the family as
+  `NanumGothic_Coding`, which never matches the configs.
+
+Use Naver's own GitHub release, and drop the macOS resource-fork files (`._*`)
+it ships — they match `*.ttf` but are not fonts.
+
+### Helix language servers
+
+`dot_config/helix/languages.toml` declares `tinymist` for Typst. Arch packages
+it, so it is in `packages.pacman.common`. The `packages.cargo.git` entry for it
+now fails on **both** distros: the upstream repo grew several binary packages,
+so `cargo install --git <url>` can no longer pick one and exits asking which.
+
+More generally, `packages.cargo` still lists `eza`, `yazi-fm` and `yazi-cli`,
+which pacman already provides on CachyOS. Building them again is redundant, and
+`yazi-fm` currently fails to compile. Prefer the packaged copies here.
+
+## The default terminal
+
+The Mint profile uses Ghostty; stock CachyOS Niri binds Alacritty. Ghostty is
+in `packages.pacman.niri_noctalia`, and the session is pointed at it in four
+places, because no single setting covers them all:
+
+| Mechanism | Location | Covers |
+| --- | --- | --- |
+| `Mod+Return` bind | `dot_config/niri/cfg/keybinds.kdl` | The keybinding itself |
+| `TERMINAL "ghostty"` | `dot_config/niri/cfg/misc.kdl` `environment` | Anything niri spawns that honours `$TERMINAL` |
+| `appLauncher.terminalCommand` | `~/.config/noctalia/settings.json` | Noctalia launcher "open in terminal"; GUI-managed, stays local |
+| `com.mitchellh.ghostty.desktop` | `~/.config/xdg-terminals.list` | The freedesktop `xdg-terminal-exec` spec |
+
+`gsettings set org.gnome.desktop.default-applications.terminal exec ghostty`
+additionally covers GTK/Nautilus "Open in Terminal". That key is dconf state,
+not a dotfile, so it is not tracked here.
+
+Do **not** uninstall `cachyos-alacritty-config` to remove the stock Alacritty
+setup: it is a dependency of `cachyos-niri-noctalia` and taking it out removes
+the meta package. Delete `~/.config/alacritty/` instead — everything CachyOS
+seeds into `$HOME` comes from `/etc/skel/.config/` and can be restored with a
+plain `cp -r`.
 
 ## Phase 7: reconcile packages from the real CachyOS machine
 
