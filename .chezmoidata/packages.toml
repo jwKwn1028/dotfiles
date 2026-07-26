@@ -77,7 +77,14 @@ niri_noctalia = [
     "brightnessctl", "playerctl", "pavucontrol", "blueman",
     "zathura", "zathura-pdf-poppler",
     "gimp", "vlc", "mpv",
-    "ttf-jetbrains-mono-nerd",
+    # Fonts named by dot_config/ghostty/config. Hack Nerd Font Mono carries the
+    # icon glyphs the starship prompt and CLI tools draw; without it fontconfig
+    # falls back to Noto Sans Mono and every icon renders as tofu. Noto CJK
+    # covers the Korean text fallback.
+    # NewComputerModernMono10 and NanumGothicCoding are AUR-only on Arch, so
+    # run_once_after_50-install-fonts.sh installs them from upstream archives
+    # instead -- see the font note in CACHYOS_TRANSFER_GUIDE.md.
+    "ttf-jetbrains-mono-nerd", "ttf-hack-nerd", "noto-fonts-cjk",
 ]
 
 [packages.flatpak]

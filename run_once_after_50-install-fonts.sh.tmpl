@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
 {{ $class := "desktop" -}}
 {{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
-# Installs fonts the desktop configs rely on:
-#  - New Computer Modern Mono: polybar/rofi bar font (best-effort, from apt)
-#  - JetBrainsMono Nerd Font:   icon glyphs used by polybar/starship
+# Installs the fonts the desktop configs name by family:
+#   - NewComputerModernMono10 : ghostty primary face; polybar/rofi bar font
+#   - NanumGothicCoding       : Korean monospace fallback in ghostty
+#   - JetBrainsMono Nerd Font : icon glyphs used by polybar/starship
+#
+# Everything lands in ~/.local/share/fonts from upstream archives, so no
+# distro packaging is involved and the same script works on Mint and CachyOS.
+# Only New Computer Modern takes an apt fast path, because Debian is the one
+# distro that packages it; nothing in the Arch repos does, and both of the
+# faces missing there are AUR-only.
+#
+# Hack Nerd Font Mono, the fourth family ghostty names, comes from pacman
+# (ttf-hack-nerd) instead -- see .chezmoidata/packages.toml.
 set -euo pipefail
 
 {{ if ne $class "desktop" -}}
@@ -13,25 +23,83 @@ exit 0
 fontdir="$HOME/.local/share/fonts"
 mkdir -p "$fontdir"
 
-# New Computer Modern (polybar `font: "NewComputerModernMono10 ..."`).
-if command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get install -y fonts-newcomputermodern 2>/dev/null \
-        || echo "NOTE: fonts-newcomputermodern unavailable via apt; install it manually if polybar text looks wrong."
-fi
+# fontconfig resolves on the family name recorded inside the file, which is
+# not reliably the file or package name. NanumGothicCoding is the cautionary
+# case: the chrissimpkins/codeface build of it registers as
+# "NanumGothic_Coding", which silently fails to match the configs. Always
+# test the family, never the filename.
+#
+# Deliberately `grep -ix ... >/dev/null` and NOT `grep -qix`: -q makes grep
+# exit at the first match, which SIGPIPEs fc-list/tr upstream, and under
+# `set -o pipefail` that turns the whole pipeline non-zero. The predicate
+# would then report "missing" exactly when the font IS installed, and every
+# run would re-download all of them.
+have_family() {
+    fc-list : family 2>/dev/null | tr ',' '\n' | grep -ix -- "$1" >/dev/null
+}
 
-# JetBrainsMono Nerd Font for icon glyphs.
-if ! fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd Font"; then
-    echo "==> installing JetBrainsMono Nerd Font"
-    tmp="$(mktemp -d)"
-    if curl -fsSL -o "$tmp/JetBrainsMono.zip" \
-        https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip; then
-        unzip -oq "$tmp/JetBrainsMono.zip" -d "$fontdir/JetBrainsMonoNerd"
-    else
-        echo "WARN: could not download JetBrainsMono Nerd Font."
+# install_zip FAMILY URL DESTDIR GLOB
+# Fetches a zip and copies every file matching GLOB into DESTDIR. Skips the
+# download entirely when FAMILY already resolves, so re-runs are cheap.
+# Best-effort by design: a failure warns and returns non-zero rather than
+# aborting the rest of provisioning.
+install_zip() {
+    local family="$1" url="$2" dest="$3" glob="$4" tmp
+    if have_family "$family"; then
+        echo "  $family already present"
+        return 0
     fi
+    echo "==> installing $family"
+    tmp="$(mktemp -d)"
+    if ! curl -fsSL -o "$tmp/font.zip" "$url"; then
+        echo "WARN: could not download $family from $url"
+        rm -rf "$tmp"
+        return 1
+    fi
+    if ! unzip -qo "$tmp/font.zip" -d "$tmp/extracted"; then
+        echo "WARN: could not unpack the $family archive"
+        rm -rf "$tmp"
+        return 1
+    fi
+    mkdir -p "$dest"
+    # Naver's archive carries macOS resource forks (._*). They match *.ttf but
+    # are not fonts, and fontconfig reports each one as a broken font file.
+    find "$tmp/extracted" -type f -name "$glob" ! -name '._*' -exec cp {} "$dest/" \;
     rm -rf "$tmp"
+}
+
+# --- NewComputerModernMono10 ---
+if ! have_family "NewComputerModernMono10" && command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get install -y fonts-newcomputermodern 2>/dev/null || true
+    fc-cache -f >/dev/null 2>&1 || true
 fi
+# Upstream CTAN archive, used wherever apt did not supply it.
+install_zip "NewComputerModernMono10" \
+    "https://mirrors.ctan.org/fonts/newcomputermodern.zip" \
+    "$fontdir/NewComputerModern" \
+    'NewCMMono10-*.otf' || true
+
+# --- NanumGothicCoding ---
+# Naver's own GitHub release. Do not substitute the AUR package or the older
+# mirrors: ttf-nanumgothic_coding still points at dev.naver.com, which Naver
+# retired, so it cannot build.
+install_zip "NanumGothicCoding" \
+    "https://github.com/naver/nanumfont/releases/download/VER2.5/NanumGothicCoding-2.5.zip" \
+    "$fontdir/NanumGothicCoding" \
+    '*.ttf' || true
+
+# --- JetBrainsMono Nerd Font ---
+install_zip "JetBrainsMono Nerd Font" \
+    "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip" \
+    "$fontdir/JetBrainsMonoNerd" \
+    '*.ttf' || true
 
 fc-cache -f "$fontdir" >/dev/null
 echo "==> fonts done."
+
+# Surface anything the desktop configs still cannot resolve, rather than
+# leaving it to be discovered as tofu in the terminal later.
+for family in "NewComputerModernMono10" "NanumGothicCoding" "JetBrainsMono Nerd Font"; do
+    have_family "$family" || echo "WARN: $family is still unresolved."
+done
 {{- end }}
