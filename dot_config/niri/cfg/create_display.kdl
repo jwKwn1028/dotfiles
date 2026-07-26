@@ -1,0 +1,53 @@
+// ────────────── Output Configuration ──────────────
+// https://github.com/YaLTeR/niri/wiki/Configuration:-Outputs
+//
+// SEED FILE. The `create_` source prefix means chezmoi writes this once, on a
+// machine that has no ~/.config/niri/cfg/display.kdl yet, and never touches it
+// again. Edit the copy in $HOME freely -- `chezmoi apply` will not revert it,
+// and your monitor layout is never committed back to this repo.
+//
+// It exists mainly so `include "./cfg/display.kdl"` in config.kdl always
+// resolves: niri treats a missing include as a hard config error, so leaving
+// display.kdl unmanaged would break a fresh checkout outright.
+//
+// Connector names, modes, scale and placement are physical facts about one
+// machine, so there is deliberately no portable default here.
+//
+// ── How placement works ──
+// Niri has no "left-of" / "right-of" relation. Every output is placed by
+// absolute logical coordinates, where `position x= y=` is that output's
+// top-left corner in a single shared coordinate space. Pick one screen as the
+// origin (0,0) -- usually the internal panel -- and position the others
+// relative to it. Negative values are legal, and are how you place a screen to
+// the left of, or above, the origin.
+//
+// With no `position`, niri auto-arranges outputs left-to-right, which can
+// shift when you replug a monitor or add a third one. Set positions
+// explicitly if you want the arrangement to stay put.
+//
+// Run `niri msg outputs` to list connectors and their modes, then
+// `niri validate` after editing.
+//
+// ── Example: a 1920-wide external to the LEFT of a 1920x1200 laptop ──
+// x = -1920 puts the external's right edge exactly on the laptop's left edge.
+//
+//   +----------++----------+
+//   | HDMI-A-1 ||  eDP-1   |
+//   +----------++----------+
+//   x=-1920     x=0
+//
+// output "eDP-1" {
+//     mode "1920x1200@60.003"
+//     scale 1
+//     position x=0 y=0
+// }
+//
+// output "HDMI-A-1" {
+//     mode "1920x1080@60.000"
+//     scale 1
+//     position x=-1920 y=0
+// }
+//
+// Stack that external ABOVE instead with position x=0 y=-1080, or put it to
+// the RIGHT with x=1920 y=0. Omit `mode` on an external you swap often so niri
+// falls back to the preferred mode instead of warning it is unavailable.

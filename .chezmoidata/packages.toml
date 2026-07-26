@@ -67,6 +67,7 @@ common = [
 niri_noctalia = [
     "cachyos-niri-noctalia",
     "flatpak",
+    "ghostty",
     "wl-clipboard", "cliphist",
     "brightnessctl", "playerctl", "pavucontrol", "blueman",
     "zathura", "zathura-pdf-poppler",
