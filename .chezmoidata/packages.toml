@@ -53,6 +53,11 @@ common = [
     "base-devel", "cmake", "pkgconf",
     "zsh", "tmux", "micro", "nano", "vim",
     "helix",
+    # Typst LSP that dot_config/helix/languages.toml declares. Arch packages it,
+    # so prefer that over packages.cargo.git -- building it from the repo now
+    # fails on both distros because the repo grew several binary packages and
+    # `cargo install --git <url>` can no longer pick one unaided.
+    "tinymist",
     "eza", "bat", "btop", "htop", "fastfetch",
     "fd", "fzf", "ripgrep", "jq", "tree",
     "unzip", "zip", "7zip", "bzip2", "gzip",

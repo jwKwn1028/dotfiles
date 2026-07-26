@@ -9,6 +9,19 @@
 {{- end -}}
 {{- if hasKey . "desktopProfile" -}}
 {{-   $desktopProfile = .desktopProfile -}}
+{{- end -}}
+{{- /* Arch-family detection, used for packaging differences rather than for
+       desktop routing. CachyOS reports id "cachyos" / idLike "arch". */ -}}
+{{- $archFamily := false -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   $id := .chezmoi.osRelease.id -}}
+{{-   $idLike := "" -}}
+{{-   if hasKey .chezmoi.osRelease "idLike" -}}
+{{-     $idLike = .chezmoi.osRelease.idLike -}}
+{{-   end -}}
+{{-   if or (eq $id "arch") (eq $id "cachyos") (contains "arch" $idLike) -}}
+{{-     $archFamily = true -}}
+{{-   end -}}
 {{- end }}
 
 # ─── Repo documentation ───────────────────────────────────────────────────
@@ -56,6 +69,15 @@
 /.toggle-touchpad.sh
 /.local/bin/touchpad
 /.local/bin/disable-trackpoint-middle-click
+{{ end -}}
+
+# ─── Distro packaging differences ─────────────────────────────────────────
+# Arch/CachyOS ship Helix as `helix` and provide no `hx`; Debian/Ubuntu and
+# the upstream tarball ship `hx`. ~/.local/bin/hx is a compat symlink that
+# must exist only where the distro omits the name -- elsewhere it would
+# shadow the real binary. See dot_local/bin/symlink_hx.tmpl.
+{{ if not $archFamily -}}
+/.local/bin/hx
 {{ end -}}
 
 # Niri and curated Noctalia configuration belong only to the CachyOS profile.
