@@ -5,12 +5,13 @@
 . "$DIR/_snap-common.sh"
 
 # These paths are intentionally consumed by scripts that source this file.
-# shellcheck disable=SC2034
 POLYBAR_CONTROL_LOCK="$SNAP_RUNTIME_DIR/i3-polybar-toggle.lock"
 POLYBAR_PEEK_OWNER="$SNAP_RUNTIME_DIR/i3-polybar-peek.owner"
 POLYBAR_PEEK_TRIGGER="$SNAP_RUNTIME_DIR/i3-polybar-peek.trigger"
-# shellcheck disable=SC2034
+POLYBAR_PEEK_HOLD="$SNAP_RUNTIME_DIR/i3-polybar-peek.hold"
 POLYBAR_PEEK_WORKER_LOCK="$SNAP_RUNTIME_DIR/i3-polybar-peek-worker.lock"
+export POLYBAR_CONTROL_LOCK POLYBAR_PEEK_OWNER POLYBAR_PEEK_TRIGGER
+export POLYBAR_PEEK_HOLD POLYBAR_PEEK_WORKER_LOCK
 
 mkdir -p "$SNAP_RUNTIME_DIR" 2>/dev/null || true
 
@@ -85,5 +86,5 @@ polybar_wait_for_state() {
 }
 
 polybar_cancel_peek() {
-  rm -f "$POLYBAR_PEEK_OWNER" "$POLYBAR_PEEK_TRIGGER"
+  rm -f "$POLYBAR_PEEK_OWNER" "$POLYBAR_PEEK_TRIGGER" "$POLYBAR_PEEK_HOLD"
 }

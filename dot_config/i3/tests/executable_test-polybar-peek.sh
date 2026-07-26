@@ -93,7 +93,10 @@ wait_for_state() {
 
 wait_for_peek_exit() {
   for _ in $(seq 1 80); do
-    [ ! -e "$XDG_RUNTIME_DIR/i3-polybar-peek.owner" ] && return 0
+    if [ ! -e "$XDG_RUNTIME_DIR/i3-polybar-peek.owner" ] \
+      && [ ! -e "$XDG_RUNTIME_DIR/i3-polybar-peek.hold" ]; then
+      return 0
+    fi
     sleep 0.025
   done
   fail "timed out waiting for the peek worker"
@@ -125,6 +128,37 @@ if grep -Fqx 'get_tree' "$MOCK_STATE/i3-events"; then
   fail "transient peek unexpectedly ran resnap.sh"
 fi
 
+# A standalone-Super hold stays visible beyond the normal deadline and hides
+# immediately when its matching listener releases it.
+reset_case hidden
+"$ROOT/polybar-peek.sh" --hold-start "$$"
+assert_state visible
+sleep 0.35
+assert_state visible
+"$ROOT/polybar-peek.sh" --hold-end "$$"
+assert_state hidden
+wait_for_peek_exit
+
+# A different/stale listener is not allowed to end the current hold.
+reset_case hidden
+"$ROOT/polybar-peek.sh" --hold-start "$$"
+"$ROOT/polybar-peek.sh" --hold-end "$(($$ + 1))"
+sleep 0.05
+assert_state visible
+"$ROOT/polybar-peek.sh" --hold-end "$$"
+assert_state hidden
+wait_for_peek_exit
+
+# Turning a hold into a chord starts the ordinary 250ms inactivity deadline.
+reset_case hidden
+"$ROOT/polybar-peek.sh" --hold-start "$$"
+sleep 0.3
+assert_state visible
+"$ROOT/polybar-peek.sh" --hold-cancel "$$"
+assert_state visible
+wait_for_state hidden
+wait_for_peek_exit
+
 # A bar that was visible before the binding remains untouched.
 reset_case visible
 "$ROOT/workspace-action.sh" switch 4
@@ -132,6 +166,15 @@ sleep 0.3
 assert_state visible
 [ ! -s "$MOCK_STATE/polybar-events" ] ||
   fail "an already-visible bar received an IPC visibility command"
+
+# A Super hold also leaves an already-visible bar untouched.
+reset_case visible
+"$ROOT/polybar-peek.sh" --hold-start "$$"
+sleep 0.3
+"$ROOT/polybar-peek.sh" --hold-end "$$"
+assert_state visible
+[ ! -s "$MOCK_STATE/polybar-events" ] ||
+  fail "a Super hold changed an already-visible bar"
 
 # A second workspace press renews the single inactivity deadline.
 reset_case hidden

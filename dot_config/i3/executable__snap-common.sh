@@ -14,14 +14,12 @@
 #   apply_autotiling_split <con_id> [depth_limit]
 #                         - apply the same split h/v rule used by autotiling
 
-# shellcheck disable=SC2034
 SNAP_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-# shellcheck disable=SC2034
 SNAP_TITLES_STATE="$SNAP_RUNTIME_DIR/i3-titles.state"
-# shellcheck disable=SC2034
 SNAP_FOCUS_HISTORY="$SNAP_RUNTIME_DIR/i3-focus-history"
 SNAP_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/i3"
 SNAP_LOG="$SNAP_LOG_DIR/snap.log"
+export SNAP_RUNTIME_DIR SNAP_TITLES_STATE SNAP_FOCUS_HISTORY
 
 # Append a timestamped line to the log. Caps file at ~200KB by trimming to the
 # last 500 lines when exceeded. No-op (silently) if the log dir can't be made.
@@ -67,9 +65,9 @@ apply_autotiling_split() {
   local target="$1" limit="${2:-6}"
   local fields floating fullscreen width height parent_layout parent_type
   local workspace_found depth_limit_reached desired cmd
-  local i
+  local attempts=10
 
-  for i in 1 2 3 4 5 6 7 8 9 10; do
+  while [ "$attempts" -gt 0 ]; do
     fields=$(i3-msg -t get_tree | jq -r --argjson id "$target" --argjson limit "$limit" '
       def ancestor_paths($p):
         if ($p | length) < 2 then empty
@@ -112,7 +110,10 @@ apply_autotiling_split() {
     [ -n "$fields" ] || return 0
     IFS=$'\t' read -r floating fullscreen width height parent_layout parent_type workspace_found depth_limit_reached <<<"$fields"
     case "$floating" in
-      user_on|auto_on) sleep 0.01 ;;
+      user_on|auto_on)
+        sleep 0.01
+        attempts=$((attempts - 1))
+        ;;
       *) break ;;
     esac
   done

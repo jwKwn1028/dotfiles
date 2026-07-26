@@ -22,6 +22,7 @@ The config is built around these major features:
   Sioyek-based workspaces.
 - Polybar show/hide integration that resizes snapped windows after the bar
   changes.
+- Standalone Super tap/hold gestures for transient Polybar visibility.
 - Global title-bar toggling that also resizes snapped windows.
 - Laptop/external monitor placement policy.
 - Floating rules for system dialogs, settings tools, input-method tools,
@@ -325,7 +326,7 @@ ends.
 
 ## Autotiling Integration
 
-The external daemon `$HOME/.local/bin/autotiling --limit 6` is started
+The external daemon `/home/kjw1028/.local/bin/autotiling --limit 6` is started
 from i3 autostart on every reload/restart.
 
 `_snap-common.sh` also implements `apply_autotiling_split`, a local helper used
@@ -386,19 +387,31 @@ The i3 config starts it after `display-setup.sh` on every reload/restart.
 kill-workspace mode.
 
 `polybar-peek.sh` provides transient workspace feedback for the Super-number
-bindings:
+bindings and hold-aware visibility for a standalone Super gesture:
 
 - It shows Polybar only when it was hidden before the workspace action.
 - It hides the bar after 0.25 seconds; repeated workspace keys extend the same
   deadline instead of starting competing timers.
 - The duration is controlled by `I3_POLYBAR_PEEK_MS` in milliseconds and
   defaults to `250`.
+- A quick Super-only tap shows the bar on release for the same duration.
+- Holding only Super for 250 milliseconds shows the bar until Super is
+  released.
+- `I3_SUPER_HOLD_MS` can override the hold threshold; otherwise it follows
+  `I3_POLYBAR_PEEK_MS`.
+- Pressing another key while Super is down cancels the standalone gesture, so
+  normal i3 Super shortcuts do not produce an extra peek.
 - A runtime ownership file ensures it never hides a bar that was already
   visible.
 - `Super+Shift+B` cancels any pending peek before performing its explicit
   visibility toggle.
 - The brief show/hide skips `resnap.sh`, avoiding two snapped-window geometry
   changes for every workspace action.
+
+`super-polybar-listener.py` observes XI2 raw key events without grabbing the
+keyboard, so i3 continues to receive all Super combinations. It resolves the
+active Super keycodes from the X keymap, rejects gestures involving any other
+key, and calls the hold/tap modes in `polybar-peek.sh`.
 
 ## Monitor and Wallpaper Setup
 
@@ -709,7 +722,7 @@ Saved programs:
 | `5` | Zathura, decoherence PDF, page 11. |
 | `6` | Helium AppImage, YouTube video URL. |
 | `7` | Ghostty and Zen Browser opened to Learn C++. |
-| `8` | Ghostty and Sioyek opened to `notes.pdf`. |
+| `8` | Ghostty and Sioyek opened to `qchem_notes.pdf`. |
 | `9` | Zathura quantum chemistry PDF, page 79, and Ghostty. |
 | `10` | Zen Browser opened to a ChatGPT computational workspace URL. |
 
@@ -797,12 +810,13 @@ Always on reload/restart:
 - Stop and restart `focus-tracker.sh`.
 - Stop and restart `snap-watcher.sh`.
 - Stop and restart `kakaotalk-float-watcher.sh`.
-- Stop and restart `$HOME/.local/bin/autotiling --limit 6`.
-- Run `$HOME/.local/bin/disable-trackpoint-middle-click` under a
+- Stop and restart `super-polybar-listener.py`.
+- Stop and restart `/home/kjw1028/.local/bin/autotiling --limit 6`.
+- Run `/home/kjw1028/.local/bin/disable-trackpoint-middle-click` under a
   `/tmp/disable-trackpoint-middle-click.lock` flock.
 - Run `display-setup.sh`, then `~/.config/polybar/launch.sh`.
 
-The three long-running watchers also use their own runtime locks, so duplicate
+The long-running watchers also use their own runtime locks, so duplicate
 instances are avoided even during i3 reloads.
 
 ## Dependencies
@@ -854,6 +868,8 @@ Monitor/bar/snap helpers:
 - `polybar`
 - `polybar-msg`
 - `xdotool`
+- `xinput`
+- `xmodmap`
 - `xwininfo`
 - `xprop`
 - `feh`
@@ -887,6 +903,7 @@ Inside this directory:
 - `resnap.sh`: reapplies current snap regions.
 - `toggle-polybar-resnap.sh`: toggles Polybar and resnaps.
 - `polybar-peek.sh`: owner-aware, debounced transient Polybar display.
+- `super-polybar-listener.py`: passive standalone-Super tap/hold listener.
 - `workspace-action.sh`: numbered workspace switch/move wrapper that requests a peek.
 - `show-polybar-or-kill-workspace.sh`: shows Polybar before kill mode.
 - `toggle-titles.sh`: toggles title bars globally.
@@ -916,6 +933,10 @@ Runtime files outside this directory:
 - `$XDG_RUNTIME_DIR/i3-snap-watcher.lock`
 - `$XDG_RUNTIME_DIR/i3-kakaotalk-float-watcher.lock`
 - `$XDG_RUNTIME_DIR/i3-polybar-toggle.lock`
+- `$XDG_RUNTIME_DIR/i3-polybar-peek.owner`
+- `$XDG_RUNTIME_DIR/i3-polybar-peek.trigger`
+- `$XDG_RUNTIME_DIR/i3-polybar-peek.hold`
+- `$XDG_RUNTIME_DIR/i3-super-polybar-listener.lock`
 - `$XDG_RUNTIME_DIR/tile-snap-<con_id>.lock`
 - `${XDG_STATE_HOME:-$HOME/.local/state}/i3/snap.log`
 - `/tmp/disable-trackpoint-middle-click.lock`

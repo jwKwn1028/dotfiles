@@ -253,6 +253,7 @@ exec_always --no-startup-id sh -c 'pgrep -u "$USER" polkit-gnome >/dev/null || /
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/focus-tracker\.sh$"; setsid ~/.config/i3/focus-tracker.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/snap-watcher\.sh$"; setsid ~/.config/i3/snap-watcher.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/kakaotalk-float-watcher\.sh$"; setsid ~/.config/i3/kakaotalk-float-watcher.sh </dev/null >/dev/null 2>&1 &'
+exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/super-polybar-listener\.py$"; exec /usr/bin/python3 ~/.config/i3/super-polybar-listener.py'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 /home/kjw1028/.local/bin/autotiling"; exec /home/kjw1028/.local/bin/autotiling --limit 6'
 exec --no-startup-id xrdb -merge ~/.Xresources
 exec --no-startup-id xsetroot -cursor_name left_ptr
