@@ -418,9 +418,18 @@ it, so it is in `packages.pacman.common`. The `packages.cargo.git` entry for it
 now fails on **both** distros: the upstream repo grew several binary packages,
 so `cargo install --git <url>` can no longer pick one and exits asking which.
 
-More generally, `packages.cargo` still lists `eza`, `yazi-fm` and `yazi-cli`,
-which pacman already provides on CachyOS. Building them again is redundant, and
-`yazi-fm` currently fails to compile. Prefer the packaged copies here.
+More generally, `packages.cargo` shares one list across both distros, so
+several of its crates duplicate something pacman already ships here — `eza`,
+`yazi-fm`, `yazi-cli`. Every entry therefore records the `bin` it installs,
+and `run_once_after_30-install-cli-tools.sh.tmpl` skips any crate whose binary
+is already on `PATH`. The packaged copy wins on CachyOS, cargo still builds it
+on Mint, and no per-distro copy of the list is needed. Note the binary is often
+not the crate name: `yazi-fm` → `yazi`, `taplo-cli` → `taplo`, `cargo-update` →
+`cargo-install-update`.
+
+This also stops the script wasting a long rebuild on tools that are already
+present, and sidesteps `yazi-fm`, which does not currently compile against the
+packaged toolchain.
 
 ## The default terminal
 

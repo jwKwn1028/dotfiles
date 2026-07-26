@@ -11,17 +11,38 @@ if ! command -v cargo >/dev/null 2>&1; then
     echo "  installing rustup..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 fi
-# shellcheck disable=SC1091
-[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+# Must be an `if`, not `[ -f ... ] && . ...`: under `set -e` that one-liner
+# aborts the whole script when the file is absent, which happens whenever cargo
+# came from the distro (pacman's `rust`) rather than from rustup. Everything
+# below -- crates, starship, zoxide, Miniconda -- would then be skipped with no
+# error shown.
+if [ -f "$HOME/.cargo/env" ]; then
+    # shellcheck disable=SC1091
+    . "$HOME/.cargo/env"
+fi
 
 # --- cargo crates from crates.io ---
+# Skipped when the crate's binary is already on PATH, so a tool the distro
+# packages is not rebuilt from source. On CachyOS pacman supplies eza and yazi,
+# and building them again is slow at best -- yazi-fm does not currently compile
+# at all against the packaged toolchain.
 {{- range .packages.cargo.registry }}
-cargo install --locked {{ . }} || echo "WARN: cargo install {{ . }} failed"
+if command -v {{ .bin }} >/dev/null 2>&1; then
+    echo "  {{ .bin }} already present; skipping crate {{ .crate }}"
+else
+    cargo install --locked {{ .crate }} || echo "WARN: cargo install {{ .crate }} failed"
+fi
 {{- end }}
 
 # --- cargo crates from git ---
+# Same skip rule. `package` is passed when the repo holds several crates with
+# binaries; cargo aborts rather than guessing between them.
 {{- range .packages.cargo.git }}
-cargo install --git {{ . | quote }} --locked || echo "WARN: cargo install --git {{ . }} failed"
+if command -v {{ .bin }} >/dev/null 2>&1; then
+    echo "  {{ .bin }} already present; skipping {{ .url }}"
+else
+    cargo install --git {{ .url | quote }} --locked {{ if hasKey . "package" }}{{ .package }} {{ end }}|| echo "WARN: cargo install --git {{ .url }} failed"
+fi
 {{- end }}
 
 # --- starship prompt ---

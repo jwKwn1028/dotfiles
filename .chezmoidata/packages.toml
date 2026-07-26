@@ -28,6 +28,9 @@ common = [
     "unzip", "zip", "7zip", "p7zip-full", "bzip2", "gzip",
     "nodejs", "npm", "pipx",
     "ranger", "taskwarrior-tui",
+    # AGENTS.md requires linting the run_once_* scripts before changing them,
+    # so treat it as a dependency of working in this repo, not an optional tool.
+    "shellcheck",
 ]
 
 # Installed only for class == "desktop" and profile == "linuxmint-i3-x11".
@@ -64,6 +67,7 @@ common = [
     "nodejs", "npm", "python-pipx",
     "ranger", "taskwarrior-tui",
     "yazi", "starship", "zoxide",
+    "shellcheck",
 ]
 
 # CachyOS owns the base Niri/Noctalia session through its packages. The meta
@@ -104,21 +108,42 @@ apps = [
 ]
 
 [packages.cargo]
-# `cargo install --locked <name>` from crates.io.
+# Rust tools built from source, for crates the distro does not package.
+#
+# Every entry carries `bin`: the command the crate actually installs, which is
+# frequently not the crate name (yazi-fm -> yazi, taplo-cli -> taplo,
+# cargo-update -> cargo-install-update). Provisioning skips a crate whose `bin`
+# is already on PATH, so anything the system package manager supplied is never
+# rebuilt from source. That keeps one shared list correct on both distros
+# instead of needing a per-distro copy: pacman ships eza and yazi on CachyOS
+# and is skipped, while apt ships neither on Mint, so cargo builds them there.
+
+# `cargo install --locked <crate>` from crates.io.
 # eza = modern ls; the rest are Helix LSPs / formatters + utilities.
 # yazi-fm/yazi-cli provide the `yazi` file manager used by the shell configs.
 registry = [
-    "eza",
-    "yazi-fm", "yazi-cli",
-    "dprint", "taplo-cli", "typstyle",
-    "texlab", "harper-ls",
-    "watchexec-cli", "cargo-update",
+    { crate = "eza",           bin = "eza" },
+    { crate = "yazi-fm",       bin = "yazi" },
+    { crate = "yazi-cli",      bin = "ya" },
+    { crate = "dprint",        bin = "dprint" },
+    { crate = "taplo-cli",     bin = "taplo" },
+    { crate = "typstyle",      bin = "typstyle" },
+    { crate = "texlab",        bin = "texlab" },
+    { crate = "harper-ls",     bin = "harper-ls" },
+    { crate = "watchexec-cli", bin = "watchexec" },
+    { crate = "cargo-update",  bin = "cargo-install-update" },
 ]
 
 # `cargo install --git <url> --locked` for crates not published to crates.io.
+# Optional `package` names one crate inside a repo that contains several with
+# binaries; cargo refuses to guess and aborts without it.
 git = [
-    "https://github.com/rtk-ai/rtk",                    # rtk (see RTK.md)
-    "https://github.com/Feel-ix-343/markdown-oxide.git", # markdown LSP
-    "https://github.com/Myriad-Dreamin/tinymist",        # typst LSP (tinymist)
-    "https://github.com/itsjunetime/tdf.git",            # tdf terminal PDF viewer
+    # rtk (see RTK.md)
+    { url = "https://github.com/rtk-ai/rtk",                     bin = "rtk" },
+    # markdown LSP
+    { url = "https://github.com/Feel-ix-343/markdown-oxide.git", bin = "markdown-oxide" },
+    # typst LSP; Arch packages this as `tinymist`, so it is skipped there.
+    { url = "https://github.com/Myriad-Dreamin/tinymist",        bin = "tinymist", package = "tinymist-cli" },
+    # tdf terminal PDF viewer
+    { url = "https://github.com/itsjunetime/tdf.git",            bin = "tdf" },
 ]
