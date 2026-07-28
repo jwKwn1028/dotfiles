@@ -32,7 +32,7 @@
         "command": "workbench.action.toggleSplitEditorInGroup"
     },
     {
-        "key": "ctrl+j ctrl+m",
+        "key": "ctrl+p ctrl+m",
         "command": "workbench.action.toggleMaximizedPanel"
     },
     {

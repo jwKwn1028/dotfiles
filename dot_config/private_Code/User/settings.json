@@ -45,7 +45,8 @@
         "editor.defaultFormatter": "redhat.vscode-yaml"
     },
     "workbench.statusBar.visible": false,
-    "terminal.integrated.defaultProfile.linux": "bash",
+    "python.defaultInterpreterPath": "/usr/bin/python3",
+    "terminal.integrated.defaultProfile.linux": "zsh",
     "workbench.sideBar.location": "right",
     "editor.minimap.enabled": false,
     "workbench.colorTheme": "Palenight Italic",
@@ -79,5 +80,26 @@
     "workbench.browser.showInTitleBar": false,
     "workbench.editor.editorActionsLocation": "hidden",
     "window.menuBarVisibility": "compact",
-    "window.commandCenter": false
+    "window.commandCenter": false,
+    "terminal.integrated.profiles.linux": {
+        "bash": {
+            "path": "bash",
+            "icon": "terminal-bash"
+        },
+        "zsh": {
+            "path": "/usr/bin/zsh"
+        },
+        "fish": {
+            "path": "fish"
+        },
+        "tmux": {
+            "path": "tmux",
+            "icon": "terminal-tmux"
+        },
+        "pwsh": {
+            "path": "pwsh",
+            "icon": "terminal-powershell"
+        }
+    },
+    "claudeCode.preferredLocation": "panel"
 }
