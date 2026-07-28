@@ -140,8 +140,8 @@ Workspace output policy:
 - Workspaces `1` to `6` are assigned to the primary output.
 - Workspaces `7` to `10` are assigned to `HDMI-A-0`, `DP-1`, `DP-2`, or a
   non-primary output.
-- `move-to-workspace.sh` refuses moves to workspaces `7` to `10` unless an
-  external output is active.
+- If no external output is active, workspaces `7` to `10` remain available on
+  the laptop output and accept moved windows normally.
 
 ### Kill Workspace Mode
 
@@ -440,20 +440,18 @@ Behavior:
 feh --no-fehbg --bg-fill "$HOME/.wallpaper-laptop.png" "$HOME/.wallpaper-external.png"
 ```
 
-## Workspace Movement Guard
+## Workspace Movement
 
 `move-to-workspace.sh` is used by `Super+Shift+number-row`.
 
 Rules:
 
-- Workspaces `1` to `6` always accept moved windows.
-- Workspaces `7` to `10` accept moved windows only when a non-laptop output is
-  connected and active.
+- Workspaces `1` to `10` accept moved windows.
+- The i3 workspace output assignments still place workspaces `7` to `10` on an
+  active external output when one is available; otherwise they stay on the
+  laptop output.
 - Invalid workspace numbers exit with status `2`.
 - Successful moves also switch focus to the destination workspace.
-
-The laptop output defaults to `eDP` and can be overridden with
-`I3_LAPTOP_OUTPUT`.
 
 ## Show Desktop
 
@@ -912,7 +910,7 @@ Inside this directory:
 - `focus-prev.sh`: focuses the previous window.
 - `display-setup.sh`: applies monitor layout and wallpaper.
 - `wallpaper.sh`: applies laptop/external wallpapers through `feh`.
-- `move-to-workspace.sh`: guarded move-to-workspace command.
+- `move-to-workspace.sh`: validated move-to-workspace command.
 - `show-desktop.sh`: toggles `_desktop` workspace.
 - `kakaotalk-float-watcher.sh`: repairs KakaoTalk floating state.
 - `i3-resurrect-save-all.sh`: main save profile script.

@@ -63,8 +63,13 @@ else
 fi
 EOF
 
+cat > "$MOCK_BIN/xrandr" <<'EOF'
+#!/usr/bin/env bash
+printf 'eDP connected primary 1920x1080+0+0\n'
+EOF
+
 chmod +x "$MOCK_BIN/xdotool" "$MOCK_BIN/xwininfo" \
-  "$MOCK_BIN/polybar-msg" "$MOCK_BIN/i3-msg"
+  "$MOCK_BIN/polybar-msg" "$MOCK_BIN/i3-msg" "$MOCK_BIN/xrandr"
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
@@ -219,12 +224,22 @@ grep -Fqx 'workspace next' "$MOCK_STATE/i3-events" ||
 wait_for_state hidden
 wait_for_peek_exit
 
-# The move path preserves the existing guarded move command and also peeks.
+# The move path delegates to the validated move command and also peeks.
 reset_case hidden
 "$ROOT/workspace-action.sh" move 2
 grep -Fqx 'move container to workspace number 2; workspace number 2' \
   "$MOCK_STATE/i3-events" ||
   fail "move action did not delegate to move-to-workspace.sh"
+wait_for_state hidden
+wait_for_peek_exit
+
+# External-preferred workspaces remain valid move targets when xrandr reports
+# only the laptop output.
+reset_case hidden
+"$ROOT/workspace-action.sh" move 7
+grep -Fqx 'move container to workspace number 7; workspace number 7' \
+  "$MOCK_STATE/i3-events" ||
+  fail "move to workspace 7 was blocked without an external output"
 wait_for_state hidden
 wait_for_peek_exit
 
