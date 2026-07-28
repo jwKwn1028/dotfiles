@@ -35,9 +35,9 @@ bindsym $mod+p                exec --no-startup-id xfce4-display-settings --mini
 bindsym XF86Display           exec --no-startup-id xfce4-display-settings --minimal
 bindsym $mod+Shift+p          exec --no-startup-id ~/.config/i3/display-setup.sh
 bindsym Control+$mod+z        exec --no-startup-id zed
-bindsym Control+$mod+l        exec --no-startup-id xflock4
+# bindsym Control+$mod+l        exec --no-startup-id xflock4  # reserved for numeric workspace navigation
 bindsym Control+Mod1+p        exec --no-startup-id flatpak run com.super_productivity.SuperProductivity
-bindsym Control+$mod+h        exec --no-startup-id gtk-launch helium
+# bindsym Control+$mod+h        exec --no-startup-id gtk-launch helium  # reserved for numeric workspace navigation
 bindsym Control+Shift+z       exec --no-startup-id /usr/bin/flatpak run app.zen_browser.zen
 bindsym --release Control+Mod1+Escape exec --no-startup-id /usr/bin/xkill
 bindsym Control+Shift+Escape  exec --no-startup-id xfce4-taskmanager
@@ -223,6 +223,8 @@ bindsym $mod+n exec --no-startup-id ~/.config/i3/show-polybar-or-kill-workspace.
 
 bindsym $mod+Mod1+h exec --no-startup-id ~/.config/i3/workspace-action.sh prev
 bindsym $mod+Mod1+l exec --no-startup-id ~/.config/i3/workspace-action.sh next
+bindsym Control+$mod+h exec --no-startup-id ~/.config/i3/workspace-action.sh relative -1
+bindsym Control+$mod+l exec --no-startup-id ~/.config/i3/workspace-action.sh relative 1
 
 # --- media / brightness / screenshot ---
 bindsym XF86AudioRaiseVolume exec --no-startup-id pactl set-sink-volume @DEFAULT_SINK@ +5%

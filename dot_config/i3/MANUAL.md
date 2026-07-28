@@ -65,15 +65,15 @@ Theme colors use a Tokyo Night style palette:
 | `XF86Display` | Open minimal XFCE display settings. |
 | `Super+Shift+P` | Run `display-setup.sh`. |
 | `Ctrl+Super+Z` | Launch Zed. |
-| `Ctrl+Super+L` | Lock the session with `xflock4`. |
 | `Ctrl+Alt+P` | Launch Super Productivity Flatpak. |
-| `Ctrl+Super+H` | Launch the Helium AppImage. |
 | `Ctrl+Shift+Z` | Launch Zen Browser Flatpak. |
 | `Ctrl+Alt+Escape` on release | Run `xkill`. |
 | `Ctrl+Shift+Escape` | Launch `xfce4-taskmanager`. |
 
 `Ctrl+Alt+T` is intentionally left for XFCE, and `Super+D` is used for snap
-right instead of application launch.
+right instead of application launch. The old `Ctrl+Super+H` Helium and
+`Ctrl+Super+L` lock bindings are commented out to reserve those keys for
+numeric workspace navigation.
 
 ### Window Management
 
@@ -129,11 +129,14 @@ There are numbered workspaces `1` through `10`.
 | `Super+Shift+number-row` | Move focused window to workspace, follow it, and briefly peek at Polybar if hidden. |
 | `Super+Alt+H` | Switch to the previous workspace with the same Polybar peek. |
 | `Super+Alt+L` | Switch to the next workspace with the same Polybar peek. |
+| `Super+Ctrl+H` | Switch to the workspace whose number is one lower, including an empty workspace, with the same Polybar peek. |
+| `Super+Ctrl+L` | Switch to the workspace whose number is one higher, including an empty workspace, with the same Polybar peek. |
 
 Shifted number-row moves are implemented with keycodes so keyboard layout does
 not change which workspace receives the window. Super-number switching and
 shifted moves call `workspace-action.sh`; its move path delegates the output
-guard to `move-to-workspace.sh`.
+guard to `move-to-workspace.sh`. Numeric relative navigation stops at workspace
+`1` or `10`; it does not wrap or trigger a Polybar peek at those boundaries.
 
 Workspace output policy:
 
@@ -902,7 +905,8 @@ Inside this directory:
 - `toggle-polybar-resnap.sh`: toggles Polybar and resnaps.
 - `polybar-peek.sh`: owner-aware, debounced transient Polybar display.
 - `super-polybar-listener.py`: passive standalone-Super tap/hold listener.
-- `workspace-action.sh`: numbered workspace switch/move wrapper that requests a peek.
+- `workspace-action.sh`: numbered switch/move and relative workspace wrapper
+  that requests a peek.
 - `show-polybar-or-kill-workspace.sh`: shows Polybar before kill mode.
 - `toggle-titles.sh`: toggles title bars globally.
 - `toggle-titles-resnap.sh`: toggles title bars and resnaps.

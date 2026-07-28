@@ -51,6 +51,18 @@ window-show-tab-bar = never
 # Disable the default Ctrl+Enter fullscreen toggle.
 keybind = ctrl+enter=unbind
 
+# Vim-style split navigation. These intentionally stay at the Ghostty level
+# so they work regardless of the program running in the focused split.
+# Ctrl+Shift+J replaces Ghostty's default write-screen-file binding.
+keybind = ctrl+shift+h=goto_split:left
+keybind = ctrl+shift+j=goto_split:down
+keybind = ctrl+shift+k=goto_split:up
+keybind = ctrl+shift+l=goto_split:right
+
+# Cycle through splits in creation order.
+# This intentionally replaces Ghostty's default Ctrl+Tab next-tab binding.
+keybind = ctrl+tab=goto_split:next
+
 # Hide the scrollbar (still scrollable via wheel/keybinds)
 scrollbar = never
 

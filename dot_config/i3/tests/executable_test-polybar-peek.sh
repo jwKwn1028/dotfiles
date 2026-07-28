@@ -57,6 +57,10 @@ cat > "$MOCK_BIN/i3-msg" <<'EOF'
 if [ "${1:-}" = -t ] && [ "${2:-}" = get_tree ]; then
   printf 'get_tree\n' >> "$POLYBAR_TEST_STATE_DIR/i3-events"
   printf '{"nodes":[]}\n'
+elif [ "${1:-}" = -t ] && [ "${2:-}" = get_workspaces ]; then
+  current="$(cat "$POLYBAR_TEST_STATE_DIR/current-workspace")"
+  printf 'get_workspaces\n' >> "$POLYBAR_TEST_STATE_DIR/i3-events"
+  printf '[{"num":%s,"name":"%s","focused":true}]\n' "$current" "$current"
 else
   printf '%s\n' "$*" >> "$POLYBAR_TEST_STATE_DIR/i3-events"
   printf '[{"success":true}]\n'
@@ -70,6 +74,7 @@ EOF
 
 chmod +x "$MOCK_BIN/xdotool" "$MOCK_BIN/xwininfo" \
   "$MOCK_BIN/polybar-msg" "$MOCK_BIN/i3-msg" "$MOCK_BIN/xrandr"
+printf '5\n' > "$MOCK_STATE/current-workspace"
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
@@ -223,6 +228,50 @@ grep -Fqx 'workspace next' "$MOCK_STATE/i3-events" ||
   fail "next-workspace action was not sent to i3"
 wait_for_state hidden
 wait_for_peek_exit
+
+# Relative actions select the exact numeric neighbor even when the target is
+# absent from i3's current workspace list.
+reset_case hidden
+printf '5\n' > "$MOCK_STATE/current-workspace"
+"$ROOT/workspace-action.sh" relative -1
+grep -Fqx 'get_workspaces' "$MOCK_STATE/i3-events" ||
+  fail "relative workspace action did not inspect the focused workspace"
+grep -Fqx 'workspace number 4' "$MOCK_STATE/i3-events" ||
+  fail "relative -1 did not select the exact numeric workspace on the left"
+assert_state visible
+wait_for_state hidden
+wait_for_peek_exit
+
+reset_case hidden
+printf '5\n' > "$MOCK_STATE/current-workspace"
+"$ROOT/workspace-action.sh" relative 1
+grep -Fqx 'workspace number 6' "$MOCK_STATE/i3-events" ||
+  fail "relative +1 did not select the exact numeric workspace on the right"
+assert_state visible
+wait_for_state hidden
+wait_for_peek_exit
+
+# Numeric navigation stops at the configured 1-10 boundaries. Re-selecting the
+# current workspace would trigger workspace_auto_back_and_forth.
+reset_case hidden
+printf '1\n' > "$MOCK_STATE/current-workspace"
+"$ROOT/workspace-action.sh" relative -1
+if grep -Fq 'workspace number' "$MOCK_STATE/i3-events"; then
+  fail "relative -1 moved past workspace 1"
+fi
+if [ -s "$MOCK_STATE/polybar-events" ]; then
+  fail "relative -1 peeked Polybar at workspace 1"
+fi
+
+reset_case hidden
+printf '10\n' > "$MOCK_STATE/current-workspace"
+"$ROOT/workspace-action.sh" relative 1
+if grep -Fq 'workspace number' "$MOCK_STATE/i3-events"; then
+  fail "relative +1 moved past workspace 10"
+fi
+if [ -s "$MOCK_STATE/polybar-events" ]; then
+  fail "relative +1 peeked Polybar at workspace 10"
+fi
 
 # The move path delegates to the validated move command and also peeks.
 reset_case hidden
