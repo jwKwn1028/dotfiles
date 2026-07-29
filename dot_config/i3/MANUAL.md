@@ -63,7 +63,7 @@ Theme colors use a Tokyo Night style palette:
 | `Super+T` | Open Thunar. |
 | `Super+P` | Open minimal XFCE display settings. |
 | `XF86Display` | Open minimal XFCE display settings. |
-| `Super+Shift+P` | Run `display-setup.sh`. |
+| `Super+Shift+P` | Apply the preferred display layout, wallpaper, and per-monitor Polybars. |
 | `Ctrl+Super+Z` | Launch Zed. |
 | `Ctrl+Alt+P` | Launch Super Productivity Flatpak. |
 | `Ctrl+Shift+Z` | Launch Zen Browser Flatpak. |
@@ -137,6 +137,10 @@ not change which workspace receives the window. Super-number switching and
 shifted moves call `workspace-action.sh`; its move path delegates the output
 guard to `move-to-workspace.sh`. Numeric relative navigation stops at workspace
 `1` or `10`; it does not wrap or trigger a Polybar peek at those boundaries.
+`reserve-i3-shortcuts.sh` removes XFCE's custom `Ctrl+Super+L → xflock4`
+shortcut, refreshes `xfsettingsd` to release its stale X11 key grab, and
+reloads i3 so it can acquire the chord. XFCE's default `Ctrl+Alt+L` lock
+shortcut remains unchanged.
 
 Workspace output policy:
 
@@ -370,14 +374,20 @@ Polybar is launched from:
 ```
 
 The launcher uses a per-user runtime `flock`. Concurrent requests wait for the
-active launch and reuse its Polybar process, preventing duplicate bars during
-an i3 reload and workspace-peek fallback race.
+active launch and reuse its Polybar processes, preventing duplicate bars during
+an i3 reload and workspace-peek fallback race. It launches the full `main` bar
+on the XRandR primary output and an inherited `external` bar on every other
+active output. The external bar omits only the system tray because X11 permits
+one tray owner.
 
-The i3 config starts it after `display-setup.sh` on every reload/restart.
+`display-setup.sh` starts it after arranging the outputs on every i3
+reload/restart and after a manual `Super+Shift+P` layout refresh.
 
 `toggle-polybar-resnap.sh`, bound to `Super+Shift+B`, handles bar visibility:
 
 - Uses `polybar-msg cmd hide` or `polybar-msg cmd show`.
+- Broadcasts those commands to every monitor-specific bar so toggles and peeks
+  remain synchronized.
 - If showing the bar and IPC is unavailable, relaunches Polybar using the
   launch script.
 - Polls the X server through `xdotool` and `xwininfo` until the requested
@@ -436,6 +446,7 @@ Behavior:
 - Without an external monitor:
   - Laptop output is primary at `0x0`.
 - Runs `wallpaper.sh` afterward.
+- Relaunches one synchronized Polybar instance per active output afterward.
 
 `wallpaper.sh` uses `feh` if available:
 
@@ -808,6 +819,8 @@ One-shot startup:
 
 Always on reload/restart:
 
+- Remove XFCE's conflicting custom `Ctrl+Super+L` shortcut if it exists,
+  refresh `xfsettingsd`, then reload once so i3 can acquire the released grab.
 - Stop and restart `focus-tracker.sh`.
 - Stop and restart `snap-watcher.sh`.
 - Stop and restart `kakaotalk-float-watcher.sh`.
@@ -815,7 +828,8 @@ Always on reload/restart:
 - Stop and restart `/home/kjw1028/.local/bin/autotiling --limit 6`.
 - Run `/home/kjw1028/.local/bin/disable-trackpoint-middle-click` under a
   `/tmp/disable-trackpoint-middle-click.lock` flock.
-- Run `display-setup.sh`, then `~/.config/polybar/launch.sh`.
+- Run `display-setup.sh`, which arranges the outputs, refreshes the wallpaper,
+  and launches Polybar on every active monitor.
 
 The long-running watchers also use their own runtime locks, so duplicate
 instances are avoided even during i3 reloads.

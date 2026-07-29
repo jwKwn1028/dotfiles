@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+DIR="$(dirname "$(readlink -f "$0")")"
 LAPTOP_OUTPUT="${I3_LAPTOP_OUTPUT:-eDP}"
 
 is_connected() {
@@ -50,4 +51,11 @@ fi
 
 sleep 0.2
 
-"$(dirname "$(readlink -f "$0")")/wallpaper.sh"
+"$DIR/wallpaper.sh"
+
+# Recreate the monitor-specific bar instances after the output layout changes.
+# This also makes the Super+Shift+P display shortcut pick up hotplugged outputs.
+POLYBAR_LAUNCHER="${I3_POLYBAR_LAUNCHER:-$DIR/../polybar/launch.sh}"
+if [ -x "$POLYBAR_LAUNCHER" ]; then
+    "$POLYBAR_LAUNCHER"
+fi

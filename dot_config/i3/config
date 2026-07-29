@@ -251,6 +251,7 @@ bindsym $mod+m exec --no-startup-id ~/.config/i3/show-desktop.sh
 bindsym $mod+Control+m move scratchpad
 # --- autostart ---
 exec --no-startup-id /usr/bin/gnome-keyring-daemon --start --components=secrets
+exec_always --no-startup-id ~/.config/i3/reserve-i3-shortcuts.sh
 exec_always --no-startup-id sh -c 'pgrep -u "$USER" polkit-gnome >/dev/null || /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/focus-tracker\.sh$"; setsid ~/.config/i3/focus-tracker.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/snap-watcher\.sh$"; setsid ~/.config/i3/snap-watcher.sh </dev/null >/dev/null 2>&1 &'
@@ -268,5 +269,5 @@ exec --no-startup-id sh -c 'pgrep -x nm-applet           >/dev/null || nm-applet
 exec --no-startup-id sh -c 'pgrep -x blueman-applet      >/dev/null || blueman-applet &'
 exec --no-startup-id sh -c 'pgrep -x unclutter-xfixes    >/dev/null || unclutter-xfixes --timeout 3 &'
 exec --no-startup-id dropbox start -i
-exec_always --no-startup-id sh -c '~/.config/i3/display-setup.sh; ~/.config/polybar/launch.sh'
+exec_always --no-startup-id ~/.config/i3/display-setup.sh
 exec --no-startup-id xss-lock -- xflock4
