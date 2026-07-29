@@ -33,6 +33,69 @@ if (( ! ${+ZSH_BANNER_SPECIAL_CHANCE} )); then
   typeset -g ZSH_BANNER_SPECIAL_CHANCE=1/100
 fi
 
+# Render the banner through the first live prompt instead of writing fixed
+# leading spaces into the scrollback. ZLE re-expands prompts after a terminal
+# resize, so the padding follows the current value of COLUMNS while that first
+# command line is active.
+_zsh_banner_prompt() {
+  emulate -L zsh
+  (( ${ZSH_BANNER_ACTIVE:-0} )) || return 0
+
+  local banner_text=$ZSH_BANNER_TEXT
+  local current_time=$ZSH_BANNER_TIME
+  local tasklist=$ZSH_BANNER_TASKLIST
+  local -i banner_width padding_banner padding_time
+
+  # Measure terminal cells rather than Unicode code points so wide and
+  # combining characters are centered correctly.
+  banner_width=${(m)#banner_text}
+  (( padding_banner = (${COLUMNS:-80} - banner_width) / 2 ))
+  (( padding_banner < 0 )) && padding_banner=0
+  local indent_banner=$(printf "%*s" "$padding_banner")
+
+  (( padding_time = (${COLUMNS:-80} - ${#current_time}) / 2 ))
+  (( padding_time < 0 )) && padding_time=0
+  local indent_time=$(printf "%*s" "$padding_time")
+
+  # The returned text is expanded as part of PROMPT, so literal percent signs
+  # in user-configured messages or task descriptions must be doubled.
+  banner_text=${banner_text//\%/%%}
+  current_time=${current_time//\%/%%}
+  tasklist=${tasklist//\%/%%}
+
+  print -nr -- $'\n'
+  print -nr -- "%B%F{${ZSH_BANNER_COLOR}}${indent_banner}${banner_text}%f%b"$'\n'
+  print -nr -- "%F{245}${indent_time}${current_time}%f"$'\n\n'
+  [[ -n $tasklist ]] && print -nr -- "${tasklist}"$'\n\n'
+
+  # Command substitution strips trailing newlines. This zero-width prompt
+  # escape preserves the blank line before Starship without adding a cell.
+  print -nr -- '%f%b'
+}
+
+_zsh_banner_finish() {
+  emulate -L zsh
+
+  typeset -gi ZSH_BANNER_ACTIVE=0
+  typeset -gi ZSH_BANNER_INSTALLED=0
+  local banner_prefix='$(_zsh_banner_prompt)'
+  [[ $PROMPT == ${banner_prefix}* ]] && PROMPT=${PROMPT#$banner_prefix}
+
+  autoload -Uz add-zsh-hook
+  add-zsh-hook -d preexec _zsh_banner_finish
+}
+
+_zsh_banner_install() {
+  emulate -L zsh
+  (( ${ZSH_BANNER_ACTIVE:-0} && ! ${ZSH_BANNER_INSTALLED:-0} )) || return 0
+
+  PROMPT='$(_zsh_banner_prompt)'"${PROMPT}"
+  typeset -gi ZSH_BANNER_INSTALLED=1
+
+  autoload -Uz add-zsh-hook
+  add-zsh-hook preexec _zsh_banner_finish
+}
+
 # Anonymous function keeps the scratch variables out of the session
 # (the old top-level version leaked messages/size/index/... globals).
 if (( SHLVL <= 2 )); then
@@ -112,32 +175,18 @@ if (( SHLVL <= 2 )); then
       banner_text="${messages[$index]}"
     fi
 
-    # Measure the banner in terminal cells rather than Unicode code points so
-    # wide and combining characters are centered correctly. The (m) flag is
-    # zsh's own width count -- `wc -L` would be GNU-only and costs a fork.
-    local -i banner_width padding_banner
-    banner_width=${(m)#banner_text}
-    (( padding_banner = (${COLUMNS:-80} - banner_width) / 2 ))
-    (( padding_banner < 0 )) && padding_banner=0
-    local indent_banner=$(printf "%*s" "$padding_banner")
-
-    local padding_time=$(( (${COLUMNS:-80} - ${#current_time}) / 2 ))
-    (( padding_time < 0 )) && padding_time=0
-    local indent_time=$(printf "%*s" $padding_time)
-
-    print -P ""
-    print -nP "%B%F{$banner_color}"
-    print -nr -- "${indent_banner}${banner_text}"
-    print -P "%f%b"
-    print -P "%F{245}${indent_time}${current_time}%f"
-    print -P ""
+    typeset -g ZSH_BANNER_TEXT=$banner_text
+    typeset -g ZSH_BANNER_COLOR=$banner_color
+    typeset -g ZSH_BANNER_TIME=$current_time
+    typeset -g ZSH_BANNER_TASKLIST=
+    typeset -gi ZSH_BANNER_ACTIVE=1
 
     if (( show_tasklist )); then
       if [[ -d $banner_state_dir ]] || mkdir -p -- "$banner_state_dir" 2>/dev/null; then
         { print -r -- "$current_date" >! "$tasklist_date_file" } 2>/dev/null
       fi
-      command task list
-      print -P ""
+      # Raw ANSI color bytes confuse ZLE's prompt-width accounting.
+      ZSH_BANNER_TASKLIST=$(command task rc.verbose=nothing rc.color=off list)
     fi
   }
 fi
