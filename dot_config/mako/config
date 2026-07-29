@@ -1,0 +1,39 @@
+# mako — notification daemon for the Niri desktop, in place of the one
+# noctalia-shell provided. Nothing on the Mint side corresponds to it
+# (dunst is installed there but unconfigured), so the styling follows the
+# launcher: the Tokyo Night palette of dot_config/rofi/spotlight.rasi, square
+# corners, one-pixel border. Same treatment as the waybar tooltips.
+
+font=NewComputerModernSans10 11
+
+background-color=#292d3e
+text-color=#c0caf5
+border-color=#292e42
+progress-color=over #283457
+
+border-size=1
+border-radius=0
+padding=10,14
+margin=10
+width=380
+height=180
+
+# Below waybar, which owns an exclusive zone at the top of the screen.
+anchor=top-right
+layer=top
+
+icon-path=/usr/share/icons/Papirus
+max-icon-size=48
+
+default-timeout=5000
+ignore-timeout=1
+max-visible=5
+
+[urgency=low]
+text-color=#565f89
+default-timeout=3000
+
+[urgency=critical]
+border-color=#f7768e
+# Critical notifications stay until dismissed.
+default-timeout=0

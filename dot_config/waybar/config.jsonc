@@ -1,0 +1,167 @@
+// ============================================================
+// Waybar — the Wayland counterpart of this repo's Polybar bar.
+// dot_config/polybar/config.ini is the design reference: same
+// geometry, same module order, same palette, same glyphs.
+// Colours live in style.css; this file only decides content.
+// ============================================================
+{
+    // Polybar: height 28px, width 100%, top, radius 0, fixed-center.
+    // `layer: top` + the default exclusive zone reserves the strip the
+    // same way polybar's struts did under i3.
+    "layer": "top",
+    "position": "top",
+    "height": 28,
+    "fixed-center": true,
+
+    // Polybar spaces modules with `module-margin = 1`, i.e. one space on
+    // each side of every module. GTK has no equivalent, so the gap is CSS
+    // padding on the modules themselves and `spacing` stays at 0.
+    "spacing": 0,
+
+    "modules-left":   ["niri/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right":  [
+        "custom/cpu",
+        "memory",
+        "pulseaudio",
+        "battery",
+        "network",
+        "tray",
+        "custom/power"
+    ],
+
+    // ─── Workspaces (polybar [module/i3]) ───────────────────────────
+    // Niri numbers workspaces per output and always keeps one empty
+    // workspace at the end of each, so `all-outputs` is left off: with it
+    // on, two monitors contribute two independent "1, 2, 3" runs to the
+    // same bar. The trailing empty workspace is dimmed rather than hidden
+    // (GTK CSS cannot hide a widget), which reads like polybar's
+    // label-visible styling.
+    "niri/workspaces": {
+        "all-outputs": false,
+        "format": "{index}",
+        "on-scroll-up": "niri msg action focus-workspace-up",
+        "on-scroll-down": "niri msg action focus-workspace-down"
+    },
+
+    // ─── Date (polybar [module/date]) ───────────────────────────────
+    // label = "%date%  %time%" with date "%a %m %d" and time "%H:%M".
+    "clock": {
+        "interval": 5,
+        "format": "{:%a %m %d  %H:%M}",
+        "tooltip-format": "<big>{:%Y  %B}</big>\n<tt><small>{calendar}</small></tt>",
+        "calendar": {
+            "mode": "month",
+            "weeks-pos": "right",
+            "format": {
+                "months":  "<span color='#e0e0e0'><b>{}</b></span>",
+                "weeks":   "<span color='#6c7086'>{}</span>",
+                "weekdays":"<span color='#f5c2e7'><b>{}</b></span>",
+                "today":   "<span color='#89b4fa'><b>{}</b></span>"
+            }
+        }
+    },
+
+    // ─── CPU (polybar [module/cpu]) ────────────────────────────────
+    // Deliberately a custom module, not waybar's built-in `cpu`: this is
+    // the same ~/.local/bin/cpu-load the polybar bar and the zsh `sysmon`
+    // monitor use, so all three report the identical number (iowait
+    // counted as idle, the top/htop convention). The "waybar" argument is
+    // the state key, keeping this caller's /proc/stat delta separate from
+    // polybar's and sysmon's.
+    "custom/cpu": {
+        "exec": "$HOME/.local/bin/cpu-load waybar",
+        "interval": 2,
+        "format": "CPU {}%",
+        "tooltip": false
+    },
+
+    // ─── Memory (polybar [module/memory]) ──────────────────────────
+    "memory": {
+        "interval": 2,
+        "format": "RAM {percentage}%",
+        "tooltip-format": "{used:0.1f}G / {total:0.1f}G"
+    },
+
+    // ─── Volume (polybar [module/pulseaudio]) ──────────────────────
+    // Polybar drew the ramp glyph from font-1 (JetBrainsMono Nerd Font at
+    // size 14) in pure white while the percentage stayed at the bar
+    // foreground; Pango markup is how waybar reproduces a per-run font
+    // size and colour inside one label.
+    "pulseaudio": {
+        "format": "<span size='14pt' color='#ffffff'>{icon}</span> {volume}%",
+        "format-muted": "<span size='14pt'>󰝟</span> muted",
+        "format-icons": {
+            "default": ["󰕿", "󰖀", "󰕾"]
+        },
+        "max-volume": 100,
+        "scroll-step": 5,
+        "on-click": "pactl set-sink-mute @DEFAULT_SINK@ toggle",
+        "on-click-right": "pavucontrol",
+        "tooltip-format": "{desc}  {volume}%"
+    },
+
+    // ─── Battery (polybar [module/battery]) ────────────────────────
+    // Same battery/adapter, same 99% full and 15% low thresholds, same
+    // labels, and the same slightly unusual polybar binding: scrolling
+    // over the battery changes screen brightness.
+    "battery": {
+        "bat": "BAT0",
+        "adapter": "AC",
+        "interval": 5,
+        "full-at": 99,
+        "states": { "low": 15 },
+        "format": "BAT {capacity}%",
+        "format-charging": "CHG {capacity}%",
+        "format-plugged": "CHG {capacity}%",
+        "format-full": "FULL",
+        "format-low": "low {capacity}%",
+        "format-charging-low": "CHG {capacity}%",
+        "format-plugged-low": "CHG {capacity}%",
+        "format-time": "{H} h {M} min",
+        "tooltip-format": "{capacity}%  ({time})",
+        "on-scroll-up": "brightnessctl -q set +5%",
+        "on-scroll-down": "brightnessctl -q set 5%-"
+    },
+
+    // ─── Wi-Fi (polybar [module/wlan]) ─────────────────────────────
+    // Polybar showed a signal-strength ramp when connected and a dimmed
+    // "offline" otherwise. Its ramp-signal-0..4 values are empty strings
+    // in config.ini -- the glyphs were lost at some point, so the module
+    // renders nothing while connected -- and the nf-md-wifi-strength
+    // ramp its option names describe is restored here.
+    "network": {
+        "interval": 5,
+        "format-wifi": "<span size='14pt'>{icon}</span>",
+        "format-ethernet": "<span size='14pt'>󰈀</span>",
+        "format-linked": "<span size='14pt'>󰤫</span>",
+        "format-disconnected": "offline",
+        "format-icons": [
+            "󰤯", "󰤟", "󰤢", "󰤥", "󰤨"
+        ],
+        "tooltip-format-wifi": "{essid}  {signalStrength}%\n{ipaddr}",
+        "tooltip-format-ethernet": "{ifname}\n{ipaddr}",
+        "tooltip-format-disconnected": "Disconnected",
+        "on-click": "nm-connection-editor"
+    },
+
+    // ─── Tray (polybar [module/tray]) ──────────────────────────────
+    "tray": {
+        "icon-size": 18,
+        "spacing": 8,
+        "show-passive-items": false
+    },
+
+    // ─── Power (polybar [module/powermenu]) ────────────────────────
+    // Polybar expanded an inline row of coloured icons on click. Waybar
+    // can imitate that with a group drawer, but the same actions read
+    // better -- and stay keyboard-reachable -- in the rofi-styled fuzzel
+    // menu, which Mod+Shift+Q also opens. At rest the bar therefore looks
+    // exactly like closed polybar: one red power glyph on the right.
+    "custom/power": {
+        "format": "<span size='14pt'></span>",
+        "on-click": "$HOME/.local/bin/session-menu",
+        "on-click-right": "$HOME/.local/bin/session-menu lock",
+        "tooltip-format": "Session menu"
+    }
+}

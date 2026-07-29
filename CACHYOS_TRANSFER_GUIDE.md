@@ -1,10 +1,17 @@
 # Transferring This Chezmoi Setup to CachyOS
 
-Last reviewed: 2026-07-26
+Last reviewed: 2026-07-29
 
-This guide covers a fresh CachyOS desktop running **Niri with Noctalia** while
-keeping the existing Linux Mint **i3/X11** setup intact. The two desktops are
-separate profiles; CachyOS is not treated as an in-place port of the i3 files.
+This guide covers a fresh CachyOS desktop running **Niri** while keeping the
+existing Linux Mint **i3/X11** setup intact. The two desktops are separate
+profiles; CachyOS is not treated as an in-place port of the i3 files.
+
+CachyOS installs Niri together with **noctalia-shell**, and that is what the
+first apply should be tested against. The configured desktop then replaces
+noctalia-shell with **waybar** and **fuzzel**, which are the Wayland
+counterparts of the Mint profile's Polybar and rofi — see
+[Phase 6](#phase-6-the-desktop-shell-waybar-and-fuzzel). noctalia-shell stays
+installed as the fallback.
 
 The short version is:
 
@@ -12,8 +19,8 @@ The short version is:
 2. Select `desktop` and `cachyos-niri-noctalia`.
 3. Apply the CachyOS package-provisioning script **first**.
 4. Apply a small, shared command-line configuration set **next**.
-5. Capture and curate the working Niri and Noctalia configuration only after
-   the packaged CachyOS session has been tested.
+5. Capture and curate the working Niri configuration, then swap the shell,
+   only after the packaged CachyOS session has been tested.
 6. Finish with a full dry run before allowing a full apply.
 
 Do not use `chezmoi init --apply` for the first CachyOS checkout.
@@ -25,12 +32,17 @@ The repository has three desktop-profile values:
 | Value | Purpose |
 | --- | --- |
 | `linuxmint-i3-x11` | Mint/Ubuntu apt packages and the existing i3, Polybar, Picom, Rofi, and X11 helpers |
-| `cachyos-niri-noctalia` | CachyOS pacman packages and future Niri/Noctalia source state |
+| `cachyos-niri-noctalia` | CachyOS pacman packages, Niri, and its waybar/fuzzel/mako/swaylock shell |
 | `none` | Shared terminal configuration only; suitable for a server or an unsupported desktop |
 
+The profile value still says `noctalia` because the CachyOS package it selects
+is still `cachyos-niri-noctalia`, and noctalia-shell is still installed by it.
+Renaming the value would force a `chezmoi init` on every machine for no gain.
+
 On CachyOS, `.chezmoiignore` prevents the Mint i3/X11 targets from being
-applied. On Mint, it prevents Niri and Noctalia targets from being applied.
-Noctalia runtime state and cache remain local on every profile:
+applied. On Mint, it prevents Niri, its shell (`waybar`, `fuzzel`, `mako`,
+`swaylock`, `~/.local/bin/session-menu`) and Noctalia targets from being
+applied. Noctalia runtime state and cache remain local on every profile:
 
 ```text
 ~/.local/state/noctalia/
@@ -292,68 +304,125 @@ This creates the future `dot_config/niri/` source state. It will be ignored by
 the Mint profile automatically. Prefer small includes or templates if only a
 few Niri values differ between machines.
 
-## Phase 6: capture Noctalia according to its installed generation
+## Phase 6: the desktop shell — waybar and fuzzel
 
-Do not copy the entire Noctalia directory blindly. CachyOS can move between
-Noctalia generations, and their configuration formats differ.
+noctalia-shell is one process that provides the bar, launcher, notifications,
+lock screen, session menu, on-screen volume/brightness overlays, wallpaper and
+idle handling. This desktop replaces it with the same set of small programs the
+Mint profile uses, in their Wayland form, so both machines look and behave
+alike:
 
-Identify what is installed:
+| Noctalia feature | Replacement | Modelled on |
+| --- | --- | --- |
+| bar | `waybar` | `dot_config/polybar/config.ini` |
+| launcher (`Mod+Ctrl+Return`) | `fuzzel` | `dot_config/rofi/spotlight.rasi` |
+| session menu (`Mod+Shift+Q`) | `~/.local/bin/session-menu` (fuzzel dmenu) | polybar's `[module/powermenu]` |
+| lock screen (`Mod+Alt+L`) | `swaylock` | — |
+| notifications | `mako` | — |
+| idle / suspend | `swayidle` | noctalia's own timeouts |
+| volume, brightness, media keys | `pactl`, `brightnessctl`, `playerctl` | `dot_config/i3/config` |
+| wallpaper | niri's own `background-color` | — |
+
+Do this only after the stock CachyOS session has started and been tested. The
+packages come from `packages.pacman.niri_noctalia`, so run the pacman script
+from Phase 2 before the configuration lands.
+
+### What the configuration reproduces
+
+`dot_config/waybar/` is a transcription of the Polybar bar, not a fresh design:
+28px transparent strip at the top, the same module order
+(workspaces · date · CPU · RAM · volume · battery · Wi-Fi · tray · power), the
+same `[colors]` values, the same Nerd Font glyphs at the same size, and the
+same slightly unusual bindings — scrolling the battery changes brightness,
+clicking the volume module mutes. The CPU figure comes from
+`~/.local/bin/cpu-load`, the script polybar and the zsh `sysmon` monitor share,
+so all three report the same number.
+
+Two deliberate departures, both noted in the files:
+
+- Polybar's `[module/wlan]` has **empty** `ramp-signal-*` values, so it renders
+  nothing while connected. waybar restores the signal-strength ramp those
+  option names describe.
+- `niri/workspaces` runs with `all-outputs` off. Niri numbers workspaces per
+  output, so polybar's `pin-workspaces = false` would put two independent
+  "1, 2, 3" runs on one bar. Niri's always-present trailing empty workspace is
+  dimmed rather than hidden, because GTK CSS cannot hide a widget.
+
+`dot_config/fuzzel/fuzzel.ini` is the same exercise for `spotlight.rasi`: Tokyo
+Night, square corners, one-pixel border, top-anchored, 640px wide, eight rows,
+`Search` placeholder, no prompt label. fuzzel sizes its window in *characters*,
+so the width is derived from the font metric — `NewComputerModernMono10`
+advances 0.525 em, which is 11.0px at 16pt — and `line-height` is in points
+unless suffixed `px`, while the `*-pad` options are pixels. Getting those units
+wrong is the easy way to end up with a window that is not the size it claims.
+
+Things fuzzel cannot copy: rofi's separate input-bar background tint, and its
+independent control of row padding, row spacing and icon size (fuzzel derives
+all three from `line-height`).
+
+### What is gone
+
+- **On-screen volume and brightness overlays.** The waybar module updates
+  immediately, which is the only feedback now.
+- **Noctalia's control centre, wallpaper selector and colour-scheme
+  generation.** `~/.config/noctalia/settings.json` is still on disk and still
+  untracked; nothing reads it while noctalia is not running.
+- **A wallpaper image.** Noctalia was configured with `disableWallpaper`, so
+  there was none to preserve; `layout { background-color }` in
+  `dot_config/niri/cfg/layout.kdl` now paints the desktop instead. For an
+  image, install `swaybg`, start it from `cfg/autostart.kdl`, set
+  `background-color` back to `"transparent"`, and re-add the backdrop
+  layer-rule that `cfg/rules.kdl` keeps commented out for the purpose.
+
+### Fonts
+
+The bar names `NewComputerModernSans10` — Polybar's `font-0`, which nothing in
+this repo had ever installed. `run_once_after_50-install-fonts.sh.tmpl` now
+takes both New Computer Modern faces out of the one 33 MB CTAN archive. Check
+after provisioning:
 
 ```sh
-pacman -Q | rg 'noctalia|quickshell'
-command -v noctalia
-command -v qs
+fc-list : family | tr ',' '\n' | sort -u | rg 'NewComputerModern'
 ```
 
-As of this writing CachyOS ships **Noctalia v4** (`noctalia-shell 4.7.7`,
-`noctalia-qs 0.0.12`). There is no `noctalia` binary, only `qs`, so the v5
-`noctalia config export` flow below does not apply — follow the v4 section.
-Re-check after a major upgrade rather than assuming either generation.
+A missing face is not obvious: fontconfig silently falls back to the next
+family in the list, so the bar still renders — in the wrong typeface.
 
-### Noctalia v5
+### Going back to Noctalia
 
-Noctalia v5 uses hand-managed TOML in `~/.config/noctalia/` and GUI-managed
-overrides in `~/.local/state/noctalia/settings.toml`. Export a portable merged
-configuration and validate it:
+noctalia-shell is **not** uninstalled, and must not be: it is a dependency of
+`cachyos-niri-noctalia`, and removing it takes the meta package with it. To
+fall back, stop the replacements and start it by hand:
 
 ```sh
-noctalia config export > /tmp/noctalia-config.toml
-noctalia config validate /tmp/noctalia-config.toml
-install -Dm644 /tmp/noctalia-config.toml ~/.config/noctalia/config.toml
-chezmoi add ~/.config/noctalia/config.toml
-```
-
-Do **not** add `~/.local/state/noctalia/`; the profile routing explicitly
-ignores it. Review exported location, calendar, plugin, wallpaper, output, and
-device values before committing.
-
-### Noctalia v4
-
-Noctalia v4 uses its own JSON configuration and normally starts under Niri
-through:
-
-```text
-spawn-at-startup "qs" "-c" "noctalia-shell"
-```
-
-Configure it in the GUI, inspect the files under `~/.config/noctalia/`, and add
-only the stable user-owned JSON files. Exclude caches, generated templates,
-plugin checkouts, credentials, device identifiers, and host-specific paths.
-Test the installed shell manually with:
-
-```sh
+pkill -x waybar; pkill -x mako; pkill -x swayidle
 qs -c noctalia-shell
 ```
 
-After adding either generation:
+To make that permanent, restore `spawn-sh-at-startup "qs -c noctalia-shell"` in
+`dot_config/niri/cfg/autostart.kdl` and put the `qs ... ipc call` binds back in
+`cfg/keybinds.kdl`; both files were changed in place and `git log` has the
+originals.
+
+If you ever do want Noctalia's own configuration tracked, note that its
+generations differ. CachyOS currently ships **v4** (`noctalia-shell 4.7.7`,
+`noctalia-qs 0.0.12`): there is no `noctalia` binary, only `qs`, so the v5
+`noctalia config export` flow does not apply — add the stable user-owned JSON
+files under `~/.config/noctalia/` by hand, and never
+`~/.local/state/noctalia/`, which the profile routing ignores on purpose.
+Re-check the generation after a major upgrade rather than assuming either.
+
+### Validating the shell
 
 ```sh
-chezmoi diff
-chezmoi status
+niri validate
+waybar -c ~/.config/waybar/config.jsonc -s ~/.config/waybar/style.css   # Ctrl-C
+fuzzel --check-config
+shellcheck ~/.local/bin/session-menu
 ```
 
-The resulting `dot_config/noctalia/` source state is applied only by the
-CachyOS profile.
+waybar logs CSS and JSON errors on startup rather than failing, so read its
+output rather than trusting a clean exit.
 
 ## Distro packaging differences
 
@@ -441,7 +510,7 @@ places, because no single setting covers them all:
 | --- | --- | --- |
 | `Mod+Return` bind | `dot_config/niri/cfg/keybinds.kdl` | The keybinding itself |
 | `TERMINAL "ghostty"` | `dot_config/niri/cfg/misc.kdl` `environment` | Anything niri spawns that honours `$TERMINAL` |
-| `appLauncher.terminalCommand` | `~/.config/noctalia/settings.json` | Noctalia launcher "open in terminal"; GUI-managed, stays local |
+| `terminal=ghostty -e` | `dot_config/fuzzel/fuzzel.ini` | The launcher's "run in a terminal" desktop entries |
 | `com.mitchellh.ghostty.desktop` | `~/.config/xdg-terminals.list` | The freedesktop `xdg-terminal-exec` spec |
 
 `gsettings set org.gnome.desktop.default-applications.terminal exec ghostty`
@@ -481,8 +550,9 @@ reviewable provisioning path later.
 
 ## Phase 8: final dry run, then full apply
 
-Only after the shared shell layer, Niri, Noctalia, package manifest, and every
-remaining provisioning-script decision have been tested independently:
+Only after the shared shell layer, Niri, the desktop shell, package manifest,
+and every remaining provisioning-script decision have been tested
+independently:
 
 ```sh
 chezmoi data | jq '{os: .chezmoi.os, distro: .chezmoi.osRelease.id, class, desktopProfile}'
@@ -526,7 +596,7 @@ When changing a profile-specific file, validate on that profile before
 committing. A good cross-system change has all three properties:
 
 1. the Mint render still contains the existing i3/X11 setup;
-2. the CachyOS render contains Niri/Noctalia and no i3/X11 target;
+2. the CachyOS render contains Niri and its shell, and no i3/X11 target;
 3. package provisioning and the configuration that consumes it change
    together.
 
