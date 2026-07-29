@@ -85,3 +85,4 @@ desktop-notifications = false
 
 # Don't dim the unfocused split
 unfocused-split-opacity = 1
+focus-follows-mouse = true
