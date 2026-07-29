@@ -70,9 +70,14 @@ common = [
     "shellcheck",
 ]
 
-# CachyOS owns the base Niri/Noctalia session through its packages. The meta
-# package preserves that supported stack; chezmoi adds user configuration only
-# after it has been reviewed as described in CACHYOS_TRANSFER_GUIDE.md.
+# CachyOS owns the base Niri session through its packages. The meta package
+# preserves that supported stack; chezmoi adds user configuration only after
+# it has been reviewed as described in CACHYOS_TRANSFER_GUIDE.md.
+#
+# The desktop shell itself is waybar + fuzzel, not noctalia-shell -- see the
+# "Replacing noctalia-shell" section of that guide. noctalia stays installed
+# regardless: it is a dependency of cachyos-niri-noctalia, and keeping it is
+# what makes the stock session available as a fallback.
 niri_noctalia = [
     "cachyos-niri-noctalia",
     "flatpak",
@@ -81,6 +86,19 @@ niri_noctalia = [
     "brightnessctl", "playerctl", "pavucontrol", "blueman",
     "zathura", "zathura-pdf-poppler",
     "gimp", "vlc", "mpv",
+    # Desktop shell. waybar and fuzzel arrive as dependencies of the CachyOS
+    # meta package today, but this repo configures both, so they are named
+    # explicitly rather than left to a transitive dependency that could be
+    # dropped. mako/swaylock/swayidle replace the notification daemon, lock
+    # screen and idle handling that came with noctalia-shell.
+    "waybar", "fuzzel",
+    "mako", "swaylock", "swayidle",
+    # dot_config/fuzzel/fuzzel.ini and dot_config/mako/config name this icon
+    # theme, following dot_config/rofi/spotlight.rasi.
+    "papirus-icon-theme",
+    # nm-applet for waybar's tray, and nm-connection-editor for the network
+    # module's click action. Mirrors the i3 profile's network-manager-gnome.
+    "network-manager-applet",
     # Fonts named by dot_config/ghostty/config. Hack Nerd Font Mono carries the
     # icon glyphs the starship prompt and CLI tools draw; without it fontconfig
     # falls back to Noto Sans Mono and every icon renders as tofu. Noto CJK

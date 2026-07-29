@@ -20,7 +20,9 @@
     }
 
     debug {
-        // Allows notification actions and window activation from Noctalia.
+        // Lets a notification's action actually raise the window that sent
+        // it. Was here for Noctalia; mako and waybar need it for the same
+        // reason -- they request activation without a valid input serial.
         honor-xdg-activation-with-invalid-serial
     }
 

@@ -1,0 +1,156 @@
+/* ============================================================
+ * Waybar stylesheet — the [colors] section and per-module
+ * foregrounds of dot_config/polybar/config.ini, expressed as
+ * GTK 3 CSS. Geometry that polybar counted in spaces
+ * (padding-left, module-margin, label padding) becomes pixels
+ * here; everything else is a direct transcription.
+ * ============================================================ */
+
+/* Polybar [colors]. background is #00000000: fully transparent, so the
+ * wallpaper shows through the whole strip. */
+@define-color background rgba(0, 0, 0, 0);
+@define-color foreground #e0e0e0;
+@define-color primary    #89b4fa;
+@define-color accent     #f5c2e7;
+@define-color disabled   #6c7086;
+@define-color alert      #f38ba8;
+
+/* Popups (tooltips) have no polybar counterpart. They borrow the Tokyo
+ * Night palette of the rofi/fuzzel launcher so every surface this desktop
+ * pops up over the bar reads as one family. */
+@define-color popup-bg     #24283b;
+@define-color popup-fg     #c0caf5;
+@define-color popup-border #292e42;
+
+* {
+    /* Polybar font-0 (text) and font-1 (icons). Pango walks this list per
+     * character, so the Nerd Font is reached only for glyphs New Computer
+     * Modern does not have -- which is exactly the icons. The icon size
+     * (polybar's font-1 size 14) is applied per label with <span size>
+     * markup in config.jsonc. */
+    font-family: "NewComputerModernSans10", "JetBrainsMono Nerd Font", sans-serif;
+    font-size: 11pt;
+
+    /* GTK decorates widgets by default; polybar draws nothing but text. */
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+}
+
+window#waybar {
+    background-color: @background;
+    color: @foreground;
+}
+
+/* Polybar padding-left / padding-right = 3 spaces. */
+.modules-left  { margin-left: 12px; }
+.modules-right { margin-right: 12px; }
+
+/* Polybar module-margin = 1, i.e. one space on either side of a module,
+ * so adjacent modules sit two spaces apart. */
+#workspaces,
+#clock,
+#custom-cpu,
+#memory,
+#pulseaudio,
+#battery,
+#network,
+#tray,
+#custom-power {
+    padding: 0 5px;
+    background-color: transparent;
+    color: @foreground;
+}
+
+/* ─── Workspaces ([module/i3]) ───────────────────────────────────── */
+
+#workspaces {
+    padding: 0;
+}
+
+#workspaces button {
+    /* label-*-padding = 1 */
+    padding: 0 6px;
+    margin: 0;
+    background-color: transparent;
+    color: @foreground;
+}
+
+/* Niri keeps one empty workspace at the end of every output. Polybar
+ * never showed one, so dim it the way it dimmed off-screen workspaces. */
+#workspaces button.empty {
+    color: @disabled;
+}
+
+/* Active on its own output but not the focused one -- polybar's
+ * label-visible, i.e. the workspace showing on the other monitor. */
+#workspaces button.active {
+    color: @disabled;
+}
+
+#workspaces button.urgent {
+    color: @alert;
+}
+
+/* Polybar has no hover state, but a GTK button with no feedback at all
+ * feels dead under the pointer. Kept below the focused colour. */
+#workspaces button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* label-focused: background #33ffffff (20% white) over the wallpaper. */
+#workspaces button.focused,
+#workspaces button.focused:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: @primary;
+}
+
+/* ─── Right-hand modules ─────────────────────────────────────────── */
+
+#pulseaudio.muted {
+    color: @disabled;
+}
+
+#battery.charging,
+#battery.plugged {
+    color: @primary;
+}
+
+#battery.full {
+    color: @disabled;
+}
+
+#battery.discharging.low {
+    color: @alert;
+}
+
+#network.disconnected {
+    color: @disabled;
+}
+
+#tray {
+    padding: 0 3px;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+}
+
+/* label-open of the polybar power menu. */
+#custom-power {
+    color: @alert;
+}
+
+/* ─── Popups ─────────────────────────────────────────────────────── */
+
+tooltip {
+    background-color: @popup-bg;
+    border: 1px solid @popup-border;
+}
+
+tooltip label {
+    color: @popup-fg;
+    padding: 2px 4px;
+}

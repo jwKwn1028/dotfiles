@@ -48,23 +48,35 @@ next `apply` when the data changes.
 CachyOS/Arch repositories; verify with `pacman -Si <pkg>`. Do not put AUR-only
 packages into the official pacman list or assume an AUR helper is installed.
 
-## The CachyOS Niri/Noctalia profile
+## The CachyOS Niri profile
 
 For any task that changes or evaluates the CachyOS setup, read
 [`CACHYOS_TRANSFER_GUIDE.md`](CACHYOS_TRANSFER_GUIDE.md) first. It defines the
 safe first apply, the package/configuration boundary, and what Noctalia data
 must remain local.
 
-- Treat CachyOS Niri/Noctalia as a separate desktop profile, not as a mechanical
-  port of i3.
+The desktop is Niri plus a shell of separate programs — **waybar** (bar),
+**fuzzel** (launcher and session menu), **mako**, **swaylock**, **swayidle** —
+which deliberately mirror the Mint profile's Polybar and rofi. CachyOS's
+**noctalia-shell** is installed but not started; it is the fallback.
+
+- Treat CachyOS Niri as a separate desktop profile, not as a mechanical port
+  of i3.
 - Keep `dot_config/i3/`, Polybar, Picom, Rofi, and the X11 helpers unchanged
   unless the user explicitly asks to change or retire the Mint profile.
-- Package provisioning comes first. Capture Niri and Noctalia configuration
-  only after the CachyOS-packaged session works.
+- `dot_config/waybar/` and `dot_config/fuzzel/` are transcriptions of
+  `dot_config/polybar/config.ini` and `dot_config/rofi/spotlight.rasi`. When
+  either side changes, keep the pair in step and say in the file which
+  polybar/rofi option a value came from.
+- Package provisioning comes first. Capture desktop configuration only after
+  the CachyOS-packaged session works.
+- Do not uninstall `noctalia-shell` or `cachyos-alacritty-config`: both are
+  dependencies of the `cachyos-niri-noctalia` meta package.
 - Never manage `~/.local/state/noctalia/` or `~/.cache/noctalia/`; they contain
   application-owned state, generated material, and potentially private data.
-- Validate Niri with `niri validate`. Detect the installed Noctalia generation
-  before adding config because v4 and v5 use different formats.
+- Validate with `niri validate`, `fuzzel --check-config`, and by starting
+  waybar and reading its log — waybar reports CSS and JSON errors on startup
+  instead of exiting non-zero.
 
 ## The Mint X11 → Sway transition
 

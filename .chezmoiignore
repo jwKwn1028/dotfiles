@@ -80,11 +80,18 @@
 /.local/bin/hx
 {{ end -}}
 
-# Niri and curated Noctalia configuration belong only to the CachyOS profile.
-# Noctalia's runtime state and cache remain local on every profile.
+# Niri and its desktop shell belong only to the CachyOS profile: waybar and
+# fuzzel are the Wayland counterparts of the Mint profile's polybar and rofi,
+# and land on exactly the machines that do not get those. Noctalia's runtime
+# state and cache remain local on every profile.
 {{ if ne $desktopProfile "cachyos-niri-noctalia" -}}
 /.config/niri/
 /.config/noctalia/
+/.config/waybar/
+/.config/fuzzel/
+/.config/mako/
+/.config/swaylock/
+/.local/bin/session-menu
 {{ end -}}
 /.local/state/noctalia/
 /.cache/noctalia/

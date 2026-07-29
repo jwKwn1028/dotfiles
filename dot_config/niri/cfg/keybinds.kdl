@@ -3,34 +3,49 @@ binds {
     // ────────────── Keybindings ──────────────
     // https://github.com/YaLTeR/niri/wiki/Configuration:-Key-Bindings
 
-    // ─── noctalia-shell keybinds ───
-    // https://docs.noctalia.dev/getting-started/keybinds/
+    // ─── Desktop shell keybinds ───
+    // waybar + fuzzel, not noctalia-shell. The media, brightness and volume
+    // keys call the same commands the i3 profile binds in
+    // dot_config/i3/config, so both desktops behave identically; there is no
+    // on-screen volume/brightness overlay any more, but the waybar module
+    // updates immediately.
+    // ~/.local/bin/session-menu is reached through $HOME rather than by name
+    // because ~/.local/bin is not guaranteed to be on the session's PATH.
 
     Mod+Shift+ESCAPE                     { show-hotkey-overlay; }
 
     // ─── Applications ───
     Mod+Return                          hotkey-overlay-title="Open Terminal: Ghostty" { spawn "ghostty"; }
-    Mod+CTRL+Return                     hotkey-overlay-title="Open App Launcher: noctalia launcher" { spawn-sh "qs -c noctalia-shell ipc call launcher toggle"; }
+    // Mod+Space is the launcher, as `bindsym $mod+space` is on the Mint
+    // profile. Mod+Ctrl+Return stays bound to it too -- it is what the stock
+    // CachyOS/noctalia session used, so the muscle memory keeps working.
+    Mod+Space                           hotkey-overlay-title="Open App Launcher: fuzzel" { spawn "fuzzel"; }
+    Mod+CTRL+Return                     hotkey-overlay-title="Open App Launcher: fuzzel" { spawn "fuzzel"; }
     Mod+B                               hotkey-overlay-title="Open Browser: firefox" { spawn "firefox"; }
-    Mod+ALT+L                           hotkey-overlay-title="Lock Screen: noctalia lock" { spawn-sh "qs -c noctalia-shell ipc call lockScreen lock"; }
-    Mod+Shift+Q                        hotkey-overlay-title="Session Menu: noctalia sessionMenu" { spawn-sh "qs -c noctalia-shell ipc call sessionMenu toggle"; }
+    Mod+ALT+L                           hotkey-overlay-title="Lock Screen: swaylock" { spawn-sh "\"$HOME/.local/bin/session-menu\" lock"; }
+    Mod+Shift+Q                        hotkey-overlay-title="Session Menu: fuzzel" { spawn-sh "\"$HOME/.local/bin/session-menu\""; }
 
     // Please choose your own file manager.
     Mod+E                               hotkey-overlay-title="File Manager: Nautilus" { spawn "nautilus"; }
 
+    // ─── Bar ───
+    // Same binding the i3 profile uses to toggle polybar. waybar's default
+    // action for SIGUSR1 is to toggle visibility.
+    Mod+Shift+B                         hotkey-overlay-title="Toggle Bar: waybar" { spawn "pkill" "-SIGUSR1" "-x" "waybar"; }
+
     // ─── Media Controls ───
-    XF86AudioRaiseVolume                allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call volume increase"; }
-    XF86AudioLowerVolume                allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call volume decrease"; }
-    XF86AudioMute                       allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call volume muteOutput"; }
-    XF86AudioMicMute                    allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call volume muteInput"; }
-    XF86AudioNext                       allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call media next"; }
-    XF86AudioPrev                       allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call media previous"; }
-    XF86AudioPlay                       allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call media playPause"; }
-    XF86AudioPause                      allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call media playPause"; }
+    XF86AudioRaiseVolume                allow-when-locked=true { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "+5%"; }
+    XF86AudioLowerVolume                allow-when-locked=true { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "-5%"; }
+    XF86AudioMute                       allow-when-locked=true { spawn "pactl" "set-sink-mute" "@DEFAULT_SINK@" "toggle"; }
+    XF86AudioMicMute                    allow-when-locked=true { spawn "pactl" "set-source-mute" "@DEFAULT_SOURCE@" "toggle"; }
+    XF86AudioNext                       allow-when-locked=true { spawn "playerctl" "next"; }
+    XF86AudioPrev                       allow-when-locked=true { spawn "playerctl" "previous"; }
+    XF86AudioPlay                       allow-when-locked=true { spawn "playerctl" "play-pause"; }
+    XF86AudioPause                      allow-when-locked=true { spawn "playerctl" "play-pause"; }
 
     // ─── Brightness Controls ───
-    XF86MonBrightnessUp                 allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call brightness increase"; }
-    XF86MonBrightnessDown               allow-when-locked=true { spawn-sh "qs -c noctalia-shell ipc call brightness decrease"; }
+    XF86MonBrightnessUp                 allow-when-locked=true { spawn "brightnessctl" "-q" "set" "+5%"; }
+    XF86MonBrightnessDown               allow-when-locked=true { spawn "brightnessctl" "-q" "set" "5%-"; }
 
     // ─── Window Movement and Focus ───
     Mod+Q                               { close-window; }

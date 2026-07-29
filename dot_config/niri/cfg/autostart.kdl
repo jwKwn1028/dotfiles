@@ -1,4 +1,32 @@
 // ────────────── Startup Applications ──────────────
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Miscellaneous#spawn-sh-at-startup
+//
+// This desktop runs waybar and fuzzel instead of noctalia-shell, so the
+// pieces noctalia used to provide as one process are started individually
+// here: the bar, notifications, idle handling, and the tray applets that
+// populate polybar's tray on the Mint profile.
+//
+// noctalia-shell is NOT uninstalled -- it is a dependency of the
+// cachyos-niri-noctalia meta package and stays available as a fallback.
+// `qs -c noctalia-shell` still starts it by hand; it is simply not
+// autostarted, and its keybinds have been replaced in keybinds.kdl.
 
-    spawn-sh-at-startup "qs -c noctalia-shell"
+    spawn-at-startup "waybar"
+    spawn-at-startup "mako"
+
+    // Idle handling, at the timeouts noctalia was configured with
+    // (~/.config/noctalia/settings.json: screenOffTimeout 600,
+    // lockTimeout 660, suspendTimeout 1800). `lock` also covers
+    // `loginctl lock-session` from anywhere else.
+    spawn-at-startup "swayidle" "-w" \
+        "timeout" "600"  "niri msg action power-off-monitors" \
+        "resume"         "niri msg action power-on-monitors" \
+        "timeout" "660"  "swaylock -f" \
+        "timeout" "1800" "systemctl suspend" \
+        "before-sleep"   "swaylock -f" \
+        "lock"           "swaylock -f"
+
+    // Tray applets, matching the i3 profile's exec lines. waybar's tray
+    // module has nothing to show without them.
+    spawn-sh-at-startup "pgrep -x nm-applet      >/dev/null || nm-applet"
+    spawn-sh-at-startup "pgrep -x blueman-applet >/dev/null || blueman-applet"
