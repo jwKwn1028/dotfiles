@@ -10,6 +10,9 @@ _clipcopy() {
   fi
 }
 
+# Postfix pipeline shorthand: command Y
+alias -g Y='| _clipcopy'
+
 crpf() {
   emulate -L zsh
   setopt localoptions
