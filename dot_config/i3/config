@@ -56,11 +56,21 @@ bindsym $mod+Down  focus down
 bindsym $mod+Up    focus up
 bindsym $mod+Right focus right
 bindsym $mod+Shift+m scratchpad show
-# move
-bindsym $mod+Shift+h move left
-bindsym $mod+Shift+j move down
-bindsym $mod+Shift+k move up
-bindsym $mod+Shift+l move right
+# move: Super+G, then H/J/K/L; each move returns to the default mode
+set $mode_move Move: [h] left [j] down [k] up [l] right
+bindsym $mod+g mode "$mode_move"
+mode "$mode_move" {
+    bindsym h move left,  mode "default"
+    bindsym j move down,  mode "default"
+    bindsym k move up,    mode "default"
+    bindsym l move right, mode "default"
+    bindsym $mod+h move left,  mode "default"
+    bindsym $mod+j move down,  mode "default"
+    bindsym $mod+k move up,    mode "default"
+    bindsym $mod+l move right, mode "default"
+    bindsym Return mode "default"
+    bindsym Escape mode "default"
+}
 bindsym $mod+Shift+Left  move left
 bindsym $mod+Shift+Down  move down
 bindsym $mod+Shift+Up    move up
@@ -225,6 +235,8 @@ bindsym $mod+Mod1+h exec --no-startup-id ~/.config/i3/workspace-action.sh prev
 bindsym $mod+Mod1+l exec --no-startup-id ~/.config/i3/workspace-action.sh next
 bindsym Control+$mod+h exec --no-startup-id ~/.config/i3/workspace-action.sh relative -1
 bindsym Control+$mod+l exec --no-startup-id ~/.config/i3/workspace-action.sh relative 1
+bindsym $mod+Shift+h exec --no-startup-id ~/.config/i3/workspace-action.sh move-relative -1
+bindsym $mod+Shift+l exec --no-startup-id ~/.config/i3/workspace-action.sh move-relative 1
 
 # --- media / brightness / screenshot ---
 bindsym XF86AudioRaiseVolume exec --no-startup-id pactl set-sink-volume @DEFAULT_SINK@ +5%

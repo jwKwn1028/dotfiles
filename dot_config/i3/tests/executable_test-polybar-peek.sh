@@ -273,6 +273,44 @@ if [ -s "$MOCK_STATE/polybar-events" ]; then
   fail "relative +1 peeked Polybar at workspace 10"
 fi
 
+# Relative moves follow the focused window to the adjacent numbered workspace
+# and wrap across the configured 1-10 boundary.
+reset_case hidden
+printf '5\n' > "$MOCK_STATE/current-workspace"
+"$ROOT/workspace-action.sh" move-relative -1
+grep -Fqx 'move container to workspace number 4; workspace number 4' \
+  "$MOCK_STATE/i3-events" ||
+  fail "move-relative -1 did not move to workspace 4"
+wait_for_state hidden
+wait_for_peek_exit
+
+reset_case hidden
+printf '5\n' > "$MOCK_STATE/current-workspace"
+"$ROOT/workspace-action.sh" move-relative 1
+grep -Fqx 'move container to workspace number 6; workspace number 6' \
+  "$MOCK_STATE/i3-events" ||
+  fail "move-relative +1 did not move to workspace 6"
+wait_for_state hidden
+wait_for_peek_exit
+
+reset_case hidden
+printf '1\n' > "$MOCK_STATE/current-workspace"
+"$ROOT/workspace-action.sh" move-relative -1
+grep -Fqx 'move container to workspace number 10; workspace number 10' \
+  "$MOCK_STATE/i3-events" ||
+  fail "move-relative -1 did not wrap workspace 1 to 10"
+wait_for_state hidden
+wait_for_peek_exit
+
+reset_case hidden
+printf '10\n' > "$MOCK_STATE/current-workspace"
+"$ROOT/workspace-action.sh" move-relative 1
+grep -Fqx 'move container to workspace number 1; workspace number 1' \
+  "$MOCK_STATE/i3-events" ||
+  fail "move-relative +1 did not wrap workspace 10 to 1"
+wait_for_state hidden
+wait_for_peek_exit
+
 # The move path delegates to the validated move command and also peeks.
 reset_case hidden
 "$ROOT/workspace-action.sh" move 2

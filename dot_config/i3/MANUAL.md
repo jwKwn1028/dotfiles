@@ -83,8 +83,9 @@ numeric workspace navigation.
 | `Alt+F4` | Kill focused window. |
 | `Super+H/J/K/L` | Focus left/down/up/right. |
 | `Super+Arrow keys` | Focus left/down/up/right. |
-| `Super+Shift+H/J/K/L` | Move window left/down/up/right. |
+| `Super+G`, then `H/J/K/L` | Move window left/down/up/right and return to the default mode. Super may remain held for the direction key. |
 | `Super+Shift+Arrow keys` | Move window left/down/up/right. |
+| `Super+Shift+H/L` | Move the focused window to the previous/next numbered workspace, follow it, and wrap between workspaces `1` and `10`. |
 | `Super+Shift+M` | Show a scratchpad window. |
 | `Super+Ctrl+M` | Move focused window to scratchpad. |
 | `Super+B` | Set horizontal split. |
@@ -131,12 +132,16 @@ There are numbered workspaces `1` through `10`.
 | `Super+Alt+L` | Switch to the next workspace with the same Polybar peek. |
 | `Super+Ctrl+H` | Switch to the workspace whose number is one lower, including an empty workspace, with the same Polybar peek. |
 | `Super+Ctrl+L` | Switch to the workspace whose number is one higher, including an empty workspace, with the same Polybar peek. |
+| `Super+Shift+H` | Move the focused window one numbered workspace lower and follow it; workspace `1` wraps to `10`. |
+| `Super+Shift+L` | Move the focused window one numbered workspace higher and follow it; workspace `10` wraps to `1`. |
 
 Shifted number-row moves are implemented with keycodes so keyboard layout does
 not change which workspace receives the window. Super-number switching and
 shifted moves call `workspace-action.sh`; its move path delegates the output
 guard to `move-to-workspace.sh`. Numeric relative navigation stops at workspace
 `1` or `10`; it does not wrap or trigger a Polybar peek at those boundaries.
+Relative window moves instead wrap modulo ten and use the same move/follow and
+Polybar-peek path as shifted number-row moves.
 `reserve-i3-shortcuts.sh` removes XFCE's custom `Ctrl+Super+L → xflock4`
 shortcut, refreshes `xfsettingsd` to release its stale X11 key grab, and
 reloads i3 so it can acquire the chord. XFCE's default `Ctrl+Alt+L` lock
@@ -456,7 +461,8 @@ feh --no-fehbg --bg-fill "$HOME/.wallpaper-laptop.png" "$HOME/.wallpaper-externa
 
 ## Workspace Movement
 
-`move-to-workspace.sh` is used by `Super+Shift+number-row`.
+`move-to-workspace.sh` is used by `Super+Shift+number-row` and the relative
+`Super+Shift+H/L` workspace moves.
 
 Rules:
 
@@ -466,6 +472,7 @@ Rules:
   laptop output.
 - Invalid workspace numbers exit with status `2`.
 - Successful moves also switch focus to the destination workspace.
+- Relative moves wrap from workspace `1` to `10` and from `10` to `1`.
 
 ## Show Desktop
 
