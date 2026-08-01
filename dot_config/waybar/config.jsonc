@@ -67,9 +67,12 @@
     // monitor use, so all three report the identical number (iowait
     // counted as idle, the top/htop convention). The "waybar" argument is
     // the state key, keeping this caller's /proc/stat delta separate from
-    // polybar's and sysmon's.
+    // polybar's and sysmon's. The second is `interval` below: waybar builds
+    // one instance of this module per output, and cpu-load needs the poll
+    // rate so those instances measure over an interval rather than over the
+    // gap between each other.
     "custom/cpu": {
-        "exec": "$HOME/.local/bin/cpu-load waybar",
+        "exec": "$HOME/.local/bin/cpu-load waybar 2",
         "interval": 2,
         "format": "CPU {}%",
         "tooltip": false

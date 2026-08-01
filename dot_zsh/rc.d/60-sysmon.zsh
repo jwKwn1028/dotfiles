@@ -14,10 +14,11 @@ _sysmon_tcolor () {
 }
 
 # CPU utilization %, via the shared calculator so sysmon and polybar's cpu
-# module always agree on the method (2s-ish window, iowait counted as idle).
+# module always agree on the method (iowait counted as idle).  Arg 1 is the
+# refresh interval, which cpu-load needs to size its measurement window.
 # See ~/.local/bin/cpu-load for the details.
 _sysmon_cpu_load () {
-  "$HOME/.local/bin/cpu-load" sysmon
+  "$HOME/.local/bin/cpu-load" sysmon "${1:-2}"
 }
 
 # RAM utilization %, using MemAvailable so reclaimable cache is not counted as
@@ -42,7 +43,7 @@ _sysmon_gpu_load () {
   print -n 0
 }
 
-_sysmon_frame () {           # render one snapshot
+_sysmon_frame () {           # render one snapshot.  Arg 1: refresh interval.
   emulate -L zsh
   setopt prompt_percent      # local (LOCAL_OPTIONS): guarantee %% -> % in print -P,
                              # even if the session left prompt_percent unset
@@ -75,7 +76,7 @@ _sysmon_frame () {           # render one snapshot
   local ct gt f1 f2 cl gl rl
   ct=$(printf '%.0f' "${cpu_temp:-0}"); gt=$(printf '%.0f' "${gpu_temp:-0}")
   f1=$(printf '%.0f' "${fan1:-0}");     f2=$(printf '%.0f' "${fan2:-0}")
-  cl=$(_sysmon_cpu_load);               gl=$(_sysmon_gpu_load)
+  cl=$(_sysmon_cpu_load "$1");          gl=$(_sysmon_gpu_load)
   rl=$(_sysmon_ram_load)
 
   print -P "%F{8}$(date '+%H:%M:%S')%f"
@@ -140,7 +141,7 @@ sysmon () {
   trap 'resized=1' WINCH
 
   while (( ! interrupted )); do
-    frame="$(_sysmon_frame)"
+    frame="$(_sysmon_frame "$interval")"
     (( interrupted )) && break
     (( clear_frame = resized, resized = 0 ))
     _sysmon_draw "$frame" "$clear_frame"
