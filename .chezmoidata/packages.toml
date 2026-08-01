@@ -41,6 +41,10 @@ i3_x11 = [
     "thunar", "thunar-archive-plugin", "thunar-media-tags-plugin", "thunar-volman",
     "pavucontrol", "blueman", "brightnessctl", "playerctl",
     "network-manager-gnome",
+    # i3ipc bindings for dot_config/i3/overflow-watcher.py, started from the i3
+    # autostart. Without it the watcher dies on import and windows that land
+    # too small are never handed to another workspace.
+    "python3-i3ipc",
     "gimp", "vlc", "mpv",
     # Display manager + screen locker for a standalone i3 login session.
     # Installing lightdm may prompt you to pick the default display manager.

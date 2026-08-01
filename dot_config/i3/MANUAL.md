@@ -17,6 +17,8 @@ The config is built around these major features:
 - Automatic snap fill/rebalance for workspaces that already contain snapped
   windows.
 - A two-window Super+Tab focus toggle backed by a focus-history watcher.
+- Automatic hand-off of windows that land smaller than a quarter of the
+  workspace to another workspace.
 - Three i3-resurrect save/restore profiles.
 - Browser/PDF session enhancements for Zen Browser, Helium, Zathura, and
   Sioyek-based workspaces.
@@ -36,7 +38,7 @@ The modifier key is `Mod4`, usually the Super/Windows key.
 General behavior:
 
 - Font: `pango:DejaVu Sans 10`.
-- Focus does not follow the mouse.
+- Focus follows the mouse (`focus_follows_mouse yes`).
 - Focus wrapping is disabled.
 - `workspace_auto_back_and_forth` is enabled.
 - Default borders are `pixel 1` for both tiled and floating windows.
@@ -355,6 +357,72 @@ width/height rule:
 This keeps windows restored from the snap system aligned with the same split
 policy as normal new tiled windows.
 
+## Overflow Watcher
+
+`overflow-watcher.py` is the companion to autotiling: autotiling picks the split
+direction, the watcher decides when a workspace is packed enough that a window
+belongs somewhere else. It is a Python `i3ipc` listener started from i3
+autostart.
+
+A window is handed off when it lands covering less than a quarter of its
+workspace. Target selection walks workspace numbers upward, wrapping `10` to
+`1`:
+
+1. The first occupied workspace that still has room for another window.
+2. Otherwise the first empty workspace.
+3. Otherwise the next workspace number.
+
+Room on a target is predicted from that workspace's own focus chain, because
+that is the container i3 attaches an arriving window next to. A tabbed or
+stacked insertion parent always has room, since the arriving window gets the
+whole rectangle.
+
+Both freshly opened windows and hand-offs from the manual bindings
+(`Super+Shift+H/L`, `Super+Shift+number-row`) go through the same rule.
+Untouched:
+
+- Rearranging a window inside one workspace.
+- Floating and fullscreen windows.
+- The scratchpad (it reports workspace number `-1`).
+- Windows the watcher itself just moved.
+
+The move is issued from where the window sits and never focuses the target
+first: a criteria-matched move into the currently visible workspace silently
+does nothing while still reporting success. Each relocation requests the usual
+transient Polybar peek through `polybar-peek.sh`.
+
+Options:
+
+| Flag | Effect |
+| --- | --- |
+| `-f`, `--fraction` | Size floor as a share of the workspace; default `0.25`. |
+| `--no-follow` | Leave focus behind instead of following the window. |
+| `-d`, `--debug` | Print decisions to stderr. |
+
+`I3_OVERFLOW_PEEK` overrides the peek script path, so a nested test session
+cannot drive the real bar — peek scripts talk to Polybar over IPC, which is not
+scoped to a display.
+
+## Tests
+
+`tests/` holds standalone checks; there is no runner and nothing runs
+automatically.
+
+| Test | Covers |
+| --- | --- |
+| `test-overflow-watcher.py` | Pure functions of `overflow-watcher.py`; runs in milliseconds. |
+| `test-overflow-live.py` | Drives a throwaway Xephyr i3 session through every overflow rule on one and two screens. Needs `Xephyr`, `xterm`, `autotiling`; takes minutes. |
+| `test-polybar-peek.sh` | `polybar-peek.sh` show/hide, ownership, and debounce behavior. |
+| `test-super-polybar-listener.py` | Standalone-Super tap/hold gesture detection. |
+
+The live test never touches the running session:
+
+```sh
+~/.config/i3/tests/test-overflow-live.py          # single screen, then dual
+~/.config/i3/tests/test-overflow-live.py single
+~/.config/i3/tests/test-overflow-live.py dual
+```
+
 ## Title-Bar Toggle
 
 `toggle-titles.sh` toggles title bars for all windows across all workspaces.
@@ -473,6 +541,9 @@ Rules:
 - Invalid workspace numbers exit with status `2`.
 - Successful moves also switch focus to the destination workspace.
 - Relative moves wrap from workspace `1` to `10` and from `10` to `1`.
+
+`overflow-watcher.py` sees the resulting move and may forward the window again
+if it lands smaller than a quarter of the destination workspace.
 
 ## Show Desktop
 
@@ -713,98 +784,30 @@ Restore behavior:
 
 ## Saved Session Profiles
 
-The repository currently contains saved layouts and programs for three profiles.
-These files are data used by the restore scripts, not static i3 config.
+The `resurrect*` directories hold saved layouts and program lists — data written
+by the save scripts, not static i3 config. They are local to this machine:
+`.gitignore` excludes `dot_config/i3/resurrect*`, so they never enter the
+repository and their contents change on every save. This manual therefore does
+not snapshot them.
 
-### Main Profile
+To see what a profile currently holds:
 
-Directories:
+```sh
+cd ~/.config/i3
+cat resurrect-meta/workspaces.txt          # which workspaces will restore
+cat resurrect-meta/focused-workspace.txt
+jq . resurrect-meta/zathura-pages.json     # captured PDF pages
+jq . resurrect-meta/zen-pages.json         # captured browser URLs
+jq -r '.[].command | if type=="array" then join(" ") else . end' \
+   resurrect/workspace_7_programs.json     # what workspace 7 relaunches
+```
 
-- State: `resurrect`.
-- Metadata: `resurrect-meta`.
+Use `resurrect-meta-b` / `resurrect-b` and `resurrect-meta-c` / `resurrect-c`
+for the other two profiles.
 
-Metadata:
-
-- Saved workspaces: `2`, `3`, `4`, `5`, `7`, `8`, `9`, `10`.
-- Focused workspace: `8`.
-- Captured Zathura page entries: `5`.
-- Captured Zen/Helium page entries: `2`.
-
-Saved programs:
-
-| Workspace | Programs |
-| --- | --- |
-| `1` | Zathura, quantum chemistry PDF, page 1. |
-| `2` | Zathura, relativistic quantum chemistry PDF, page 4. |
-| `3` | Zathura, density matrix PDF, page 20. |
-| `4` | Zathura, quantum mechanics PDF, page 1. |
-| `5` | Zathura, decoherence PDF, page 11. |
-| `6` | Helium AppImage, YouTube video URL. |
-| `7` | Ghostty and Zen Browser opened to Learn C++. |
-| `8` | Ghostty and Sioyek opened to `qchem_notes.pdf`. |
-| `9` | Zathura quantum chemistry PDF, page 79, and Ghostty. |
-| `10` | Zen Browser opened to a ChatGPT computational workspace URL. |
-
-The main metadata workspace list does not currently include workspaces `1` and
-`6`, but the state directory contains saved program/layout files for them.
-
-### Profile B
-
-Directories:
-
-- State: `resurrect-b`.
-- Metadata: `resurrect-meta-b`.
-
-Metadata:
-
-- Saved workspaces: `2`, `4`, `5`, `7`, `8`, `9`.
-- Focused workspace: `7`.
-- Captured Zathura page entries: `6`.
-- Captured Zen/Helium page entries: `0`.
-
-Saved programs:
-
-| Workspace | Programs |
-| --- | --- |
-| `1` | Empty saved program list. |
-| `2` | Zathura, relativistic quantum chemistry PDF, page 1. |
-| `3` | Two Zathura windows for solid-state physics notes. |
-| `4` | Zathura, quantum mechanics PDF, page 1. |
-| `5` | Zathura, decoherence PDF, page 1. |
-| `6` | Two Zathura windows for solid-state physics note PDFs. |
-| `7` | Zathura, `DoWeReallyUnderstandQuantumMechanics.pdf`, page 1. |
-| `8` | Zathura, density matrix PDF, page 1. |
-| `9` | Zathura, quantum chemistry PDF, page 1. |
-
-The metadata workspace list does not currently include workspaces `1`, `3`,
-or `6`, but the state directory contains saved files for them.
-
-### Profile C
-
-Directories:
-
-- State: `resurrect-c`.
-- Metadata: `resurrect-meta-c`.
-
-Metadata:
-
-- Saved workspaces: `2`, `4`, `5`, `6`, `7`, `8`, `9`, `10`.
-- Focused workspace: `7`.
-- Captured Zathura page entries: `5`.
-- Captured Zen/Helium page entries: `3`.
-
-Saved programs:
-
-| Workspace | Programs |
-| --- | --- |
-| `2` | Zathura, relativistic quantum chemistry PDF, page 4. |
-| `4` | Zathura, quantum mechanics PDF, page 1. |
-| `5` | Zathura, decoherence PDF, page 11. |
-| `6` | Helium AppImage, YouTube video URL. |
-| `7` | Ghostty and Zen Browser opened to Learn C++. |
-| `8` | Zathura, density matrix PDF, page 20. |
-| `9` | Zathura, quantum chemistry PDF, page 82. |
-| `10` | Helium AppImage opened to YouTube. |
+A state directory can hold saved files for workspaces that are absent from the
+matching `workspaces.txt`; those are leftovers from an earlier save and will not
+be restored.
 
 ## Autostart
 
@@ -833,8 +836,13 @@ Always on reload/restart:
 - Stop and restart `kakaotalk-float-watcher.sh`.
 - Stop and restart `super-polybar-listener.py`.
 - Stop and restart `/home/kjw1028/.local/bin/autotiling --limit 6`.
+- Stop and restart `overflow-watcher.py`.
+- Start the polkit authentication agent
+  (`/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1`) if no
+  `polkit-gnome` process is already running.
 - Run `/home/kjw1028/.local/bin/disable-trackpoint-middle-click` under a
   `/tmp/disable-trackpoint-middle-click.lock` flock.
+- Run `/home/kjw1028/.local/bin/touchpad apply`.
 - Run `display-setup.sh`, which arranges the outputs, refreshes the wallpaper,
   and launches Polybar on every active monitor.
 
@@ -876,6 +884,7 @@ Desktop integration:
 - `nm-applet`
 - `blueman-applet`
 - `unclutter-xfixes`
+- `polkit-gnome-authentication-agent-1`
 
 Media and screenshots:
 
@@ -895,6 +904,7 @@ Monitor/bar/snap helpers:
 - `xwininfo`
 - `xprop`
 - `feh`
+- Python 3 with the `i3ipc` module, for `overflow-watcher.py`
 
 Session restore:
 
@@ -911,7 +921,10 @@ Local helper programs expected outside this directory:
 
 - `~/.local/bin/autotiling`
 - `~/.local/bin/disable-trackpoint-middle-click`
+- `~/.local/bin/touchpad`
 - `~/.config/polybar/launch.sh`
+
+Only for `tests/`: `Xephyr` and `xterm`.
 
 ## Runtime and State Files
 
@@ -926,6 +939,7 @@ Inside this directory:
 - `toggle-polybar-resnap.sh`: toggles Polybar and resnaps.
 - `polybar-peek.sh`: owner-aware, debounced transient Polybar display.
 - `super-polybar-listener.py`: passive standalone-Super tap/hold listener.
+- `overflow-watcher.py`: moves too-small windows to another workspace.
 - `workspace-action.sh`: numbered switch/move and relative workspace wrapper
   that requests a peek.
 - `show-polybar-or-kill-workspace.sh`: shows Polybar before kill mode.
@@ -947,6 +961,7 @@ Inside this directory:
   program lists.
 - `resurrect-meta`, `resurrect-meta-b`, `resurrect-meta-c`: saved workspace,
   focus, browser URL, and Zathura page metadata.
+- `tests/`: standalone checks for the overflow watcher and the Polybar peek.
 
 Runtime files outside this directory:
 
@@ -984,6 +999,11 @@ Runtime files outside this directory:
   directory may contain saved files for workspaces that are not listed in the
   corresponding `workspaces.txt`; those files will not be restored by the
   profile until the metadata list includes them.
+- If the workspace count ever stops being `1` to `10`, update `MAX_WS` in
+  `overflow-watcher.py` alongside the i3 workspace bindings.
+- `overflow-watcher.py` and its tests need the `i3ipc` Python module, which
+  `.chezmoidata/packages.toml` does not install; like `~/.local/bin/autotiling`
+  it is expected to be present already.
 
 ## Quick Commands
 
@@ -1009,4 +1029,17 @@ Inspect the snap/debug log:
 
 ```sh
 tail -n 100 "${XDG_STATE_HOME:-$HOME/.local/state}/i3/snap.log"
+```
+
+Run the fast overflow-watcher tests:
+
+```sh
+~/.config/i3/tests/test-overflow-watcher.py
+```
+
+Watch the overflow watcher decide, without restarting the running one:
+
+```sh
+pkill -f overflow-watcher.py
+~/.config/i3/overflow-watcher.py --debug
 ```
