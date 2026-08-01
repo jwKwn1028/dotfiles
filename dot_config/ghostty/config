@@ -1,18 +1,29 @@
-# Font (trial: NewComputerModernMono10 Regular 16)
-font-family = NewComputerModernMono10
+# Font (JuliaMono Regular 15; was NewComputerModernMono10 at 18 — JuliaMono's
+# x-height is ~28% larger, so 15 here reads about the same size on screen.)
+font-family = JuliaMono
 font-family = NanumGothicCoding
 font-family = Noto Sans CJK KR
-# Private-use glyph fallback for CLI icons; regular text stays in NewCM above.
+# Private-use glyph fallback for CLI icons; regular text stays in JuliaMono above.
 font-family = Hack Nerd Font Mono
 font-style = Regular
-font-size = 18
+font-size = 15
 font-feature = -calt, -liga, -dlig
+
+# Typography breathing room. Adjustments here are DELTAS, not scale factors:
+# 15% adds 15%, it does not set the value to 15% of the original.
+# JuliaMono's hhea line box is 1.175em while its ASCII ink is ~0.95em
+# (cap 0.725 + descender 0.225), leaving only 0.225em of slack. +15% takes
+# the cell to ~1.35em, the usual comfortable terminal line height.
+adjust-cell-height = 15%
 
 # Initial window size in cells (matches xfce default-geometry 120x36)
 window-width = 120
 window-height = 36
 window-padding-x = 8
 window-padding-y = 8
+
+# Split leftover pixels evenly instead of dumping them on right/bottom
+window-padding-balance = true
 
 # Built-in TokyoNight Storm (matches Helix tokyonight_storm palette/aesthetic)
 theme = TokyoNight Storm
@@ -25,6 +36,9 @@ cursor-style = block
 cursor-color = #86be43
 cursor-text = #1d202f
 
+# Steady block, no pulse
+cursor-style-blink = false
+
 # tmux compatibility: your ~/.tmux.conf has `terminal-overrides ",xterm-256color:RGB"`,
 # so set TERM=xterm-256color here to keep that override working without editing tmux.conf.
 term = xterm-256color
@@ -35,6 +49,10 @@ shell-integration-features = cursor,sudo,title
 
 # Disable bold rendering (matches xfce font-allow-bold = false)
 font-style-bold = false
+
+# No faux-slanted fallbacks. JuliaMono ships a real italic and still uses it;
+# this only stops synthesized slant on the CJK/Nerd fallbacks, which have none.
+font-synthetic-style = no-italic
 
 # Disable all window decorations: GTK header bar (tabs/controls panel)
 # AND the XFWM server-side titlebar (minimize/maximize/close).
@@ -65,6 +83,9 @@ keybind = ctrl+tab=goto_split:next
 
 # Hide the scrollbar (still scrollable via wheel/keybinds)
 scrollbar = never
+
+# No "120x36" popup on every i3 resize
+resize-overlay = never
 
 # Quality-of-life
 mouse-hide-while-typing = true
