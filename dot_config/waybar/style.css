@@ -24,11 +24,10 @@
 
 * {
     /* Polybar font-0 (text) and font-1 (icons). Pango walks this list per
-     * character, so the Nerd Font is reached only for glyphs New Computer
-     * Modern does not have -- which is exactly the icons. The icon size
-     * (polybar's font-1 size 14) is applied per label with <span size>
-     * markup in config.jsonc. */
-    font-family: "NewComputerModernSans10", "JetBrainsMono Nerd Font", sans-serif;
+     * character, so the Nerd Font is reached only for glyphs JuliaMono does
+     * not have -- which is exactly the icons. The icon size (polybar's font-1
+     * size 14) is applied per label with <span size> markup in config.jsonc. */
+    font-family: "JuliaMono", "JetBrainsMono Nerd Font", sans-serif;
     font-size: 11pt;
 
     /* GTK decorates widgets by default; polybar draws nothing but text. */

@@ -1,7 +1,9 @@
+/* Every rofi mode shares one look. spotlight.rasi carries the theme, the
+   font, and the drun matching/sorting options, so `rofi -show window` looks
+   like `rofi -show drun` instead of falling back to a stock theme. */
 configuration {
   modi: "drun,run,window";
   show-icons: true;
   drun-display-format: "{name}";
-  font: "NewComputerModernMono10 Regular 13";
 }
-@theme "/usr/share/rofi/themes/Arc-Dark.rasi"
+@theme "spotlight"

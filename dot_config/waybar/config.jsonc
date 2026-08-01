@@ -25,7 +25,6 @@
         "memory",
         "pulseaudio",
         "battery",
-        "network",
         "tray",
         "custom/power"
     ],
@@ -124,26 +123,11 @@
         "on-scroll-down": "brightnessctl -q set 5%-"
     },
 
-    // ─── Wi-Fi (polybar [module/wlan]) ─────────────────────────────
-    // Polybar showed a signal-strength ramp when connected and a dimmed
-    // "offline" otherwise. Its ramp-signal-0..4 values are empty strings
-    // in config.ini -- the glyphs were lost at some point, so the module
-    // renders nothing while connected -- and the nf-md-wifi-strength
-    // ramp its option names describe is restored here.
-    "network": {
-        "interval": 5,
-        "format-wifi": "<span size='14pt'>{icon}</span>",
-        "format-ethernet": "<span size='14pt'>󰈀</span>",
-        "format-linked": "<span size='14pt'>󰤫</span>",
-        "format-disconnected": "offline",
-        "format-icons": [
-            "󰤯", "󰤟", "󰤢", "󰤥", "󰤨"
-        ],
-        "tooltip-format-wifi": "{essid}  {signalStrength}%\n{ipaddr}",
-        "tooltip-format-ethernet": "{ifname}\n{ipaddr}",
-        "tooltip-format-disconnected": "Disconnected",
-        "on-click": "nm-connection-editor"
-    },
+    // ─── Wi-Fi ─────────────────────────────────────────────────────
+    // No network module, matching polybar: nm-applet is in the tray and
+    // already draws a signal-strength icon, so a bar module next to it
+    // showed the same state twice. The tray icon also opens the
+    // connection menu, which the module could not.
 
     // ─── Tray (polybar [module/tray]) ──────────────────────────────
     "tray": {

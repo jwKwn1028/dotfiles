@@ -12,10 +12,11 @@
 #
 # The menu is fuzzel in dmenu mode, so it picks up ~/.config/fuzzel/fuzzel.ini
 # and looks like the rofi menus this desktop is modelled on. The Nerd Font has
-# to be named explicitly because New Computer Modern carries no icon glyphs.
+# to be named explicitly because JuliaMono carries no icon glyphs. It stays at
+# 16 while the text drops to 13, the same text/icon split polybar uses.
 set -u
 
-FONT='NewComputerModernMono10:size=16,NanumGothicCoding:size=16,JetBrainsMono Nerd Font:size=16'
+FONT='JuliaMono:size=13,NanumGothicCoding:size=13,JetBrainsMono Nerd Font:size=16'
 
 # Narrower than the 54-character application launcher: this is a dialog, not
 # a list of everything installed.
