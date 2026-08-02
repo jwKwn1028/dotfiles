@@ -8,7 +8,7 @@ fi
 cd() {
   if (( $# == 1 )) && [[ $1 =~ '^--+$' ]]; then
     builtin cd "+${#1}"
-  elif (( ${+functions[__zoxide_z] )); then
+  elif (( ${+functions[__zoxide_z]} )); then
     __zoxide_z "$@"
   else
     builtin cd "$@"
