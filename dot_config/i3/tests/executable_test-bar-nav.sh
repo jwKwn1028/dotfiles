@@ -15,6 +15,8 @@ mkdir -p "$TEST_TMP/bin"
 
 IPC_LOG="$TEST_TMP/ipc"
 STATE="$TEST_TMP/i3-polybar-nav.idx"
+RESTORE="$TEST_TMP/i3-polybar-nav.restore-hidden"
+PEEK_OWNER="$TEST_TMP/i3-polybar-peek.owner"
 NAV="$ROOT/bar-nav.sh"
 
 # Record IPC instead of talking to a bar, and make sure a stray action never
@@ -66,6 +68,23 @@ logged '#date-sel.module_show' || fail "open did not show the first stop's twin"
 logged '#date.module_show' && fail "open reset the stop it was about to select"
 logged '#date-sel.module_hide' && fail "open hid the twin it was about to show"
 logged '#powermenu.module_show' || fail "open did not reset the other stops"
+
+# Leaving the mode restores the bar's previous visibility, so entering it is
+# never a way to strand a hidden bar on screen. The mocked X11 reports the bar
+# as already visible, so opening must not arm the restore.
+[ -e "$RESTORE" ] && fail "open armed the restore with the bar already visible"
+
+# A bar that is up only for a transient workspace peek was on its way out, so
+# it counts as hidden even though X11 says it is viewable.
+rm -f "$STATE"
+: > "$PEEK_OWNER"
+"$NAV" open
+[ -e "$RESTORE" ] || fail "open treated a transient peek as a persistent bar"
+rm -f "$PEEK_OWNER"
+reset_log
+"$NAV" close
+[ -e "$RESTORE" ] && fail "close left the restore armed"
+logged 'hide' || fail "close did not put the bar back to hidden"
 
 # Selecting a module hides the plain one and shows its twin, so the pair is
 # never on screen together and never both missing.

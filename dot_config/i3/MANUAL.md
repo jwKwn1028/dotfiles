@@ -235,6 +235,14 @@ The mode is sticky. `Escape` leaves it, and so does any stop that puts a window
 on screen, because the keyboard now belongs to that window; an in-place toggle
 keeps the cursor up so the value can be nudged again.
 
+Leaving restores the bar's previous visibility, so reaching a module by keyboard
+is never a way to strand a hidden bar on screen. `Super+I` with the bar up
+leaves it up; `Super+I` with the bar hidden shows it for the duration and hides
+it again on the way out, whether that exit was `Escape` or a stop that opened a
+window. A bar that was up only for a transient workspace peek counts as hidden:
+it was already on its way out. Hiding the bar by any other means while the mode
+is open wins — leaving re-checks rather than toggling blindly.
+
 `J`/`K` on the volume module step by 1 point, not the 5 the scroll wheel and the
 `XF86Audio` keys use. Reaching this mode means parking the cursor on the module,
 which is the fine-adjustment gesture; the media keys stay coarse.

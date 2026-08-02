@@ -18,6 +18,11 @@ DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_polybar-common.sh"
 
 STATE="$SNAP_RUNTIME_DIR/i3-polybar-nav.idx"
+# Present while the cursor is up if the bar was not already staying visible
+# when the mode opened. Leaving the mode puts the bar back the way it was
+# found, so reaching a module by keyboard is never a way to strand the bar
+# on screen.
+RESTORE_HIDDEN="$SNAP_RUNTIME_DIR/i3-polybar-nav.restore-hidden"
 
 # Cursor stops, left to right, named after the polybar modules they select.
 # Every one has a `<module>-sel` twin in ~/.config/polybar/config.ini.
@@ -153,10 +158,28 @@ close() {
   # Reset every twin, not just the selected one: a polybar restart mid-mode can
   # leave a pair out of step with the index file.
   reset_pairs
+
+  if [ -e "$RESTORE_HIDDEN" ]; then
+    rm -f "$RESTORE_HIDDEN"
+    # Re-check rather than hiding outright: Super+Shift+B during the mode may
+    # have hidden the bar already, and this toggle would put it back up.
+    if polybar_visible; then
+      "$DIR/toggle-polybar-resnap.sh"
+    fi
+  fi
+  return 0
 }
 
 case "${1:-}" in
   open)
+    # Record the bar's state before showing it. A bar that is only up because
+    # of a transient workspace peek counts as hidden: it was on its way out,
+    # and polybar_show_persistent is about to cancel the peek and make it stay.
+    if polybar_visible && [ ! -e "$POLYBAR_PEEK_OWNER" ]; then
+      rm -f "$RESTORE_HIDDEN"
+    else
+      : >"$RESTORE_HIDDEN"
+    fi
     polybar_show_persistent
     printf '0\n' >"$STATE"
     reset_pairs 0
