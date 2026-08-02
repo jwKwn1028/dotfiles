@@ -255,6 +255,33 @@ bindsym Shift+$mod+s          exec --no-startup-id flameshot gui
 # --- bar: polybar ---
 bindsym $mod+Shift+b exec --no-startup-id ~/.config/i3/toggle-polybar-resnap.sh
 
+# Keyboard cursor over polybar's own modules: Super+I, then H/L to move, J/K to
+# adjust, Return to click and Shift+Return to right-click. Polybar cannot be
+# focused, so the cursor is this mode plus the `-sel` module twins that
+# bar-nav.sh swaps in; the selected module wears the same block as the focused
+# workspace. If polybar is hidden, Super+I shows it before entering this mode.
+# The mode name below is a single space, on purpose, and not via a `set`
+# variable: i3 keeps the quotes in a variable's value, so `mode "$var"` cannot
+# carry one. Polybar's i3 module renders the mode name, and this mode wants no
+# text in the bar -- the block on the selected module already says both that the
+# mode is on and where the cursor is. The other modes keep their worded names.
+bindsym $mod+i exec --no-startup-id ~/.config/i3/bar-nav.sh open, mode " "
+mode " " {
+    bindsym h     exec --no-startup-id ~/.config/i3/bar-nav.sh prev
+    bindsym l     exec --no-startup-id ~/.config/i3/bar-nav.sh next
+    bindsym Left  exec --no-startup-id ~/.config/i3/bar-nav.sh prev
+    bindsym Right exec --no-startup-id ~/.config/i3/bar-nav.sh next
+    bindsym j     exec --no-startup-id ~/.config/i3/bar-nav.sh down
+    bindsym k     exec --no-startup-id ~/.config/i3/bar-nav.sh up
+    bindsym Down  exec --no-startup-id ~/.config/i3/bar-nav.sh down
+    bindsym Up    exec --no-startup-id ~/.config/i3/bar-nav.sh up
+    # No `mode "default"` here: the script leaves the mode itself, and only for
+    # a stop that puts a window on screen. Toggles keep the cursor up.
+    bindsym Return       exec --no-startup-id ~/.config/i3/bar-nav.sh click
+    bindsym Shift+Return exec --no-startup-id ~/.config/i3/bar-nav.sh click-right
+    bindsym Escape exec --no-startup-id ~/.config/i3/bar-nav.sh close, mode "default"
+}
+
 # --- toggle window title bars ---
 bindsym $mod+Shift+t exec --no-startup-id ~/.config/i3/toggle-titles-resnap.sh
 

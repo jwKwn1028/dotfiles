@@ -195,8 +195,69 @@ Inside kill-workspace mode:
 | Binding | Action |
 | --- | --- |
 | `Super+Shift+B` | Toggle Polybar visibility and resnap snapped windows. |
+| `Super+I` | Enter bar mode: a keyboard cursor over Polybar's clickable items. |
 | `Super+Shift+T` | Toggle title bars and resnap snapped windows. |
 | `Super+M` | Toggle the `_desktop` workspace. |
+
+### Bar Mode
+
+Polybar's window is an X11 dock and never accepts keyboard focus, so its click
+handlers are unreachable by keyboard. `Super+I` enters bar mode instead: the
+cursor lives in an i3 binding mode driven by `bar-nav.sh`, and moves over
+Polybar's real modules. If Polybar is hidden, `Super+I` shows it first.
+
+The mode itself is named a single space, so Polybar's i3 module, which renders
+the active mode's name, prints nothing for it. The other modes keep their worded
+names. The block on the selected module is the only indicator bar mode needs: it
+says both that the mode is on and where the cursor is.
+
+The selected module wears the same block as the focused workspace. A module's
+colors are fixed once the bar starts, so the cursor does not restyle anything:
+each navigable module has a `-sel` twin in `config.ini` that inherits it and
+differs only by `${colors.selection}`, and the cursor swaps the twin in with the
+`module_show` / `module_hide` IPC actions. The padding that gives the block its
+shape sits on both halves of each pair, so selecting a module never shifts the
+bar sideways.
+
+Inside bar mode:
+
+| Binding | Action |
+| --- | --- |
+| `H` / `Left` | Select the module to the left. |
+| `L` / `Right` | Select the module to the right. |
+| `J` / `Down` | Adjust the selected module down, as a scroll wheel would. |
+| `K` / `Up` | Adjust the selected module up. |
+| `Return` | Click the selected module. |
+| `Shift+Return` | Right-click the selected module. |
+| `Escape` | Return to default mode. |
+
+The mode is sticky. `Escape` leaves it, and so does any stop that puts a window
+on screen, because the keyboard now belongs to that window; an in-place toggle
+keeps the cursor up so the value can be nudged again.
+
+`J`/`K` on the volume module step by 1 point, not the 5 the scroll wheel and the
+`XF86Audio` keys use. Reaching this mode means parking the cursor on the module,
+which is the fine-adjustment gesture; the media keys stay coarse.
+
+The stops are the bar's own modules, left to right, and mirror their real click
+and scroll handlers:
+
+| Stop | `Return` | `Shift+Return` | `J` / `K` |
+| --- | --- | --- | --- |
+| `date` | Toggle the long date format. | — | — |
+| `pulseaudio` | Toggle mute. | Open `pavucontrol`. | Volume down/up 1%. |
+| `battery` | Open `xfce4-power-manager-settings`. | — | Brightness down/up 5%. |
+| `powermenu` | Open the rofi power menu. | — | — |
+
+Workspaces are deliberately absent: `Super+1`–`Super+0` and `Super+Alt+H/L`
+already reach them.
+
+The bar's own power icon expands a `custom/menu` built for the mouse, and its
+entries cannot be highlighted individually. Bar mode therefore routes that stop
+through rofi — already this profile's launcher, and keyboard-native — offering
+lock, reboot, shut down, and exit i3. Reboot and exit i3 go through `i3-nagbar`
+first: the bar's own reboot icon has no prompt, but a stray `Return` is much
+easier to hit than a stray click. Shut down reuses `confirm-poweroff.sh`.
 
 ## XFWM-Style Snap System
 
@@ -469,8 +530,10 @@ reload/restart and after a manual `Super+Shift+P` layout refresh.
 - Calls `resnap.sh` so snapped windows shrink/grow with the usable screen area.
 - Uses a runtime lock to avoid concurrent toggles.
 
-`show-polybar-or-kill-workspace.sh` ensures Polybar is visible before entering
-kill-workspace mode.
+`polybar_show_persistent` in `_polybar-common.sh` makes the bar visible and
+keeps it that way for a binding mode, promoting a transient peek to persistent
+visibility. `show-polybar-or-kill-workspace.sh` and `bar-nav.sh` both use it
+before entering their modes.
 
 `polybar-peek.sh` provides transient workspace feedback for the Super-number
 bindings and hold-aware visibility for a standalone Super gesture:
@@ -943,6 +1006,7 @@ Inside this directory:
 - `workspace-action.sh`: numbered switch/move and relative workspace wrapper
   that requests a peek.
 - `show-polybar-or-kill-workspace.sh`: shows Polybar before kill mode.
+- `bar-nav.sh`: keyboard cursor over Polybar's clickable items.
 - `toggle-titles.sh`: toggles title bars globally.
 - `toggle-titles-resnap.sh`: toggles title bars and resnaps.
 - `focus-tracker.sh`: records current and previous focus.
