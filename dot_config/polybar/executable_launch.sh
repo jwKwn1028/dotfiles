@@ -16,7 +16,11 @@ if ! flock -n 9; then
     pgrep -x polybar >/dev/null && exit 0
 fi
 
-killall -q --wait polybar 2>/dev/null
+# A wedged Polybar (its i3 IPC socket died with the previous i3) never acts on
+# SIGTERM, and an unbounded `--wait` would then hold the launcher lock forever,
+# so every later relaunch -- including the one that adds a hotplugged monitor's
+# bar -- exits without doing anything. Escalate to SIGKILL instead of waiting.
+timeout 5 killall -q --wait polybar 2>/dev/null || killall -q -9 polybar 2>/dev/null
 
 XRANDR_OUTPUT=$(xrandr --query 2>/dev/null) || exit 0
 mapfile -t ACTIVE_OUTPUTS < <(

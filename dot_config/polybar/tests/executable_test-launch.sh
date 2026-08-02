@@ -91,4 +91,25 @@ fi
 grep -Fqx 'cmd hide' "$MOCK_STATE/ipc-events" ||
     { printf 'FAIL: startup visibility was not broadcast\n' >&2; exit 1; }
 
+# A Polybar that ignores SIGTERM must not wedge the launcher: without the kill
+# timeout the run below never returns and no bar reaches the second monitor.
+cat >"$MOCK_BIN/killall" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$POLYBAR_TEST_STATE_DIR/killall-events"
+case "$*" in
+    *--wait*) sleep 60 ;;
+esac
+EOF
+chmod +x "$MOCK_BIN/killall"
+
+: >"$MOCK_STATE/launch-events"
+: >"$MOCK_STATE/ipc-events"
+: >"$MOCK_STATE/killall-events"
+bash "$LAUNCHER"
+
+grep -Fq -- '-9 polybar' "$MOCK_STATE/killall-events" ||
+    { printf 'FAIL: a hung graceful kill was not escalated to SIGKILL\n' >&2; exit 1; }
+[ "$(wc -l <"$MOCK_STATE/launch-events")" -eq 2 ] ||
+    { printf 'FAIL: hung kill stopped the bars from being relaunched\n' >&2; exit 1; }
+
 printf 'PASS: Polybar multi-monitor launch behavior\n'

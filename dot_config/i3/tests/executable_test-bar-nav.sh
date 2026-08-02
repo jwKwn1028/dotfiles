@@ -39,6 +39,15 @@ printf '#!/bin/sh\n[ "$1" = search ] && printf "4242\\n"\nexit 0\n' \
   > "$TEST_TMP/bin/xdotool"
 printf '#!/bin/sh\nprintf "Map State: IsViewable\\n"\n' > "$TEST_TMP/bin/xwininfo"
 
+# bar-nav `eval`s these. Without stand-ins the "opens a window" case below
+# launches the real settings window onto the live session and leaves it there,
+# and a stop that reaches rofi would block the test on a real menu.
+for cmd in xfce4-power-manager-settings nm-connection-editor blueman-manager \
+  pavucontrol brightnessctl rofi i3lock i3-nagbar; do
+  printf '#!/bin/sh\nprintf "%s\\n" >> "%s"\n' "$cmd" "$IPC_LOG" \
+    > "$TEST_TMP/bin/$cmd"
+done
+
 chmod +x "$TEST_TMP"/bin/*
 
 fail() {
@@ -121,7 +130,8 @@ logged 'i3:mode "default"' && fail "mute toggle left the mode"
 
 printf '2\n' > "$STATE"
 reset_log
-"$NAV" click >/dev/null 2>&1
+"$NAV" click
+logged 'xfce4-power-manager-settings' || fail "the stop's window was never opened"
 logged 'i3:mode "default"' || fail "a stop that opens a window stayed in the mode"
 [ -e "$STATE" ] && fail "a stop that opens a window left the cursor up"
 
