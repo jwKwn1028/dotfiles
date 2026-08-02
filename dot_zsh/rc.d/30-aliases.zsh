@@ -10,6 +10,17 @@ alias vi='vim'
 alias mu='micro'
 alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 (( $+commands[batcat] )) && alias bat='batcat'
+btop () {
+  emulate -L zsh
+  if [[ $TERM_PROGRAM != ghostty ]] || (( ! $+commands[xdotool] )); then
+    command btop "$@"
+    return
+  fi
+  xdotool key --clearmodifiers ctrl+minus ctrl+minus ctrl+minus
+  sleep 0.15
+  command btop "$@"
+  xdotool key --clearmodifiers ctrl+0
+}
 alias hz='${EDITOR:-hx} ~/.zsh/rc.d'   # config now lives in modules (was ~/.zshrc)
 alias sz='print "reloading zsh..." && exec zsh'   # full restart: re-reads .zshenv + rc.d without double-wrapping ZLE widgets
 alias ':q'='exit'

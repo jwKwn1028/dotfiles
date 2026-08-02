@@ -1,0 +1,80 @@
+# Theme: tokyonight_storm
+# Transcribed from dot_config/helix/themes/tokyonight{,_storm}.toml so btop
+# matches the Helix editor. Palette names in comments are the Helix ones.
+# Based on btop's shipped tokyo-storm.theme by Pascal Jaeger, with bg/fg
+# corrected to the values Helix and Ghostty actually use (#292d3e / #c0caf5).
+
+# Main bg — helix "bg" (= ghostty background override)
+theme[main_bg]="#292d3e"
+
+# Main text color — helix "fg"
+theme[main_fg]="#c0caf5"
+
+# Title color for boxes — helix "fg"
+theme[title]="#c0caf5"
+
+# Higlight color for keyboard shortcuts — helix "cyan"
+theme[hi_fg]="#7dcfff"
+
+# Background color of selected item in processes box — helix "bg-selection"
+theme[selected_bg]="#3d59a1"
+
+# Foreground color of selected item in processes box — helix "fg"
+theme[selected_fg]="#c0caf5"
+
+# Color of inactive/disabled text — helix "comment"
+theme[inactive_fg]="#565f89"
+
+# Misc colors for processes box including mini cpu graphs, details memory graph and details status text
+theme[proc_misc]="#7dcfff"
+
+# Box outlines — helix "comment"
+theme[cpu_box]="#565f89"
+theme[mem_box]="#565f89"
+theme[net_box]="#565f89"
+theme[proc_box]="#565f89"
+
+# Box divider line and small boxes line color — helix "black"
+theme[div_line]="#414868"
+
+# Gradients below all use helix "light-green" / "yellow" / "red".
+
+# Temperature graph colors
+theme[temp_start]="#9ece6a"
+theme[temp_mid]="#e0af68"
+theme[temp_end]="#f7768e"
+
+# CPU graph colors
+theme[cpu_start]="#9ece6a"
+theme[cpu_mid]="#e0af68"
+theme[cpu_end]="#f7768e"
+
+# Mem/Disk free meter
+theme[free_start]="#9ece6a"
+theme[free_mid]="#e0af68"
+theme[free_end]="#f7768e"
+
+# Mem/Disk cached meter
+theme[cached_start]="#9ece6a"
+theme[cached_mid]="#e0af68"
+theme[cached_end]="#f7768e"
+
+# Mem/Disk available meter
+theme[available_start]="#9ece6a"
+theme[available_mid]="#e0af68"
+theme[available_end]="#f7768e"
+
+# Mem/Disk used meter
+theme[used_start]="#9ece6a"
+theme[used_mid]="#e0af68"
+theme[used_end]="#f7768e"
+
+# Download graph colors
+theme[download_start]="#9ece6a"
+theme[download_mid]="#e0af68"
+theme[download_end]="#f7768e"
+
+# Upload graph colors
+theme[upload_start]="#9ece6a"
+theme[upload_mid]="#e0af68"
+theme[upload_end]="#f7768e"
