@@ -62,8 +62,8 @@ launch_bar() {
     MONITOR="$monitor" setsid -f polybar --reload "$bar" >>"$log" 2>&1 9>&-
 }
 
-# The primary bar owns the singleton X11 system tray. Secondary bars inherit
-# the same layout and modules except for that tray.
+# Every bar carries the same layout and modules; `main` and `external` differ
+# only in name. There is no system tray to make the primary bar special.
 launch_bar "$PRIMARY" main
 for monitor in "${ACTIVE_OUTPUTS[@]}"; do
     [ "$monitor" = "$PRIMARY" ] && continue

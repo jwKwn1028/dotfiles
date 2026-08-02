@@ -21,29 +21,35 @@ STATE="$SNAP_RUNTIME_DIR/i3-polybar-nav.idx"
 
 # Cursor stops, left to right, named after the polybar modules they select.
 # Every one has a `<module>-sel` twin in ~/.config/polybar/config.ini.
-modules=(date pulseaudio battery powermenu)
+modules=(date pulseaudio battery network bluetooth powermenu)
 
 # Return. Mirrors each module's click-left handler.
+# The date entry toggles both halves of the pair. Its action is module state,
+# not a command: sending it only to `date` toggles the module that is hidden
+# while the cursor sits on it, so nothing appears to happen, and the two halves
+# would then disagree about the format once the cursor moved away.
 click_left=(
-  "polybar-msg action '#date.toggle'"
+  "date_toggle"
   "pactl set-sink-mute @DEFAULT_SINK@ toggle"
   "xfce4-power-manager-settings"
+  "nm-connection-editor"
+  "blueman-manager"
   "power_menu"
 )
 # Stops that open a window hand the keyboard to it, so they close the cursor
 # first. The rest are in-place toggles and keep the mode.
-click_left_opens=(0 0 1 1)
+click_left_opens=(0 0 1 1 1 1)
 
 # Shift+Return. Only pulseaudio has a click-right handler in the bar.
-click_right=("" "pavucontrol" "" "")
-click_right_opens=(0 1 0 0)
+click_right=("" "pavucontrol" "" "" "" "")
+click_right_opens=(0 1 0 0 0 0)
 
 # j/k, standing in for a scroll wheel over the module. Empty means the module
 # has no scroll handler. Volume steps by 1 point rather than the 5 the wheel and
 # the XF86Audio keys use: the cursor is already parked on the module here, so
 # this is the fine adjustment. Brightness keeps the coarse 5.
-scroll_down=("" "pactl set-sink-volume @DEFAULT_SINK@ -1%" "brightnessctl -q set 5%-" "")
-scroll_up=("" "pactl set-sink-volume @DEFAULT_SINK@ +1%" "brightnessctl -q set +5%" "")
+scroll_down=("" "pactl set-sink-volume @DEFAULT_SINK@ -1%" "brightnessctl -q set 5%-" "" "" "")
+scroll_up=("" "pactl set-sink-volume @DEFAULT_SINK@ +1%" "brightnessctl -q set +5%" "" "" "")
 
 # The bar's power icon opens a menu built for the mouse. Reach the same actions
 # from the keyboard through rofi, which is already this profile's launcher.
@@ -61,6 +67,11 @@ power_menu() {
 
 ipc() {
   polybar-msg action "#$1.$2" >/dev/null 2>&1 || true
+}
+
+date_toggle() {
+  ipc date toggle
+  ipc date-sel toggle
 }
 
 # Swap module <-> twin. Both bars receive the action, so they stay in step.
@@ -126,23 +137,29 @@ scroll() {
   return 0
 }
 
-close() {
+# Put every pair back to its plain module, skipping the stop named in $1 so the
+# caller can select it. The skip matters: hiding and showing the same module
+# twice in quick succession makes polybar collapse the pair and keep the plain
+# one, which left the first stop unhighlighted until the cursor moved off it.
+reset_pairs() {
   local i
+  for i in "${!modules[@]}"; do
+    [ "$i" = "${1:-}" ] || deselect_module "$i"
+  done
+}
+
+close() {
   rm -f "$STATE"
   # Reset every twin, not just the selected one: a polybar restart mid-mode can
-  # leave the pair out of step with the index file.
-  for i in "${!modules[@]}"; do
-    deselect_module "$i"
-  done
+  # leave a pair out of step with the index file.
+  reset_pairs
 }
 
 case "${1:-}" in
   open)
     polybar_show_persistent
     printf '0\n' >"$STATE"
-    for i in "${!modules[@]}"; do
-      deselect_module "$i"
-    done
+    reset_pairs 0
     select_module 0
     ;;
   prev) move -1 ;;

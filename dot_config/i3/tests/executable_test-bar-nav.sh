@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Cursor bookkeeping for bar-nav.sh. The cursor is module visibility, so the
-# assertions are on the IPC actions it emits. `open` is not exercised: it
-# touches X11 through polybar_show_persistent.
+# assertions are on the IPC actions it emits. X11 is mocked far enough that
+# polybar_show_persistent finds the bar already up and does nothing.
 
 set -euo pipefail
 
@@ -29,7 +29,15 @@ printf 'i3:%s\n' "\$1" >> "$IPC_LOG"
 EOF
 printf '#!/bin/sh\nprintf "pactl %%s\\n" "\$*" >> "%s"\n' "$IPC_LOG" \
   > "$TEST_TMP/bin/pactl"
-chmod +x "$TEST_TMP/bin/polybar-msg" "$TEST_TMP/bin/i3-msg" "$TEST_TMP/bin/pactl"
+
+# Enough of X11 for polybar_show_persistent to conclude the bar is already
+# visible, so it takes no action of its own.
+# shellcheck disable=SC2016  # $1 belongs to the mock, not to this script
+printf '#!/bin/sh\n[ "$1" = search ] && printf "4242\\n"\nexit 0\n' \
+  > "$TEST_TMP/bin/xdotool"
+printf '#!/bin/sh\nprintf "Map State: IsViewable\\n"\n' > "$TEST_TMP/bin/xwininfo"
+
+chmod +x "$TEST_TMP"/bin/*
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -46,6 +54,19 @@ logged() {
   grep -Fqx "$1" "$IPC_LOG"
 }
 
+# Opening selects the first stop, and must not reset that stop on the way. It
+# used to: resetting all six and then selecting the first sent hide+show and
+# show+hide to the same pair back to back, polybar collapsed them, and the first
+# stop stayed unhighlighted until the cursor moved off it and back.
+rm -f "$STATE"
+reset_log
+"$NAV" open
+[ "$(cat "$STATE")" = 0 ] || fail "open did not select the first stop"
+logged '#date-sel.module_show' || fail "open did not show the first stop's twin"
+logged '#date.module_show' && fail "open reset the stop it was about to select"
+logged '#date-sel.module_hide' && fail "open hid the twin it was about to show"
+logged '#powermenu.module_show' || fail "open did not reset the other stops"
+
 # Selecting a module hides the plain one and shows its twin, so the pair is
 # never on screen together and never both missing.
 printf '0\n' > "$STATE"
@@ -60,7 +81,7 @@ logged '#pulseaudio-sel.module_show' || fail "entering a stop did not show its t
 reset_log
 "$NAV" prev
 "$NAV" prev
-[ "$(cat "$STATE")" = 3 ] || fail "prev did not wrap past the first stop"
+[ "$(cat "$STATE")" = 5 ] || fail "prev did not wrap past the first stop"
 "$NAV" next
 [ "$(cat "$STATE")" = 0 ] || fail "next did not wrap past the last stop"
 
@@ -98,7 +119,7 @@ printf '2\n' > "$STATE"
 reset_log
 "$NAV" close
 [ -e "$STATE" ] && fail "close left the state file behind"
-for m in date pulseaudio battery powermenu; do
+for m in date pulseaudio battery network bluetooth powermenu; do
   logged "#$m.module_show" || fail "close did not restore $m"
   logged "#$m-sel.module_hide" || fail "close did not hide the $m twin"
 done

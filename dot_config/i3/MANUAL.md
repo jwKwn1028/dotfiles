@@ -247,6 +247,8 @@ and scroll handlers:
 | `date` | Toggle the long date format. | — | — |
 | `pulseaudio` | Toggle mute. | Open `pavucontrol`. | Volume down/up 1%. |
 | `battery` | Open `xfce4-power-manager-settings`. | — | Brightness down/up 5%. |
+| `network` | Open `nm-connection-editor`. | — | — |
+| `bluetooth` | Open `blueman-manager`. | — | — |
 | `powermenu` | Open the rofi power menu. | — | — |
 
 Workspaces are deliberately absent: `Super+1`–`Super+0` and `Super+Alt+H/L`
@@ -511,8 +513,8 @@ The launcher uses a per-user runtime `flock`. Concurrent requests wait for the
 active launch and reuse its Polybar processes, preventing duplicate bars during
 an i3 reload and workspace-peek fallback race. It launches the full `main` bar
 on the XRandR primary output and an inherited `external` bar on every other
-active output. The external bar omits only the system tray because X11 permits
-one tray owner.
+active output. The two are identical; only the names differ. See
+[No System Tray](#no-system-tray) for why nothing distinguishes them any more.
 
 `display-setup.sh` starts it after arranging the outputs on every i3
 reload/restart and after a manual `Super+Shift+P` layout refresh.
@@ -529,6 +531,30 @@ reload/restart and after a manual `Super+Shift+P` layout refresh.
 - Raises visible Polybar windows so they stay above existing windows.
 - Calls `resnap.sh` so snapped windows shrink/grow with the usable screen area.
 - Uses a runtime lock to avoid concurrent toggles.
+
+### No System Tray
+
+X11 has a single system-tray owner, so a tray can only ever appear on one
+monitor's bar, and what it holds are bitmaps the applets paint themselves —
+Polybar can neither mirror them onto the other bars nor restyle them. Keeping
+the tray meant the primary bar could never match the rest, so there is no `tray`
+module and `bar/main` and `bar/external` are now the same bar. `bar/external`
+overrides nothing on purpose; the moment it carries its own module list, the two
+stop matching.
+
+`[module/network]` and `[module/bluetooth]` replace the wifi and bluetooth tray
+icons. Bluetooth has no internal Polybar module, so its state comes from
+`polybar/scripts/bluetooth.sh`, which checks `rfkill` before `bluetoothctl` so a
+soft-blocked adapter is not reported as merely switched off.
+
+`nm-applet` and `blueman-applet` must keep running even though they no longer
+draw anything. `nm-applet` is NetworkManager's secret agent — the thing that
+prompts for a wifi password — and `blueman-applet` answers pairing requests;
+neither job moves to a Polybar module. Both simply stop displaying an icon when
+no tray exists.
+
+Dropbox loses its tray icon along with the tray. It keeps syncing; only the
+menu goes away.
 
 `polybar_show_persistent` in `_polybar-common.sh` makes the bar visible and
 keeps it that way for a binding mode, promoting a transient peek to persistent
@@ -1006,7 +1032,7 @@ Inside this directory:
 - `workspace-action.sh`: numbered switch/move and relative workspace wrapper
   that requests a peek.
 - `show-polybar-or-kill-workspace.sh`: shows Polybar before kill mode.
-- `bar-nav.sh`: keyboard cursor over Polybar's clickable items.
+- `bar-nav.sh`: keyboard cursor over Polybar's own modules.
 - `toggle-titles.sh`: toggles title bars globally.
 - `toggle-titles-resnap.sh`: toggles title bars and resnaps.
 - `focus-tracker.sh`: records current and previous focus.
