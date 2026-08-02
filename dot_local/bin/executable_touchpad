@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Enable/disable the built-in touchpad without touching real mice.
 #
-# The ELAN touchpad exposes TWO X pointer nodes — a "Touchpad" node and a
-# shadow "Mouse" node — and BOTH belong to the same physical pad, so both must
-# be toggled or the surface stays alive. External mice and the TrackPoint are
-# left alone.
+# The ELAN pad exposes TWO X pointer nodes, "Touchpad" and a shadow "Mouse".
+# Both are the same physical pad and both must be toggled or the surface stays
+# alive. External mice and the TrackPoint are left alone.
 #
 # Usage: touchpad [disable|enable|toggle|status|apply]
 #   disable  turn the touchpad off (DEFAULT action)

@@ -89,8 +89,7 @@ polybar_cancel_peek() {
   rm -f "$POLYBAR_PEEK_OWNER" "$POLYBAR_PEEK_TRIGGER" "$POLYBAR_PEEK_HOLD"
 }
 
-# Make the bar visible and keep it that way for a binding mode, even if it is
-# currently in the middle of a transient workspace peek.
+# Show the bar and keep it up for a binding mode, promoting a transient peek.
 polybar_show_persistent() {
   local peek_was_active=0
 
@@ -107,8 +106,7 @@ polybar_show_persistent() {
   if ! polybar_visible; then
     "$DIR/toggle-polybar-resnap.sh"
   elif [ "$peek_was_active" = 1 ]; then
-    # A temporary overlay just became persistent for this mode, so bring
-    # snapped windows into the normal visible-bar geometry once.
+    # A peek just became persistent, so refit snapped windows once.
     "$DIR/resnap.sh"
     polybar_raise
   fi

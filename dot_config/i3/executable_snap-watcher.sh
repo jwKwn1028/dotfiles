@@ -13,10 +13,9 @@ DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_snap-common.sh"
 
 # ---------- single-instance ----------
-# Wait up to 5s for the lock. The i3 config's `exec_always` line first pkills
-# the old watcher and then spawns a new one; with `flock -n` the new instance
-# would race and exit because the old hadn't released its fd yet. Waiting
-# briefly lets SIGTERM finish the old process before we take over.
+# Wait up to 5s rather than `flock -n`: `exec_always` pkills the old watcher
+# and spawns a new one, which would otherwise race and exit before the old
+# process had released its fd.
 mkdir -p "$SNAP_RUNTIME_DIR" 2>/dev/null
 LOCK="$SNAP_RUNTIME_DIR/i3-snap-watcher.lock"
 exec 200>"$LOCK"

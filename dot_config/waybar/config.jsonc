@@ -1,9 +1,6 @@
-// ============================================================
-// Waybar — the Wayland counterpart of this repo's Polybar bar.
-// dot_config/polybar/config.ini is the design reference: same
-// geometry, same module order, same palette, same glyphs.
-// Colours live in style.css; this file only decides content.
-// ============================================================
+// Wayland counterpart of this repo's Polybar bar, transcribed from
+// dot_config/polybar/config.ini: same geometry, module order, palette and
+// glyphs. Colours live in style.css; this file only decides content.
 {
     // Polybar: height 28px, width 100%, top, radius 0, fixed-center.
     // `layer: top` + the default exclusive zone reserves the strip the
@@ -30,12 +27,10 @@
     ],
 
     // ─── Workspaces (polybar [module/i3]) ───────────────────────────
-    // Niri numbers workspaces per output and always keeps one empty
-    // workspace at the end of each, so `all-outputs` is left off: with it
-    // on, two monitors contribute two independent "1, 2, 3" runs to the
-    // same bar. The trailing empty workspace is dimmed rather than hidden
-    // (GTK CSS cannot hide a widget), which reads like polybar's
-    // label-visible styling.
+    // `all-outputs` is off because niri numbers workspaces per output, so
+    // two monitors would contribute two "1, 2, 3" runs to one bar. The
+    // trailing empty workspace is dimmed, not hidden -- GTK CSS cannot hide
+    // a widget -- which reads like polybar's label-visible.
     "niri/workspaces": {
         "all-outputs": false,
         "format": "{index}",
@@ -62,15 +57,11 @@
     },
 
     // ─── CPU (polybar [module/cpu]) ────────────────────────────────
-    // Deliberately a custom module, not waybar's built-in `cpu`: this is
-    // the same ~/.local/bin/cpu-load the polybar bar and the zsh `sysmon`
-    // monitor use, so all three report the identical number (iowait
-    // counted as idle, the top/htop convention). The "waybar" argument is
-    // the state key, keeping this caller's /proc/stat delta separate from
-    // polybar's and sysmon's. The second is `interval` below: waybar builds
-    // one instance of this module per output, and cpu-load needs the poll
-    // rate so those instances measure over an interval rather than over the
-    // gap between each other.
+    // Custom, not waybar's built-in `cpu`, to share ~/.local/bin/cpu-load
+    // with polybar and the zsh `sysmon` so all three report one number.
+    // First argument is the state key, keeping this caller's /proc/stat
+    // delta separate; the second mirrors `interval`, since one instance
+    // runs per output and each must measure over a full interval.
     "custom/cpu": {
         "exec": "$HOME/.local/bin/cpu-load waybar 2",
         "interval": 2,

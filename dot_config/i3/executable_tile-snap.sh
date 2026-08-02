@@ -123,13 +123,10 @@ if [ -z "$TARGET" ]; then
   fi
 fi
 
-# Serialize concurrent invocations for the same window. Key autorepeat on the
-# snap/unsnap bindings can fire this script in bursts; without a lock those run
-# concurrently and race on the same marks (e.g. two unsnaps reading the same
-# _presnap_ mark before either unmarks it). Take a per-target non-blocking lock
-# and skip if another instance already holds it. The lock auto-releases when
-# this process exits. Different windows lock on different files, so they still
-# run in parallel. If the lock file can't be created, proceed unlocked.
+# Serialize invocations for the same window: key autorepeat fires this in
+# bursts, and without a lock two unsnaps can read the same _presnap_ mark
+# before either unmarks it. Per-target and non-blocking, so different windows
+# still run in parallel; proceeds unlocked if the lock file cannot be made.
 exec {LOCK_FD}>"$SNAP_RUNTIME_DIR/tile-snap-$TARGET.lock" 2>/dev/null
 if [ -n "${LOCK_FD:-}" ] && ! flock -n "$LOCK_FD"; then
   snap_log "skip $REGION $TARGET: another tile-snap holds the lock"

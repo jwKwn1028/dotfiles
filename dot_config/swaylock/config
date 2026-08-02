@@ -1,14 +1,11 @@
-# swaylock — screen locker for the Niri desktop, in place of
-# noctalia-shell's lockScreen. Reached three ways: Mod+Alt+L and the session
-# menu (~/.local/bin/session-menu lock), and swayidle's idle/before-sleep/
-# lock handlers in dot_config/niri/cfg/autostart.kdl.
+# Screen locker for the Niri desktop, replacing noctalia-shell's lockScreen.
+# Reached from Mod+Alt+L, `session-menu lock`, and swayidle's handlers in
+# dot_config/niri/cfg/autostart.kdl.
 #
-# Colours are Tokyo Night, matching the launcher and notifications. swaylock
-# takes them as RRGGBB with no leading '#'.
+# Tokyo Night colours, which swaylock takes as RRGGBB with no leading '#'.
 #
-# `daemonize` is deliberately not set here: the call sites pass -f, and
-# swayidle's before-sleep handler depends on the lock surface being up
-# before swaylock detaches.
+# `daemonize` is deliberately unset: call sites pass -f, and swayidle's
+# before-sleep handler needs the lock surface up before swaylock detaches.
 
 # Feedback while typing, without leaking the password length. The indicator is
 # drawn by default but only once a key is pressed; idle-visible keeps it up, so

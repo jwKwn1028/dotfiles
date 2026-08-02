@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Pin apps to the top of rofi's drun list.
 #
-# rofi orders drun by launch count in ~/.cache/rofi3.druncache ("<count> <desktop-id>",
-# highest first). Pinning = writing counts far above anything reachable organically.
-# Ordering only applies to the empty-query list; typing re-ranks via fzf (sort: true).
+# rofi orders drun by launch count in ~/.cache/rofi3.druncache
+# ("<count> <desktop-id>", highest first), so pinning writes counts far above
+# anything reachable organically. Only the empty-query list is ordered; typing
+# re-ranks via fzf.
 #
-# Two rofi behaviours constrain the numbers below (both verified against 1.7.5):
-#   - Launching a pinned app increments its count, so pins must be spaced widely or
-#     they reorder each other. STEP is the launches needed for one pin to pass another.
-#   - Every write subtracts the lowest entry's count from all entries. If the pins were
-#     the only entries, the bottom pin would normalise to 0 and lose its pin; FLOOR is
-#     an inert entry (matching no real app, so never displayed) holding the minimum at 0.
-#     It is evicted once real history fills max-history-size, by which point real
-#     low-count entries hold the floor instead.
+# Two rofi behaviours constrain the numbers below (verified against 1.7.5):
+#   - Launching a pin increments its count, so pins must be spaced or they
+#     reorder each other. STEP is the launches needed to pass one pin.
+#   - Every write subtracts the lowest count from all entries, so the bottom
+#     pin would normalise to 0 and lose its pin. FLOOR is an inert entry
+#     matching no real app that holds the minimum at 0, evicted once real
+#     history fills max-history-size.
 #
 #   ./rofi-pin.sh                            # apply the PINS list below
 #   ./rofi-pin.sh foo.desktop bar.desktop    # pin these instead (first = topmost)

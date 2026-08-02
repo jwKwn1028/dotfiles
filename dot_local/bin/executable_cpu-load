@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# Shared CPU-load calculator used by BOTH polybar's cpu module and the zsh
-# `sysmon` monitor, so the two always compute the number the same way.
+# Shared CPU-load calculator for polybar's cpu module, waybar's, and the zsh
+# `sysmon` monitor, so all report the same number.
 #
 # Definition (matches top/htop/mpstat): load% = 100 * busy / total, where
 #   busy = total - (idle + iowait)      # iowait counts as idle, NOT as load
 #
 # Stateful and non-blocking: each call diffs /proc/stat against the previous
-# snapshot, so the % is the average load over the real time since that
-# snapshot (~the caller's refresh interval). No sleep on the hot path.
+# snapshot, so the % averages over the time since it. No sleep on the hot path.
 #
 # Usage: cpu-load [instance] [interval_seconds]
 #   instance  state key, so independent callers (e.g. "polybar", "sysmon") keep
@@ -16,14 +15,11 @@
 #   interval  how often the caller polls. Used only to decide when a snapshot
 #             is too fresh to replace. Default: 2.
 #
-# One instance key can be shared by several *processes*: polybar runs one bar
-# per monitor and every bar has its own cpu module, all invoking this with
-# "polybar". They must not consume each other's snapshot -- that shrinks the
-# measured window from `interval` to the few milliseconds between the two
-# processes, and a window that short reads whatever burst it happens to land
-# on (a steady 5% machine shows 50%). So the first caller in a polling cycle
-# advances the window and the rest reuse its result: one number per cycle,
-# identical on every monitor.
+# One instance key is shared by several *processes*: polybar runs a bar per
+# monitor, each with its own cpu module. They must not consume each other's
+# snapshot, which would shrink the window from `interval` to milliseconds and
+# read whatever burst it lands on (a steady 5% machine shows 50%). So the first
+# caller in a cycle advances the window and the rest reuse its result.
 
 export LC_ALL=C                        # keep EPOCHREALTIME's decimal point a "."
 

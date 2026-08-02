@@ -485,6 +485,7 @@ automatically.
 | `test-overflow-live.py` | Drives a throwaway Xephyr i3 session through every overflow rule on one and two screens. Needs `Xephyr`, `xterm`, `autotiling`; takes minutes. |
 | `test-polybar-peek.sh` | `polybar-peek.sh` show/hide, ownership, and debounce behavior. |
 | `test-super-polybar-listener.py` | Standalone-Super tap/hold gesture detection. |
+| `test-top-edge-peek.py` | Top-edge pointer gesture: hysteresis and per-monitor tops. |
 
 The live test never touches the running session:
 
@@ -595,6 +596,33 @@ bindings and hold-aware visibility for a standalone Super gesture:
 keyboard, so i3 continues to receive all Super combinations. It resolves the
 active Super keycodes from the X keymap, rejects gestures involving any other
 key, and calls the hold/tap modes in `polybar-peek.sh`.
+
+### Top-Edge Peek
+
+`top-edge-peek.py` drives the same hold gesture from the pointer: put the
+pointer against the top of a screen and the bar appears, move it back down and
+the bar goes away. It is the standalone-Super hold with a different trigger, so
+it inherits that contract whole — it never takes over a bar that was already
+visible, and if the process dies the helper's worker hides the bar by itself.
+
+- Two thresholds, not one. The bar appears within `I3_POLYBAR_EDGE_ENTER_PX`
+  (2) of a monitor's top and only leaves past `I3_POLYBAR_EDGE_LEAVE_PX` (40).
+  The gap is what makes a peeked bar usable: the bar is 28px tall and appears
+  under the pointer, so a single threshold would dismiss it the moment the
+  pointer moved onto the thing it just revealed.
+- Each monitor's own top edge counts, not just root `y=0`, so a head placed
+  below another still peeks. `I3_POLYBAR_EDGE_POLL_MS` (100) sets the rate.
+- It polls the pointer rather than watching an input region at the screen edge.
+  An InputOnly window covering the top would swallow the clicks Polybar's
+  modules need; stacking it underneath instead trades that for a worse bug,
+  since showing the bar puts it above the region, which reads as the pointer
+  leaving and makes the peek flap.
+- Entering bar mode during an edge peek promotes the bar for the duration of
+  the mode, and leaving the mode hides it again — a bar up only for a peek
+  counts as hidden. See [Bar Mode](#bar-mode).
+- It needs `python3-xlib`, which is in `.chezmoidata/packages.toml` for the
+  `linuxmint-i3-x11` profile. Without it the watcher dies on import and the
+  edge simply does nothing.
 
 ## Monitor and Wallpaper Setup
 
@@ -1036,6 +1064,7 @@ Inside this directory:
 - `toggle-polybar-resnap.sh`: toggles Polybar and resnaps.
 - `polybar-peek.sh`: owner-aware, debounced transient Polybar display.
 - `super-polybar-listener.py`: passive standalone-Super tap/hold listener.
+- `top-edge-peek.py`: peeks Polybar while the pointer is at a screen's top edge.
 - `overflow-watcher.py`: moves too-small windows to another workspace.
 - `workspace-action.sh`: numbered switch/move and relative workspace wrapper
   that requests a peek.
@@ -1099,9 +1128,11 @@ Runtime files outside this directory:
   profile until the metadata list includes them.
 - If the workspace count ever stops being `1` to `10`, update `MAX_WS` in
   `overflow-watcher.py` alongside the i3 workspace bindings.
-- `overflow-watcher.py` and its tests need the `i3ipc` Python module, which
-  `.chezmoidata/packages.toml` does not install; like `~/.local/bin/autotiling`
-  it is expected to be present already.
+- `overflow-watcher.py` and its tests need the `i3ipc` Python module, and
+  `top-edge-peek.py` needs `Xlib`. Both are installed by
+  `.chezmoidata/packages.toml` as `python3-i3ipc` and `python3-xlib` in the
+  `linuxmint-i3-x11` group. `~/.local/bin/autotiling` is not, and is expected to
+  be present already.
 
 ## Quick Commands
 

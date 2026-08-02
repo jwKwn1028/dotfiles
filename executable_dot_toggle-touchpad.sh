@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# toggle-touchpad.sh — flip the built-in touchpad on/off, defaulting to OFF.
+# Flip the built-in touchpad on/off, defaulting to OFF.
 #
-# The ELAN pad exposes TWO X pointer nodes (a "Touchpad" node and a shadow
-# "Mouse" node); both belong to the same physical pad, so both must be switched
-# or the surface stays alive. External mice and the TrackPoint are left alone.
+# The ELAN pad exposes TWO X pointer nodes, "Touchpad" and a shadow "Mouse";
+# both are the same physical pad and both must be switched or the surface stays
+# alive. External mice and the TrackPoint are left alone.
 #
 # Usage: toggle-touchpad.sh [toggle|on|off]   (default: toggle)
 #   toggle  flip current state; when the state can't be read, DISABLE

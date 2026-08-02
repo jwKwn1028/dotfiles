@@ -33,8 +33,7 @@ fi
 #   fallback lists, making the same call differ per machine).
 #   -d lists directories instead; ext restricts to files with that
 #   extension (case-insensitive). fd/fdfind when available, find(1)
-#   otherwise. Replaces the fd -> fdfind -> find ladders that were
-#   copy-pasted into so/zo/bo/crpd.
+#   otherwise.
 _zsh_ls_files() {
   emulate -L zsh
   local kind=file ext

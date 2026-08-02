@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# Claude Code statusLine — mirrors the user's Starship [directory] segment
-# (~/.config/starship.toml, Tokyo Night palette) plus a remaining-context
-# indicator from Claude Code's own JSON context. Git info is intentionally
-# omitted per user request.
+# Claude Code statusLine: mirrors the Starship [directory] segment plus a
+# remaining-context indicator. Git info is intentionally omitted.
 #
-# Managed by the statusline-setup agent. Ask Claude ("use the statusline-setup
-# agent") to make further changes instead of hand-editing this file.
+# Managed by the statusline-setup agent -- ask it to make changes rather than
+# hand-editing.
 
 input=$(cat)
 
@@ -51,9 +49,8 @@ fi
 DIR_SEGMENT="${BOLD}${BLUE}${disp}${RESET}"
 
 # ---------------------------------------------------------------------------
-# Remaining context window indicator (context_window.remaining_percentage)
-# Color ramps green -> yellow -> red as available context shrinks.
-# Omitted entirely until the first API response of the session exists.
+# Remaining context (context_window.remaining_percentage), ramping green ->
+# yellow -> red. Omitted until the session's first API response exists.
 # ---------------------------------------------------------------------------
 CONTEXT_SEGMENT=""
 if [ -n "$REMAINING" ]; then

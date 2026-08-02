@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
+# Mirror bookmarks from Zen (Firefox-based, places.sqlite) into Helium
+# (Chromium-based, "Bookmarks" JSON).
 #
-# sync-zen-to-helium-bookmarks.sh
-#
-# Mirror the bookmarks from the Zen browser (Firefox-based, places.sqlite)
-# into the Helium browser (Chromium-based, "Bookmarks" JSON file).
-#
-# Zen is treated as the single source of truth: every run rebuilds Helium's
-# bookmark tree to match Zen exactly (folders, URLs, order). A timestamped
-# backup of Helium's current bookmarks is made before anything is written, so
-# the operation is always reversible.
+# Zen is the single source of truth: every run rebuilds Helium's tree to match
+# it exactly. Helium's current bookmarks are backed up first, so this is always
+# reversible.
 #
 #   Zen toolbar         -> Helium "Bookmarks bar"
 #   Zen menu + unfiled  -> Helium "Other bookmarks"

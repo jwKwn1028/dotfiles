@@ -25,10 +25,9 @@
 {{- end }}
 
 # ─── Repo documentation ───────────────────────────────────────────────────
-# These describe the source repo; they are not dotfiles. Without this block
-# `chezmoi apply` writes them to ~/README.md etc. (`chezmoi status` shows them
-# as `A`), littering $HOME. Leading slash anchors to $HOME so that a nested
-# README.md elsewhere in the target tree is still applied normally.
+# Repo docs, not dotfiles: without this block `chezmoi apply` writes them to
+# ~/README.md and litters $HOME. The leading slash anchors to $HOME so a nested
+# README.md elsewhere in the target tree still applies.
 /README.md
 /X11_TO_WAYLAND_TRANSITION.md
 /CACHYOS_TRANSFER_GUIDE.md
@@ -39,10 +38,9 @@
 /LICENSE
 
 # ─── Browser profiles ──────────────────────────────────────────────────────
-# Browser-generated profiles stay local. They contain bookmarks, account/sync
-# identifiers, site-engagement records, and other machine-generated state.
-# The sanitized Zen user.js allowlist is installed by the profile-discovery
-# script without exposing or managing the rest of the profile.
+# Browser profiles stay local: bookmarks, sync identifiers, site-engagement
+# records. The sanitized Zen user.js allowlist is installed separately by the
+# profile-discovery script.
 .config/net.imput.helium/
 .var/app/app.zen_browser.zen/
 
@@ -72,10 +70,9 @@
 {{ end -}}
 
 # ─── Distro packaging differences ─────────────────────────────────────────
-# Arch/CachyOS ship Helix as `helix` and provide no `hx`; Debian/Ubuntu and
-# the upstream tarball ship `hx`. ~/.local/bin/hx is a compat symlink that
-# must exist only where the distro omits the name -- elsewhere it would
-# shadow the real binary. See dot_local/bin/symlink_hx.tmpl.
+# Arch/CachyOS ship Helix as `helix` with no `hx`; Debian and the upstream
+# tarball ship `hx`. The ~/.local/bin/hx compat symlink must exist only where
+# the distro omits the name, or it shadows the real binary.
 {{ if not $archFamily -}}
 /.local/bin/hx
 {{ end -}}

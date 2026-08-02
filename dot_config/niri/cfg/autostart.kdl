@@ -1,23 +1,18 @@
 // ────────────── Startup Applications ──────────────
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Miscellaneous#spawn-sh-at-startup
 //
-// This desktop runs waybar and fuzzel instead of noctalia-shell, so the
-// pieces noctalia used to provide as one process are started individually
-// here: the bar, notifications, idle handling, and the tray applets that
-// populate polybar's tray on the Mint profile.
+// waybar and fuzzel replace noctalia-shell, so the pieces it provided as one
+// process start individually here: bar, notifications, idle handling, applets.
 //
-// noctalia-shell is NOT uninstalled -- it is a dependency of the
-// cachyos-niri-noctalia meta package and stays available as a fallback.
-// `qs -c noctalia-shell` still starts it by hand; it is simply not
-// autostarted, and its keybinds have been replaced in keybinds.kdl.
+// noctalia-shell is not uninstalled -- it is a dependency of the
+// cachyos-niri-noctalia meta package and remains the fallback session, startable
+// by hand with `qs -c noctalia-shell`. It is simply not autostarted.
 
     spawn-at-startup "waybar"
     spawn-at-startup "mako"
 
-    // Idle handling, at the timeouts noctalia was configured with
-    // (~/.config/noctalia/settings.json: screenOffTimeout 600,
-    // lockTimeout 660, suspendTimeout 1800). `lock` also covers
-    // `loginctl lock-session` from anywhere else.
+    // Idle handling at noctalia's configured timeouts (screenOff 600, lock
+    // 660, suspend 1800). `lock` also covers `loginctl lock-session`.
     spawn-at-startup "swayidle" "-w" \
         "timeout" "600"  "niri msg action power-off-monitors" \
         "resume"         "niri msg action power-on-monitors" \

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Session menu for the CachyOS Niri desktop. It replaces two things at once:
-# noctalia-shell's sessionMenu, and the expanding power menu that
-# dot_config/polybar/config.ini gives the Mint bar.
+# Session menu for the CachyOS Niri desktop, replacing noctalia-shell's
+# sessionMenu and the expanding power menu polybar gives the Mint bar.
 #
 # Usage:
 #   session-menu            open the menu   (Mod+Shift+Q, and the waybar
@@ -10,10 +9,9 @@
 #
 #   ACTION: lock | suspend | logout | reboot | poweroff
 #
-# The menu is fuzzel in dmenu mode, so it picks up ~/.config/fuzzel/fuzzel.ini
-# and looks like the rofi menus this desktop is modelled on. The Nerd Font has
-# to be named explicitly because JuliaMono carries no icon glyphs. It stays at
-# 16 while the text drops to 13, the same text/icon split polybar uses.
+# fuzzel in dmenu mode, so it inherits ~/.config/fuzzel/fuzzel.ini. The Nerd
+# Font is named explicitly because JuliaMono carries no icon glyphs, and stays
+# at 16 while text drops to 13 -- the text/icon split polybar uses.
 set -u
 
 FONT='JuliaMono:size=13,NanumGothicCoding:size=13,JetBrainsMono Nerd Font:size=16'

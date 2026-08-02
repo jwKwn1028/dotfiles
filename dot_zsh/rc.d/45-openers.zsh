@@ -36,8 +36,6 @@ ex() {
 # One implementation; so/zo just choose the preferred viewer:
 #   so -> sioyek first, zathura as fallback
 #   zo -> zathura first, sioyek as fallback
-# (The old standalone zo had its checks inverted and launched whichever
-# viewer it had just confirmed missing.)
 # With a path argument the viewer opens it directly; bare, fzf picks.
 _zsh_open_pdf() {
   emulate -L zsh

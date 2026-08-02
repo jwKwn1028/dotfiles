@@ -7,14 +7,10 @@
 #   - NanumGothicCoding       : Korean monospace fallback in ghostty
 #   - JetBrainsMono Nerd Font : icon glyphs used by polybar/waybar/starship
 #
-# Everything lands in ~/.local/share/fonts from upstream archives, so no
-# distro packaging is involved and the same script works on Mint and CachyOS.
-# Only New Computer Modern takes an apt fast path, because Debian is the one
-# distro that packages it; nothing in the Arch repos does, and both of the
-# faces missing there are AUR-only.
-#
-# Hack Nerd Font Mono, the fourth family ghostty names, comes from pacman
-# (ttf-hack-nerd) instead -- see .chezmoidata/packages.toml.
+# Installed to ~/.local/share/fonts from upstream archives, so one script
+# works on both distros. New Computer Modern takes an apt fast path because
+# Debian is the only distro packaging it. Hack Nerd Font Mono comes from
+# pacman instead -- see .chezmoidata/packages.toml.
 set -euo pipefail
 
 {{ if ne $class "desktop" -}}
@@ -24,29 +20,22 @@ exit 0
 fontdir="$HOME/.local/share/fonts"
 mkdir -p "$fontdir"
 
-# fontconfig resolves on the family name recorded inside the file, which is
-# not reliably the file or package name. NanumGothicCoding is the cautionary
-# case: the chrissimpkins/codeface build of it registers as
-# "NanumGothic_Coding", which silently fails to match the configs. Always
-# test the family, never the filename.
+# Test the family name recorded inside the file, never the filename: the
+# codeface build of NanumGothicCoding registers as "NanumGothic_Coding" and
+# silently fails to match the configs.
 #
-# Deliberately `grep -ix ... >/dev/null` and NOT `grep -qix`: -q makes grep
-# exit at the first match, which SIGPIPEs fc-list/tr upstream, and under
-# `set -o pipefail` that turns the whole pipeline non-zero. The predicate
-# would then report "missing" exactly when the font IS installed, and every
-# run would re-download all of them.
+# `grep -ix ... >/dev/null`, not `grep -qix`: -q exits at the first match,
+# SIGPIPEs fc-list upstream, and under `set -o pipefail` turns the pipeline
+# non-zero -- reporting "missing" exactly when the font IS installed.
 have_family() {
     fc-list : family 2>/dev/null | tr ',' '\n' | grep -ix -- "$1" >/dev/null
 }
 
 # install_zip URL DESTDIR FAMILY=GLOB [FAMILY=GLOB ...]
-# Fetches a zip once and copies every file matching each GLOB into DESTDIR.
-# Skips the download entirely when all the named families already resolve, so
-# re-runs are cheap. Several families per call because one archive can carry
-# more than one face -- the 33 MB CTAN archive holds both New Computer Modern
-# faces this desktop uses, and should not be downloaded once each.
-# Best-effort by design: a failure warns and returns non-zero rather than
-# aborting the rest of provisioning.
+# Fetches a zip once and copies each GLOB into DESTDIR, skipping the download
+# when every named family already resolves. Multiple families per call because
+# one archive can carry several faces. Best-effort: a failure warns rather than
+# aborting provisioning.
 install_zip() {
     local url="$1" dest="$2"
     shift 2

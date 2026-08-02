@@ -1,11 +1,8 @@
-# Package manifest consumed by the distro-specific run_once_* provisioning
-# scripts.
-# Edit these lists to add/remove software; chezmoi re-runs the install
-# scripts automatically when this file changes (run_onchange semantics via
-# the hash of the rendered script).
+# Package manifest for the distro-specific run_once_* provisioning scripts.
+# Edit these lists to add or remove software; chezmoi re-runs the installers
+# when this file changes.
 #
-# apt names target Linux Mint 22.3 / Ubuntu 24.04. pacman names target
-# CachyOS with its normal CachyOS and Arch repositories enabled.
+# apt names target Linux Mint 22.3 / Ubuntu 24.04, pacman names CachyOS.
 
 [packages.apt]
 # PPAs added before the apt install pass (needed for packages not in the
@@ -45,6 +42,10 @@ i3_x11 = [
     # autostart. Without it the watcher dies on import and windows that land
     # too small are never handed to another workspace.
     "python3-i3ipc",
+    # X bindings for dot_config/i3/top-edge-peek.py, also started from the i3
+    # autostart. It polls the pointer to peek Polybar at the screen edge, and
+    # without this it dies on import and the edge simply does nothing.
+    "python3-xlib",
     "gimp", "vlc", "mpv",
     # Display manager + screen locker for a standalone i3 login session.
     # Installing lightdm may prompt you to pick the default display manager.
@@ -74,14 +75,10 @@ common = [
     "shellcheck",
 ]
 
-# CachyOS owns the base Niri session through its packages. The meta package
-# preserves that supported stack; chezmoi adds user configuration only after
-# it has been reviewed as described in CACHYOS_TRANSFER_GUIDE.md.
-#
-# The desktop shell itself is waybar + fuzzel, not noctalia-shell -- see the
-# "Replacing noctalia-shell" section of that guide. noctalia stays installed
-# regardless: it is a dependency of cachyos-niri-noctalia, and keeping it is
-# what makes the stock session available as a fallback.
+# CachyOS owns the base Niri session; the meta package keeps that supported
+# stack intact. The shell is waybar + fuzzel, not noctalia-shell, but noctalia
+# stays installed -- it is a dependency of the meta package and the fallback
+# session. See CACHYOS_TRANSFER_GUIDE.md.
 niri_noctalia = [
     "cachyos-niri-noctalia",
     "flatpak",
@@ -104,9 +101,8 @@ niri_noctalia = [
     # module's click action. Mirrors the i3 profile's network-manager-gnome.
     "network-manager-applet",
     # Fonts named by dot_config/ghostty/config. Hack Nerd Font Mono carries the
-    # icon glyphs the starship prompt and CLI tools draw; without it fontconfig
-    # falls back to Noto Sans Mono and every icon renders as tofu. Noto CJK
-    # covers the Korean text fallback.
+    # icon glyphs starship and the CLI tools draw -- without it they render as
+    # tofu. Noto CJK covers the Korean fallback.
     # NewComputerModernMono10 and NanumGothicCoding are AUR-only on Arch, so
     # run_once_after_50-install-fonts.sh installs them from upstream archives
     # instead -- see the font note in CACHYOS_TRANSFER_GUIDE.md.
@@ -132,13 +128,11 @@ apps = [
 [packages.cargo]
 # Rust tools built from source, for crates the distro does not package.
 #
-# Every entry carries `bin`: the command the crate actually installs, which is
-# frequently not the crate name (yazi-fm -> yazi, taplo-cli -> taplo,
-# cargo-update -> cargo-install-update). Provisioning skips a crate whose `bin`
-# is already on PATH, so anything the system package manager supplied is never
-# rebuilt from source. That keeps one shared list correct on both distros
-# instead of needing a per-distro copy: pacman ships eza and yazi on CachyOS
-# and is skipped, while apt ships neither on Mint, so cargo builds them there.
+# Every entry carries `bin`, the command the crate installs, which is often not
+# the crate name (yazi-fm -> yazi, cargo-update -> cargo-install-update).
+# Provisioning skips a crate whose `bin` is already on PATH, so one shared list
+# stays correct on both distros: pacman ships eza and yazi and is skipped, apt
+# ships neither so cargo builds them.
 
 # `cargo install --locked <crate>` from crates.io.
 # eza = modern ls; the rest are Helix LSPs / formatters + utilities.

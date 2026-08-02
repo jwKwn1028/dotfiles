@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
 # Keyboard cursor over Polybar's own modules: Super+I, then h/l to move, j/k to
-# adjust the selected module, Return to click it, Shift+Return to right-click.
+# adjust, Return to click, Shift+Return to right-click.
 #
-# Polybar's window is an X11 dock and never takes keyboard focus, so the cursor
-# cannot live in the bar itself; it lives in the i3 "bar" binding mode, which
-# calls this script. The highlight is not drawn here either: a module's colors
-# are fixed once the bar starts, so each navigable module has a hidden twin in
-# config.ini that differs only by the selection background, and the cursor swaps
-# the twin in for the original over IPC.
-#
-# The mode is sticky on purpose. Only a stop that puts a window on screen leaves
-# it; toggles stay so the value can be nudged and re-nudged.
+# Polybar never takes keyboard focus, so the cursor lives in the i3 mode that
+# calls this script, and the highlight is a hidden twin module swapped in over
+# IPC (see config.ini). The mode is sticky: only a stop that opens a window
+# leaves it, so toggles can be nudged repeatedly.
 
 set -u
 
@@ -18,21 +13,16 @@ DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_polybar-common.sh"
 
 STATE="$SNAP_RUNTIME_DIR/i3-polybar-nav.idx"
-# Present while the cursor is up if the bar was not already staying visible
-# when the mode opened. Leaving the mode puts the bar back the way it was
-# found, so reaching a module by keyboard is never a way to strand the bar
-# on screen.
+# Present if the bar was not already staying visible when the mode opened, so
+# leaving can put it back and never strand a hidden bar on screen.
 RESTORE_HIDDEN="$SNAP_RUNTIME_DIR/i3-polybar-nav.restore-hidden"
 
-# Cursor stops, left to right, named after the polybar modules they select.
-# Every one has a `<module>-sel` twin in ~/.config/polybar/config.ini.
+# Cursor stops, left to right. Each has a `<module>-sel` twin in config.ini.
 modules=(date pulseaudio battery network bluetooth powermenu)
 
-# Return. Mirrors each module's click-left handler.
-# The date entry toggles both halves of the pair. Its action is module state,
-# not a command: sending it only to `date` toggles the module that is hidden
-# while the cursor sits on it, so nothing appears to happen, and the two halves
-# would then disagree about the format once the cursor moved away.
+# Return. Mirrors each module's click-left handler. date_toggle drives both
+# halves of the pair: the action is module state, and the plain half is the
+# hidden one while the cursor sits on it.
 click_left=(
   "date_toggle"
   "pactl set-sink-mute @DEFAULT_SINK@ toggle"
@@ -41,23 +31,21 @@ click_left=(
   "blueman-manager"
   "power_menu"
 )
-# Stops that open a window hand the keyboard to it, so they close the cursor
-# first. The rest are in-place toggles and keep the mode.
+# 1 = opens a window, which takes the keyboard, so the cursor closes first.
 click_left_opens=(0 0 1 1 1 1)
 
 # Shift+Return. Only pulseaudio has a click-right handler in the bar.
 click_right=("" "pavucontrol" "" "" "" "")
 click_right_opens=(0 1 0 0 0 0)
 
-# j/k, standing in for a scroll wheel over the module. Empty means the module
-# has no scroll handler. Volume steps by 1 point rather than the 5 the wheel and
-# the XF86Audio keys use: the cursor is already parked on the module here, so
-# this is the fine adjustment. Brightness keeps the coarse 5.
+# j/k, standing in for a scroll wheel; empty means no scroll handler. Volume
+# steps by 1 rather than the wheel's 5 -- parking the cursor on the module is
+# the fine adjustment. Brightness keeps the coarse 5.
 scroll_down=("" "pactl set-sink-volume @DEFAULT_SINK@ -1%" "brightnessctl -q set 5%-" "" "" "")
 scroll_up=("" "pactl set-sink-volume @DEFAULT_SINK@ +1%" "brightnessctl -q set +5%" "" "" "")
 
-# The bar's power icon opens a menu built for the mouse. Reach the same actions
-# from the keyboard through rofi, which is already this profile's launcher.
+# The bar's power menu is built for the mouse; rofi gives the same actions to
+# the keyboard.
 power_menu() {
   local choice
   choice=$(printf 'lock\nreboot\nshut down\nexit i3\n' |
@@ -79,7 +67,7 @@ date_toggle() {
   ipc date-sel toggle
 }
 
-# Swap module <-> twin. Both bars receive the action, so they stay in step.
+# Swap module <-> twin. Every bar receives the action, so they stay in step.
 select_module() {
   ipc "${modules[$1]}" module_hide
   ipc "${modules[$1]}-sel" module_show
@@ -109,8 +97,7 @@ move() {
   select_module "$new"
 }
 
-# Click the selected module. An empty action means it has no handler for that
-# button, which is a no-op rather than an error.
+# Click the selected module; an empty action is a no-op, not an error.
 activate() {
   local idx cmd opens
   idx=$(current_index)
@@ -142,10 +129,9 @@ scroll() {
   return 0
 }
 
-# Put every pair back to its plain module, skipping the stop named in $1 so the
-# caller can select it. The skip matters: hiding and showing the same module
-# twice in quick succession makes polybar collapse the pair and keep the plain
-# one, which left the first stop unhighlighted until the cursor moved off it.
+# Put every pair back to its plain module, skipping the stop named in $1. The
+# skip matters: hiding and showing one module twice in quick succession makes
+# polybar collapse the pair and keep the plain half.
 reset_pairs() {
   local i
   for i in "${!modules[@]}"; do
@@ -155,14 +141,14 @@ reset_pairs() {
 
 close() {
   rm -f "$STATE"
-  # Reset every twin, not just the selected one: a polybar restart mid-mode can
-  # leave a pair out of step with the index file.
+  # Every twin, not just the selected one: a polybar restart mid-mode can leave
+  # a pair out of step with the index file.
   reset_pairs
 
   if [ -e "$RESTORE_HIDDEN" ]; then
     rm -f "$RESTORE_HIDDEN"
-    # Re-check rather than hiding outright: Super+Shift+B during the mode may
-    # have hidden the bar already, and this toggle would put it back up.
+    # Re-check: the bar may already have been hidden during the mode, and this
+    # toggle would put it back up.
     if polybar_visible; then
       "$DIR/toggle-polybar-resnap.sh"
     fi
@@ -172,9 +158,8 @@ close() {
 
 case "${1:-}" in
   open)
-    # Record the bar's state before showing it. A bar that is only up because
-    # of a transient workspace peek counts as hidden: it was on its way out,
-    # and polybar_show_persistent is about to cancel the peek and make it stay.
+    # A bar up only for a transient peek counts as hidden: it was on its way
+    # out, and polybar_show_persistent is about to make it stay.
     if polybar_visible && [ ! -e "$POLYBAR_PEEK_OWNER" ]; then
       rm -f "$RESTORE_HIDDEN"
     else

@@ -256,15 +256,11 @@ bindsym Shift+$mod+s          exec --no-startup-id flameshot gui
 bindsym $mod+Shift+b exec --no-startup-id ~/.config/i3/toggle-polybar-resnap.sh
 
 # Keyboard cursor over polybar's own modules: Super+I, then H/L to move, J/K to
-# adjust, Return to click and Shift+Return to right-click. Polybar cannot be
-# focused, so the cursor is this mode plus the `-sel` module twins that
-# bar-nav.sh swaps in; the selected module wears the same block as the focused
-# workspace. If polybar is hidden, Super+I shows it before entering this mode.
-# The mode name below is a single space, on purpose, and not via a `set`
-# variable: i3 keeps the quotes in a variable's value, so `mode "$var"` cannot
-# carry one. Polybar's i3 module renders the mode name, and this mode wants no
-# text in the bar -- the block on the selected module already says both that the
-# mode is on and where the cursor is. The other modes keep their worded names.
+# adjust, Return to click, Shift+Return to right-click. Shows polybar first if
+# hidden. See bar-nav.sh.
+# The mode name is a single space so polybar, which renders it, shows no text;
+# the block on the selected module already says where the cursor is. Written
+# literally because i3 keeps the quotes in a `set` variable's value.
 bindsym $mod+i exec --no-startup-id ~/.config/i3/bar-nav.sh open, mode " "
 mode " " {
     bindsym h     exec --no-startup-id ~/.config/i3/bar-nav.sh prev
@@ -275,8 +271,8 @@ mode " " {
     bindsym k     exec --no-startup-id ~/.config/i3/bar-nav.sh up
     bindsym Down  exec --no-startup-id ~/.config/i3/bar-nav.sh down
     bindsym Up    exec --no-startup-id ~/.config/i3/bar-nav.sh up
-    # No `mode "default"` here: the script leaves the mode itself, and only for
-    # a stop that puts a window on screen. Toggles keep the cursor up.
+    # No `mode "default"`: the script leaves the mode itself, and only for a
+    # stop that opens a window.
     bindsym Return       exec --no-startup-id ~/.config/i3/bar-nav.sh click
     bindsym Shift+Return exec --no-startup-id ~/.config/i3/bar-nav.sh click-right
     bindsym Escape exec --no-startup-id ~/.config/i3/bar-nav.sh close, mode "default"
@@ -298,6 +294,7 @@ exec_always --no-startup-id sh -c 'pkill -f "bash .*/kakaotalk-float-watcher\.sh
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/super-polybar-listener\.py$"; exec /usr/bin/python3 ~/.config/i3/super-polybar-listener.py'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 /home/kjw1028/.local/bin/autotiling"; exec /home/kjw1028/.local/bin/autotiling --limit 6'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/overflow-watcher\.py$"; exec /usr/bin/python3 ~/.config/i3/overflow-watcher.py'
+exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/top-edge-peek\.py$"; exec /usr/bin/python3 ~/.config/i3/top-edge-peek.py'
 exec --no-startup-id xrdb -merge ~/.Xresources
 exec --no-startup-id xsetroot -cursor_name left_ptr
 exec_always --no-startup-id /usr/bin/flock -n /tmp/disable-trackpoint-middle-click.lock /home/kjw1028/.local/bin/disable-trackpoint-middle-click
