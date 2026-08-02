@@ -28,7 +28,9 @@ else
 fi
 
 # _zsh_ls_files [-d] [ext]
-#   Print candidate paths under $PWD: hidden included, .git pruned.
+#   Print candidate paths under $PWD: hidden included, .git pruned,
+#   .gitignore NOT honored (fd would otherwise hide files the find(1)
+#   fallback lists, making the same call differ per machine).
 #   -d lists directories instead; ext restricts to files with that
 #   extension (case-insensitive). fd/fdfind when available, find(1)
 #   otherwise. Replaces the fd -> fdfind -> find ladders that were
@@ -40,7 +42,7 @@ _zsh_ls_files() {
   ext="$1"
 
   if [[ -n $_zsh_fd ]]; then
-    local -a cmd=("$_zsh_fd" --hidden --exclude .git --strip-cwd-prefix)
+    local -a cmd=("$_zsh_fd" --hidden --no-ignore --exclude .git --strip-cwd-prefix)
     if [[ $kind == dir ]]; then
       cmd+=(--type d)
     elif [[ -n $ext ]]; then

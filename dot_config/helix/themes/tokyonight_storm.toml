@@ -4,6 +4,8 @@ inherits = "tokyonight"
 
 # Contrasting line number for the line the cursor is on.
 "ui.linenr.selected" = { fg = "cyan", modifiers = ["bold"] }
+# Unfocused line numbers: fg-gutter (#3b4261) is near-invisible on this bg.
+"ui.linenr" = { fg = "fg-linenr" }
 
 [palette]
 border = "#1d202f"

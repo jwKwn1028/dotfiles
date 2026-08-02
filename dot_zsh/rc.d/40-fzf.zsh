@@ -112,7 +112,7 @@ fi
 # --------------------------------------------------------
 hf() {
   local file
-  file="$(fzf --prompt='Open with Helix> ')" || return 1
+  file="$(fzf --prompt='Open with Helix> ')" || return
 
   hx "$file"
 }

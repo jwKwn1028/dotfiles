@@ -1,14 +1,14 @@
 # --- Remote Access Tools ---
 # Values are prompted by .chezmoi.toml.tmpl and stored only in the local
 # chezmoi config. Environment variables can still override them per session.
-GPU_REMOTE_USER=${GPU_REMOTE_USER:-{{ .sshRemoteUser | quote }}}
-GPU_REMOTE_HOST=${GPU_REMOTE_HOST:-{{ .sshGpuHost | quote }}}
+HPC_REMOTE_USER=${HPC_REMOTE_USER:-{{ .sshRemoteUser | quote }}}
+HPC_REMOTE_HOST=${HPC_REMOTE_HOST:-{{ .sshGpuHost | quote }}}
 
 # 1. Quick SFTP Connect
 # Usage: just type 'cdcluster' to browse your server files
 cdcluster() {
   emulate -L zsh
-  sftp "${GPU_REMOTE_USER}@${GPU_REMOTE_HOST}"
+  sftp "${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
 }
 
 # 2. "Get" Function (Smart Download)
@@ -50,7 +50,7 @@ grem() {
     return 1
   fi
 
-  local remote="${GPU_REMOTE_USER}@${GPU_REMOTE_HOST}"
+  local remote="${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
   remotes=("${(@)argv/#/${remote}:}")
   rsync "${rsync_opts[@]}" -- "${remotes[@]}" ./
 }
@@ -109,7 +109,7 @@ prem() {
     srcs=("$@")
   fi
 
-  local remote="${GPU_REMOTE_USER}@${GPU_REMOTE_HOST}"
+  local remote="${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
 
   # Empty dst -> "host:" -> the remote home dir (rsync's default), so we do not
   # depend on the remote shell to expand a literal "~". An explicit dst keeps
@@ -121,36 +121,36 @@ prem() {
 # Host-specific remote transfer wrappers.
 grem-gpu() {
   emulate -L zsh
-  local GPU_REMOTE_HOST={{ .sshGpuHost | quote }}
+  local HPC_REMOTE_HOST={{ .sshGpuHost | quote }}
   grem "$@"
 }
 
 grem-hpc() {
   emulate -L zsh
-  local GPU_REMOTE_HOST={{ .sshHpcHost | quote }}
+  local HPC_REMOTE_HOST={{ .sshHpcHost | quote }}
   grem "$@"
 }
 
 prem-gpu() {
   emulate -L zsh
-  local GPU_REMOTE_HOST={{ .sshGpuHost | quote }}
+  local HPC_REMOTE_HOST={{ .sshGpuHost | quote }}
   prem "$@"
 }
 
 prem-hpc() {
   emulate -L zsh
-  local GPU_REMOTE_HOST={{ .sshHpcHost | quote }}
+  local HPC_REMOTE_HOST={{ .sshHpcHost | quote }}
   prem "$@"
 }
 
 sftp-gpu() {
   emulate -L zsh
-  local GPU_REMOTE_HOST={{ .sshGpuHost | quote }}
+  local HPC_REMOTE_HOST={{ .sshGpuHost | quote }}
   cdcluster
 }
 
 sftp-hpc() {
   emulate -L zsh
-  local GPU_REMOTE_HOST={{ .sshHpcHost | quote }}
+  local HPC_REMOTE_HOST={{ .sshHpcHost | quote }}
   cdcluster
 }
