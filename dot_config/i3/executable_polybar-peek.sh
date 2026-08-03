@@ -8,15 +8,11 @@ set -u
 DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_polybar-common.sh"
 
-PEEK_DURATION_MS="${I3_POLYBAR_PEEK_MS:-250}"
+PEEK_DURATION_MS="${I3_POLYBAR_PEEK_MS:-200}"
 case "$PEEK_DURATION_MS" in
-  '' | *[!0-9]*) PEEK_DURATION_MS=250 ;;
+  '' | *[!0-9]*) PEEK_DURATION_MS=200 ;;
 esac
-[ "$PEEK_DURATION_MS" -gt 0 ] || PEEK_DURATION_MS=250
-
-now_ms() {
-  date +%s%3N
-}
+[ "$PEEK_DURATION_MS" -gt 0 ] || PEEK_DURATION_MS=200
 
 write_trigger() {
   local tmp="$POLYBAR_PEEK_TRIGGER.$$"

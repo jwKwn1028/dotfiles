@@ -554,7 +554,14 @@ reload/restart and after a manual `Super+Shift+P` layout refresh.
 - If showing the bar and IPC is unavailable, relaunches Polybar using the
   launch script.
 - Polls the X server through `xdotool` and `xwininfo` until the requested
-  visibility is reflected.
+  visibility is reflected, for at most 800 milliseconds. Polybar acts on a
+  visibility command as soon as it receives it, so a state that has not landed
+  by then is not slow but unreachable — with a fullscreen window on every
+  output there is no bar left that i3 will map. The poll holds the shared
+  control lock, and every other bar binding gives up on that lock after two
+  seconds, so a longer budget would not buy patience; it would drop the next
+  keypresses and pointer peeks instead, which is what made the bar keys look
+  wedged until i3 was reloaded.
 - Raises visible Polybar windows so they stay above existing windows.
 - Calls `resnap.sh` so snapped windows shrink/grow with the usable screen area.
 - Uses a runtime lock to avoid concurrent toggles.
@@ -620,12 +627,12 @@ before entering their modes.
 bindings and hold-aware visibility for a standalone Super gesture:
 
 - It shows Polybar only when it was hidden before the workspace action.
-- It hides the bar after 0.25 seconds; repeated workspace keys extend the same
+- It hides the bar after 0.2 seconds; repeated workspace keys extend the same
   deadline instead of starting competing timers.
 - The duration is controlled by `I3_POLYBAR_PEEK_MS` in milliseconds and
-  defaults to `250`.
+  defaults to `200`.
 - A quick Super-only tap shows the bar on release for the same duration.
-- Holding only Super for 250 milliseconds shows the bar until Super is
+- Holding only Super for 200 milliseconds shows the bar until Super is
   released.
 - `I3_SUPER_HOLD_MS` can override the hold threshold; otherwise it follows
   `I3_POLYBAR_PEEK_MS`.
@@ -666,6 +673,14 @@ visible, and if the process dies the helper's worker hides the bar by itself.
 - Entering bar mode during an edge peek promotes the bar for the duration of
   the mode, and leaving the mode hides it again — a bar up only for a peek
   counts as hidden. See [Bar Mode](#bar-mode).
+- A monitor holding a fullscreen window does not peek. i3 unmaps that monitor's
+  dock for as long as the fullscreen lasts and will not map it back, so the
+  broadcast `show` could only raise the bar on the *other* screen, nowhere near
+  the pointer that asked for it — the two heads visibly disagreeing about
+  whether the bar is up. Reaching the top edge of a full-screen video therefore
+  does nothing, while the same gesture on the other head still works. The
+  gesture asks i3 once when the pointer arrives at the edge, not once per poll,
+  and re-arms on the same threshold a hold releases at.
 - It needs `python3-xlib`, which is in `.chezmoidata/packages.toml` for the
   `linuxmint-i3-x11` profile. Without it the watcher dies on import and the
   edge simply does nothing.

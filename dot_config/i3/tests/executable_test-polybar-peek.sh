@@ -159,7 +159,7 @@ assert_state visible
 assert_state hidden
 wait_for_peek_exit
 
-# Turning a hold into a chord starts the ordinary 250ms inactivity deadline.
+# Turning a hold into a chord starts the ordinary peek inactivity deadline.
 reset_case hidden
 "$ROOT/polybar-peek.sh" --hold-start "$$"
 sleep 0.3

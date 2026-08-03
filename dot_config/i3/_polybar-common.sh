@@ -15,6 +15,10 @@ export POLYBAR_PEEK_HOLD POLYBAR_PEEK_WORKER_LOCK
 
 mkdir -p "$SNAP_RUNTIME_DIR" 2>/dev/null || true
 
+now_ms() {
+  date +%s%3N
+}
+
 polybar_windows() {
   xdotool search --class '^[Pp]olybar$' 2>/dev/null || true
 }
@@ -65,24 +69,34 @@ polybar_set_state() {
 }
 
 # Print the last observed state. Return success if it reached the requested
-# state before the timeout and failure otherwise.
+# state before the deadline and failure otherwise.
+#
+# The budget is wall clock, and short on purpose. Polybar applies a visibility
+# command as soon as it receives it, so a state that has not landed within a
+# fraction of a second is not slow, it is unreachable: i3 unmaps a monitor's
+# dock while a fullscreen window sits on it and will not map it back until the
+# fullscreen ends. Polybar cannot override that -- its log says so on every
+# attempt, "Ignoring restack of i3 window (not needed when `override-redirect =
+# false`)" -- so with a fullscreen window on every output, no bar can become
+# viewable at all and the wait can only run out. The caller holds
+# POLYBAR_CONTROL_LOCK across it while every other entry point gives up on that
+# lock after two seconds, so an over-generous budget here buys no patience; it
+# drops the user's next keypresses and pointer peeks on the floor instead.
 polybar_wait_for_state() {
   local wanted="$1"
-  local attempts="${2:-80}"
-  local current
+  local budget_ms="${2:-800}"
+  local deadline current
 
-  while [ "$attempts" -gt 0 ]; do
+  deadline=$(( $(now_ms) + budget_ms ))
+  while :; do
     current=$(polybar_visible_value)
-    if [ "$current" = "$wanted" ]; then
-      printf '%s\n' "$current"
-      return 0
-    fi
+    [ "$current" = "$wanted" ] && break
+    [ "$(now_ms)" -ge "$deadline" ] && break
     sleep 0.025
-    attempts=$((attempts - 1))
   done
 
-  polybar_visible_value
-  return 1
+  printf '%s\n' "$current"
+  [ "$current" = "$wanted" ]
 }
 
 polybar_cancel_peek() {

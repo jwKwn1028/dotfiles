@@ -29,12 +29,13 @@ class Recorder:
     def __init__(self):
         self.events = []
 
-    def make(self, enter_px=2, leave_px=40):
+    def make(self, enter_px=2, leave_px=40, suppressed=None):
         return module.EdgeGesture(
             on_hold_start=lambda: self.events.append("start"),
             on_hold_end=lambda: self.events.append("end"),
             enter_px=enter_px,
             leave_px=leave_px,
+            suppressed=suppressed,
         )
 
 
@@ -103,6 +104,26 @@ def main() -> int:
     g.release()
     g.release()
     check(rec.events == ["start", "end"], f"release not idempotent: {rec.events}")
+
+    # A fullscreen window on the pointer's own monitor: i3 keeps that monitor's
+    # dock unmapped, so peeking would only raise the bar on the other screen.
+    calls = []
+
+    def external_is_fullscreen(monitors, x, y):
+        calls.append((x, y))
+        return x < 1920
+
+    rec = Recorder()
+    g = rec.make(suppressed=external_is_fullscreen)
+    for _ in range(5):
+        g.update(MONITORS, 500, 120)
+    check(rec.events == [], f"peeked over a fullscreen screen: {rec.events}")
+    check(len(calls) == 1, f"asked i3 once per poll, not once per entry: {calls}")
+
+    # Leaving the edge re-arms it, and the other head still peeks normally.
+    g.update(MONITORS, 500, 161)
+    g.update(MONITORS, 2500, 0)
+    check(rec.events == ["start"], f"free head should still peek: {rec.events}")
 
     print("PASS: top-edge peek gesture")
     return 0

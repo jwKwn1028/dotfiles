@@ -16,7 +16,7 @@ import time
 from collections.abc import Callable
 
 
-DEFAULT_HOLD_MS = 250
+DEFAULT_HOLD_MS = 200
 EVENT_RE = re.compile(r"\((RawKeyPress|RawKeyRelease)\)")
 DETAIL_RE = re.compile(r"^\s*detail:\s*(\d+)\s*$")
 

@@ -13,6 +13,7 @@ instead -- showing the bar puts it above the region, which reads as a leave.
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 from pathlib import Path
 import signal
@@ -40,12 +41,16 @@ class StopWatcher(Exception):
 class EdgeGesture:
     """Hysteresis over the pointer's distance from the top of its monitor."""
 
-    def __init__(self, on_hold_start, on_hold_end, enter_px, leave_px):
+    def __init__(
+        self, on_hold_start, on_hold_end, enter_px, leave_px, suppressed=None
+    ):
         self.on_hold_start = on_hold_start
         self.on_hold_end = on_hold_end
         self.enter_px = enter_px
         self.leave_px = leave_px
+        self.suppressed = suppressed or (lambda monitors, x, y: False)
         self.holding = False
+        self.blocked = False
 
     def update(self, monitors, x, y) -> None:
         top = monitor_top(monitors, x, y)
@@ -55,15 +60,29 @@ class EdgeGesture:
             return
 
         offset = y - top
-        if not self.holding:
-            if offset <= self.enter_px:
-                self.holding = True
-                self.on_hold_start()
-        elif offset > self.leave_px:
-            self.holding = False
-            self.on_hold_end()
+        if self.holding:
+            if offset > self.leave_px:
+                self.holding = False
+                self.on_hold_end()
+            return
+
+        if self.blocked:
+            # Re-arm on the same threshold a hold releases at, so a pointer
+            # parked at the top of a fullscreen screen asks i3 once rather than
+            # once per poll.
+            if offset > self.leave_px:
+                self.blocked = False
+            return
+
+        if offset <= self.enter_px:
+            if self.suppressed(monitors, x, y):
+                self.blocked = True
+                return
+            self.holding = True
+            self.on_hold_start()
 
     def release(self) -> None:
+        self.blocked = False
         if self.holding:
             self.holding = False
             self.on_hold_end()
@@ -75,6 +94,68 @@ def monitor_top(monitors, x, y):
         if mx <= x < mx + width and my <= y < my + height:
             return my
     return None
+
+
+def fullscreen_rects():
+    """Rects i3 currently has a fullscreen window in.
+
+    Workspace containers report a `fullscreen_mode` of their own accord even
+    with nothing fullscreen under them, so only a node holding an X11 window
+    counts.
+    """
+    try:
+        tree = json.loads(
+            subprocess.run(
+                ["i3-msg", "-t", "get_tree"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            ).stdout
+        )
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return []
+
+    rects = []
+    pending = [tree]
+    while pending:
+        node = pending.pop()
+        if not isinstance(node, dict):
+            continue
+        if node.get("window") is not None and node.get("fullscreen_mode"):
+            rect = node.get("rect") or {}
+            rects.append(
+                (
+                    rect.get("x", 0),
+                    rect.get("y", 0),
+                    rect.get("width", 0),
+                    rect.get("height", 0),
+                )
+            )
+        pending.extend(node.get("nodes") or [])
+        pending.extend(node.get("floating_nodes") or [])
+    return rects
+
+
+def monitor_is_fullscreen(monitors, x, y) -> bool:
+    """True when a fullscreen window covers the monitor under the pointer.
+
+    i3 unmaps that monitor's dock for as long as the fullscreen lasts and will
+    not map it back, so peeking there cannot reveal anything: the bar would come
+    up on the *other* screen instead, nowhere near the pointer that asked for
+    it. Leaving the two screens disagreeing about whether the bar is up is the
+    whole problem, so the gesture stays down.
+    """
+    for mx, my, width, height in monitors:
+        if mx <= x < mx + width and my <= y < my + height:
+            return any(
+                fx <= mx
+                and fy <= my
+                and fx + fw >= mx + width
+                and fy + fh >= my + height
+                for fx, fy, fw, fh in fullscreen_rects()
+            )
+    return False
 
 
 def read_monitors(root):
@@ -142,6 +223,7 @@ def main() -> int:
         on_hold_end=lambda: peek_command(script, holder_pid, "--hold-end"),
         enter_px=enter_px,
         leave_px=leave_px,
+        suppressed=monitor_is_fullscreen,
     )
 
     def stop(_signum, _frame):
