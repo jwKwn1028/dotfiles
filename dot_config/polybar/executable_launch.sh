@@ -88,12 +88,18 @@ launch_bar() {
     MONITOR="$monitor" setsid -f polybar --reload "$bar" >>"$log" 2>&1 9>&-
 }
 
+# X11 permits only one tray owner, so the icons live on the laptop panel and
+# stay there: an external output plugged in mid-session must not carry them off
+# to a screen that goes away when it is unplugged. Fall back to the primary
+# output on a machine with no internal panel.
 TRAY_OUTPUT="$PRIMARY"
 for monitor in "${ACTIVE_OUTPUTS[@]}"; do
-    if [ "$monitor" != "$PRIMARY" ]; then
-        TRAY_OUTPUT="$monitor"
-        break
-    fi
+    case "$monitor" in
+        eDP*|LVDS*)
+            TRAY_OUTPUT="$monitor"
+            break
+            ;;
+    esac
 done
 
 for monitor in "${ACTIVE_OUTPUTS[@]}"; do

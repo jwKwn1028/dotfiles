@@ -535,9 +535,9 @@ launch wait its timeout, find Polybar running, and exit without doing anything:
 no hotplugged monitor gets a bar, and the tray never gets reordered. It launches
 the full `main` bar
 on the XRandR primary output and an inherited `external` bar on every other
-active output. The first external output gets the `tray` bar; without an
-external output, the primary output gets it instead. Other outputs use the same
-layout without the tray because X11 permits only one tray owner.
+active output. The internal laptop panel (`eDP*`/`LVDS*`) gets the `tray` bar; on
+a machine without one, the primary output gets it instead. Other outputs use the
+same layout without the tray because X11 permits only one tray owner.
 
 `display-setup.sh` starts it after arranging the outputs on every i3
 reload/restart and after a manual `Super+Shift+P` layout refresh.
@@ -560,8 +560,9 @@ reload/restart and after a manual `Super+Shift+P` layout refresh.
 X11 has a single system-tray owner, so a tray can only ever appear on one
 monitor's bar, and what it holds are bitmaps the applets paint themselves —
 Polybar can neither mirror them onto the other bars nor restyle them. The
-launcher therefore assigns `[module/tray]` to the first external monitor, or
-to the primary monitor when no external is active.
+launcher therefore pins `[module/tray]` to the internal laptop panel, or to the
+primary monitor on a machine without one. Pinning it there keeps the icons on a
+screen that is always present: an external output can be unplugged mid-session.
 
 `nm-applet` supplies the graphical wifi menu and remains NetworkManager's
 secret agent for password prompts. `blueman-applet` supplies the Bluetooth

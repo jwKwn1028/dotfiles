@@ -51,3 +51,5 @@
 /.local/bin/touchpad
 /.local/bin/disable-trackpoint-middle-click
 {{ end -}}
+
+/prospect.md

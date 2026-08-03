@@ -108,10 +108,12 @@ EOF
 : >"$MOCK_STATE/applet-events"
 bash "$LAUNCHER"
 
-grep -Fqx 'eDP|closed|-f polybar --reload main' "$MOCK_STATE/launch-events" ||
-    { printf 'FAIL: primary bar was not launched on eDP\n' >&2; exit 1; }
-grep -Fqx 'HDMI-A-0|closed|-f polybar --reload tray' "$MOCK_STATE/launch-events" ||
-    { printf 'FAIL: tray bar was not launched on HDMI-A-0\n' >&2; exit 1; }
+# The tray is pinned to the internal panel, so eDP gets it even with an external
+# output attached, and the external output gets the trayless layout.
+grep -Fqx 'eDP|closed|-f polybar --reload tray' "$MOCK_STATE/launch-events" ||
+    { printf 'FAIL: tray bar was not launched on eDP\n' >&2; exit 1; }
+grep -Fqx 'HDMI-A-0|closed|-f polybar --reload external' "$MOCK_STATE/launch-events" ||
+    { printf 'FAIL: external bar was not launched on HDMI-A-0\n' >&2; exit 1; }
 if grep -Fq 'DP-1|' "$MOCK_STATE/launch-events"; then
     printf 'FAIL: a bar was launched on connected but inactive DP-1\n' >&2
     exit 1
@@ -133,7 +135,7 @@ grep -Fqx -- 'closed|-f blueman-tray' "$MOCK_STATE/applet-events" ||
 [ "$(grep -c '^probe ' "$MOCK_STATE/applet-events")" -ge 3 ] ||
     { printf 'FAIL: the redock did not wait for nm-applet\n' >&2; exit 1; }
 
-# With no external output, the primary bar owns the one X11 tray.
+# With no external output, the laptop panel still owns the one X11 tray.
 cat >"$MOCK_STATE/xrandr-output" <<'EOF'
 Screen 0: minimum 8 x 8, current 1920 x 1080, maximum 32767 x 32767
 eDP connected primary 1920x1080+0+0 (normal left inverted right x axis y axis)

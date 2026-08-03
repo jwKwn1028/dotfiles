@@ -22,3 +22,5 @@ dot_var/app/app.zen_browser.zen/
 
 __pycache__/
 *.py[cod]
+
+prospect.md
