@@ -73,10 +73,8 @@ printf '#!/bin/sh\nprintf "hide\\n" >> "%s"\n' "$IPC_LOG" \
 printf '#!/bin/sh\nexit 0\n' > "$TEST_TMP/resnap.sh"
 
 # bar-nav `eval`s these. Without stand-ins the "opens a window" case below
-# launches the real settings window onto the live session and leaves it there,
-# and a stop that reaches rofi would block the test on a real menu.
-for cmd in xfce4-power-manager-settings pavucontrol brightnessctl rofi \
-  i3lock i3-nagbar notify-send; do
+# launches the real settings window onto the live session and leaves it there.
+for cmd in xfce4-power-manager-settings pavucontrol brightnessctl notify-send; do
   printf '#!/bin/sh\nprintf "%s\\n" >> "%s"\n' "$cmd" "$IPC_LOG" \
     > "$TEST_TMP/bin/$cmd"
 done
@@ -225,6 +223,27 @@ for stop in 3 4; do
     [ -s "$MARKER" ] && fail "$action on tray stop $stop left its block painted"
   done
 done
+
+# The power stop expands the bar's own menu, the same thing a mouse click on the
+# icon does. Both halves of the pair get the action: the twin is the one on
+# screen while the cursor sits on the stop. The mode stays up -- an i3 mode grabs
+# the keyboard, not the pointer, so the mouse can still pick an entry.
+printf '5\n' > "$STATE"
+reset_log
+nav click
+logged '#powermenu.open.0' || fail "the power stop did not expand the bar's menu"
+logged '#powermenu-sel.open.0' || fail "the power stop skipped the visible twin"
+logged 'i3:mode "default"' && fail "the power stop left bar mode"
+[ -e "$STATE" ] || fail "the power stop closed the cursor"
+
+# Escape has to undo it: menu collapsed and the bar back to hidden, exactly as
+# Super+I found it.
+: > "$RESTORE"
+reset_log
+nav close
+logged '#powermenu.close' || fail "close left the power menu expanded"
+logged '#powermenu-sel.close' || fail "close left the twin's power menu expanded"
+logged 'hide' || fail "close did not put the bar back to hidden"
 
 # Buttons a module has no handler for do nothing at all.
 printf '0\n' > "$STATE"

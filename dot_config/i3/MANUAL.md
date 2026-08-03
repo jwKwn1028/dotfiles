@@ -265,17 +265,19 @@ and scroll handlers:
 `wifi` and `bluetooth` are tray icons. Their block is painted by
 `bar-nav-marker.py` rather than by Polybar, and `Return` on one is a real mouse
 click on the icon; see [NetworkManager Tray](#networkmanager-tray).
-| `powermenu` | Open the rofi power menu. | — | — |
+| `powermenu` | Expand the bar's power menu; pick from it with the mouse. | — | — |
 
 Workspaces are deliberately absent: `Super+1`–`Super+0` and `Super+Alt+H/L`
 already reach them.
 
-The bar's own power icon expands a `custom/menu` built for the mouse, and its
-entries cannot be highlighted individually. Bar mode therefore routes that stop
-through rofi — already this profile's launcher, and keyboard-native — offering
-lock, reboot, shut down, and exit i3. Reboot and exit i3 go through `i3-nagbar`
-first: the bar's own reboot icon has no prompt, but a stray `Return` is much
-easier to hit than a stray click. Shut down reuses `confirm-poweroff.sh`.
+`Return` on `powermenu` does exactly what a mouse click on the icon does: it
+expands the bar's `custom/menu`. The entries are drawn inside that one module,
+so no cursor stop can reach them and the mouse picks from there — an i3 mode
+grabs the keyboard, not the pointer.
+
+The mode stays up, unlike a stop that opens a window, so `Escape` still ends it
+the usual way: the menu collapses and the bar returns to whatever visibility it
+had before `Super+I`.
 
 ## XFWM-Style Snap System
 

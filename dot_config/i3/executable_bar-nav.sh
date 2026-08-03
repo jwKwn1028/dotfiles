@@ -40,7 +40,7 @@ click_left=(
   "power_menu"
 )
 # 1 = opens a window, which takes the keyboard, so the cursor closes first.
-click_left_opens=(0 0 1 0 0 1)
+click_left_opens=(0 0 1 0 0 0)
 
 # Shift+Return. Beyond pulseaudio, the two applets have their own right-click
 # menus -- nm-applet's networking toggles, blueman's send/setup entries -- which
@@ -54,18 +54,21 @@ click_right_opens=(0 1 0 0 0 0)
 scroll_down=("" "pactl set-sink-volume @DEFAULT_SINK@ -1%" "brightnessctl -q set 5%-" "" "" "")
 scroll_up=("" "pactl set-sink-volume @DEFAULT_SINK@ +1%" "brightnessctl -q set +5%" "" "" "")
 
-# The bar's power menu is built for the mouse; rofi gives the same actions to
-# the keyboard.
+# Return on the power stop, doing what a mouse click on the icon does: expand
+# the bar's own menu. Its entries live inside the one `custom/menu` module, so no
+# cursor stop can reach them and the mouse picks from here -- an i3 mode grabs
+# the keyboard, not the pointer. The mode stays up so Escape can put the bar back
+# the way it was, menu and all.
 power_menu() {
-  local choice
-  choice=$(printf 'lock\nreboot\nshut down\nexit i3\n' |
-    rofi -dmenu -i -p 'power') || return 0
-  case "$choice" in
-    lock) i3lock ;;
-    reboot) i3-nagbar -t warning -m 'Reboot?' -B 'Yes' 'systemctl reboot' ;;
-    'shut down') "$HOME/.config/polybar/scripts/confirm-poweroff.sh" ;;
-    'exit i3') i3-nagbar -t warning -m 'Exit i3?' -B 'Yes' 'i3-msg exit' ;;
-  esac
+  ipc powermenu open.0
+  ipc powermenu-sel open.0
+}
+
+# Collapse the power menu on both halves of the pair: whichever is on screen
+# owns the open menu, and that swaps as the cursor moves on and off the stop.
+menu_close_all() {
+  ipc powermenu close
+  ipc powermenu-sel close
 }
 
 ipc() {
@@ -233,6 +236,9 @@ close() {
   # clearing it afterwards could leave the last block painted on the bar.
   : >"$MARKER"
   rm -f "$STATE"
+  # An expanded power menu is mode state too: leaving has to put the bar back
+  # exactly as Super+I found it, not strand the menu open.
+  menu_close_all
   # Every twin, not just the selected one: a polybar restart mid-mode can leave
   # a pair out of step with the index file.
   reset_pairs
