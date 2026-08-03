@@ -275,9 +275,11 @@ expands the bar's `custom/menu`. The entries are drawn inside that one module,
 so no cursor stop can reach them and the mouse picks from there — an i3 mode
 grabs the keyboard, not the pointer.
 
-The mode stays up, unlike a stop that opens a window, so `Escape` still ends it
-the usual way: the menu collapses and the bar returns to whatever visibility it
-had before `Super+I`.
+The block goes as the menu opens: it stands for a cursor that cannot move within
+the entries, and it would paint over them as one unbroken wash. The mode stays
+up, unlike a stop that opens a window, so `Escape` still ends it the usual way:
+the menu collapses and the bar returns to whatever visibility it had before
+`Super+I`.
 
 ## XFWM-Style Snap System
 

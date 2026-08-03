@@ -157,10 +157,13 @@ workspace $ws3  output primary
 workspace $ws4  output primary
 workspace $ws5  output primary
 workspace $ws6  output primary
-workspace $ws7  output HDMI-A-0 DP-1 DP-2 nonprimary
-workspace $ws8  output HDMI-A-0 DP-1 DP-2 nonprimary
-workspace $ws9  output HDMI-A-0 DP-1 DP-2 nonprimary
-workspace $ws10 output HDMI-A-0 DP-1 DP-2 nonprimary
+# By keyword, not by name: the named outputs were this machine's and are already
+# stale (its external is DisplayPort-1), so `nonprimary` was carrying these on
+# its own. It is also what makes them right on any machine.
+workspace $ws7  output nonprimary
+workspace $ws8  output nonprimary
+workspace $ws9  output nonprimary
+workspace $ws10 output nonprimary
 
 bindsym $mod+1 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 1
 bindsym $mod+2 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 2

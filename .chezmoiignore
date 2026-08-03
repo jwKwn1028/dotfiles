@@ -38,6 +38,21 @@
 /.zsh/hxp-lib.zsh
 /.zsh/hxp-main.zsh
 
+# ─── Local-only state inside managed trees ─────────────────────────────────
+# The same set .gitignore keeps out of history, kept out of the target state
+# too. chezmoi reads the source *directory*, not git, so a file being untracked
+# is no protection: without this block `apply` overwrites live i3 session
+# snapshots with whatever was last `re-add`ed, and writes Python bytecode and
+# nested VCS/agent scaffolding into ~/.config.
+#
+# Ignoring never deletes a target, so the existing ~/.config/i3/resurrect* stay
+# where they are -- i3-resurrect keeps owning them, chezmoi stops.
+/.config/i3/resurrect*
+**/__pycache__
+**/.git
+**/.codex
+**/.agents
+
 # ─── Desktop profiles ─────────────────────────────────────────────────────
 # Mint's i3 tree is the X11 desktop. A machine on any other profile (a server,
 # or `none`) must not receive the X11 session files or helpers.

@@ -59,9 +59,13 @@ scroll_up=("" "pactl set-sink-volume @DEFAULT_SINK@ +1%" "brightnessctl -q set +
 # cursor stop can reach them and the mouse picks from here -- an i3 mode grabs
 # the keyboard, not the pointer. The mode stays up so Escape can put the bar back
 # the way it was, menu and all.
+#
+# Hand the stop back to its plain half first. The block stands for a cursor that
+# can no longer move within the menu, and it would sit over the open entries as
+# one unbroken wash. Moving on and back off re-selects the stop as usual.
 power_menu() {
+  deselect_module "$(current_index)"
   ipc powermenu open.0
-  ipc powermenu-sel open.0
 }
 
 # Collapse the power menu on both halves of the pair: whichever is on screen

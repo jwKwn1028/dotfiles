@@ -225,14 +225,17 @@ for stop in 3 4; do
 done
 
 # The power stop expands the bar's own menu, the same thing a mouse click on the
-# icon does. Both halves of the pair get the action: the twin is the one on
-# screen while the cursor sits on the stop. The mode stays up -- an i3 mode grabs
-# the keyboard, not the pointer, so the mouse can still pick an entry.
+# icon does. The twin goes first: its block would sit over the open entries, and
+# it stands for a cursor that cannot move within them anyway. The mode stays up
+# -- an i3 mode grabs the keyboard, not the pointer, so the mouse can still pick
+# an entry.
 printf '5\n' > "$STATE"
 reset_log
 nav click
+logged '#powermenu-sel.module_hide' || fail "the power stop kept its block"
+logged '#powermenu.module_show' || fail "the power stop did not restore the module"
 logged '#powermenu.open.0' || fail "the power stop did not expand the bar's menu"
-logged '#powermenu-sel.open.0' || fail "the power stop skipped the visible twin"
+logged '#powermenu-sel.open.0' && fail "the power stop expanded the hidden twin"
 logged 'i3:mode "default"' && fail "the power stop left bar mode"
 [ -e "$STATE" ] || fail "the power stop closed the cursor"
 
