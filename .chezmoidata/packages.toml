@@ -2,7 +2,7 @@
 # Edit these lists to add or remove software; chezmoi re-runs the installers
 # when this file changes.
 #
-# apt names target Linux Mint 22.3 / Ubuntu 24.04, pacman names CachyOS.
+# apt names target Linux Mint 22.3 / Ubuntu 24.04.
 
 [packages.apt]
 # PPAs added before the apt install pass (needed for packages not in the
@@ -53,63 +53,6 @@ i3_x11 = [
     "lightdm", "lightdm-settings", "light-locker",
 ]
 
-[packages.pacman]
-# Shared CLI and development tools. Names intentionally use pacman naming
-# rather than attempting to share the apt list: fd-find -> fd,
-# pkg-config -> pkgconf, and pipx -> python-pipx.
-common = [
-    "git", "git-lfs", "curl", "wget",
-    "base-devel", "cmake", "pkgconf",
-    "zsh", "tmux", "micro", "nano", "vim",
-    "helix",
-    # Typst LSP that dot_config/helix/languages.toml declares. Arch packages it,
-    # so prefer that over packages.cargo.git -- building it from the repo now
-    # fails on both distros because the repo grew several binary packages and
-    # `cargo install --git <url>` can no longer pick one unaided.
-    "tinymist",
-    "eza", "bat", "btop", "htop", "fastfetch",
-    "fd", "fzf", "ripgrep", "jq", "tree",
-    "unzip", "zip", "7zip", "bzip2", "gzip",
-    "nodejs", "npm", "python-pipx",
-    "ranger", "taskwarrior-tui",
-    "yazi", "starship", "zoxide",
-    "shellcheck",
-]
-
-# CachyOS owns the base Niri session; the meta package keeps that supported
-# stack intact. The shell is waybar + fuzzel, not noctalia-shell, but noctalia
-# stays installed -- it is a dependency of the meta package and the fallback
-# session. See CACHYOS_TRANSFER_GUIDE.md.
-niri_noctalia = [
-    "cachyos-niri-noctalia",
-    "flatpak",
-    "ghostty",
-    "wl-clipboard", "cliphist",
-    "brightnessctl", "playerctl", "pavucontrol", "blueman",
-    "zathura", "zathura-pdf-poppler",
-    "gimp", "vlc", "mpv",
-    # Desktop shell. waybar and fuzzel arrive as dependencies of the CachyOS
-    # meta package today, but this repo configures both, so they are named
-    # explicitly rather than left to a transitive dependency that could be
-    # dropped. mako/swaylock/swayidle replace the notification daemon, lock
-    # screen and idle handling that came with noctalia-shell.
-    "waybar", "fuzzel",
-    "mako", "swaylock", "swayidle",
-    # dot_config/fuzzel/fuzzel.ini and dot_config/mako/config name this icon
-    # theme, following dot_config/rofi/spotlight.rasi.
-    "papirus-icon-theme",
-    # nm-applet for waybar's tray, and nm-connection-editor for the network
-    # module's click action. Mirrors the i3 profile's network-manager-gnome.
-    "network-manager-applet",
-    # Fonts named by dot_config/ghostty/config. Hack Nerd Font Mono carries the
-    # icon glyphs starship and the CLI tools draw -- without it they render as
-    # tofu. Noto CJK covers the Korean fallback.
-    # NewComputerModernMono10 and NanumGothicCoding are AUR-only on Arch, so
-    # run_once_after_50-install-fonts.sh installs them from upstream archives
-    # instead -- see the font note in CACHYOS_TRANSFER_GUIDE.md.
-    "ttf-jetbrains-mono-nerd", "ttf-hack-nerd", "noto-fonts-cjk",
-]
-
 [packages.flatpak]
 # Installed only when class == "desktop", from Flathub.
 apps = [
@@ -131,9 +74,8 @@ apps = [
 #
 # Every entry carries `bin`, the command the crate installs, which is often not
 # the crate name (yazi-fm -> yazi, cargo-update -> cargo-install-update).
-# Provisioning skips a crate whose `bin` is already on PATH, so one shared list
-# stays correct on both distros: pacman ships eza and yazi and is skipped, apt
-# ships neither so cargo builds them.
+# Provisioning skips a crate whose `bin` is already on PATH, so a distro that
+# packages one of these is not made to rebuild it from source.
 
 # `cargo install --locked <crate>` from crates.io.
 # eza = modern ls; the rest are Helix LSPs / formatters + utilities.
@@ -159,7 +101,7 @@ git = [
     { url = "https://github.com/rtk-ai/rtk",                     bin = "rtk" },
     # markdown LSP
     { url = "https://github.com/Feel-ix-343/markdown-oxide.git", bin = "markdown-oxide" },
-    # typst LSP; Arch packages this as `tinymist`, so it is skipped there.
+    # typst LSP
     { url = "https://github.com/Myriad-Dreamin/tinymist",        bin = "tinymist", package = "tinymist-cli" },
     # tdf terminal PDF viewer
     { url = "https://github.com/itsjunetime/tdf.git",            bin = "tdf" },

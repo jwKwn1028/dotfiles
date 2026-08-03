@@ -1,9 +1,4 @@
 {{- $credentialHelper := "/usr/share/doc/git/contrib/credential/libsecret/git-credential-libsecret" -}}
-{{- if eq .chezmoi.os "linux" -}}
-{{-   if eq .chezmoi.osRelease.id "cachyos" -}}
-{{-     $credentialHelper = "/usr/lib/git-core/git-credential-libsecret" -}}
-{{-   end -}}
-{{- end -}}
 [user]
 	email = {{ if hasKey . "email" }}{{ .email }}{{ else }}217174958+jwKwn1028@users.noreply.github.com{{ end }}
 	name = {{ if hasKey . "name" }}{{ .name }}{{ else }}jwKwn1028{{ end }}

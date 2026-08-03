@@ -13,9 +13,9 @@ if ! command -v cargo >/dev/null 2>&1; then
 fi
 # Must be an `if`, not `[ -f ... ] && . ...`: under `set -e` that one-liner
 # aborts the whole script when the file is absent, which happens whenever cargo
-# came from the distro (pacman's `rust`) rather than from rustup. Everything
-# below -- crates, starship, zoxide, Miniconda -- would then be skipped with no
-# error shown.
+# came from a distro package rather than from rustup. Everything below --
+# crates, starship, zoxide, Miniconda -- would then be skipped with no error
+# shown.
 if [ -f "$HOME/.cargo/env" ]; then
     # shellcheck disable=SC1091
     . "$HOME/.cargo/env"
@@ -23,9 +23,7 @@ fi
 
 # --- cargo crates from crates.io ---
 # Skipped when the crate's binary is already on PATH, so a tool the distro
-# packages is not rebuilt from source. On CachyOS pacman supplies eza and yazi,
-# and building them again is slow at best -- yazi-fm does not currently compile
-# at all against the packaged toolchain.
+# packages is not rebuilt from source.
 {{- range .packages.cargo.registry }}
 if command -v {{ .bin }} >/dev/null 2>&1; then
     echo "  {{ .bin }} already present; skipping crate {{ .crate }}"

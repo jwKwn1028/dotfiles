@@ -8,8 +8,7 @@ Guidance for agents working in this repository. Canonical for every agent tool;
 The [chezmoi](https://chezmoi.io) **source directory** for this machine — not a
 normal project. It carries both configuration (dotfiles) and provisioning
 (`run_once_*` scripts that install the software those configs are for).
-Targets: Linux Mint 22.3 / Ubuntu 24.04 with i3/X11, and CachyOS with
-Niri/Noctalia. See `README.md`.
+Targets Linux Mint 22.3 / Ubuntu 24.04 with i3/X11. See `README.md`.
 
 ## Editing rules
 
@@ -38,53 +37,19 @@ before creating files with a new prefix.
 
 Software lists live in `.chezmoidata/packages.toml`, consumed by the
 `run_once_*` scripts and gated on `class` (`desktop` | `server`) from
-`.chezmoi.toml.tmpl` plus `desktopProfile`
-(`linuxmint-i3-x11` | `cachyos-niri-noctalia` | `none`). Add software by
-editing that manifest, not by editing the install scripts — they re-run on the
-next `apply` when the data changes.
+`.chezmoi.toml.tmpl` plus `desktopProfile` (`linuxmint-i3-x11` | `none`). Add
+software by editing that manifest, not by editing the install scripts — they
+re-run on the next `apply` when the data changes.
 
 `packages.apt` names are for Mint 22.3 / Ubuntu 24.04; verify with
-`apt-cache policy <pkg>`. `packages.pacman` names must exist in the configured
-CachyOS/Arch repositories; verify with `pacman -Si <pkg>`. Do not put AUR-only
-packages into the official pacman list or assume an AUR helper is installed.
-
-## The CachyOS Niri profile
-
-For any task that changes or evaluates the CachyOS setup, read
-[`CACHYOS_TRANSFER_GUIDE.md`](CACHYOS_TRANSFER_GUIDE.md) first. It defines the
-safe first apply, the package/configuration boundary, and what Noctalia data
-must remain local.
-
-The desktop is Niri plus a shell of separate programs — **waybar** (bar),
-**fuzzel** (launcher and session menu), **mako**, **swaylock**, **swayidle** —
-which deliberately mirror the Mint profile's Polybar and rofi. CachyOS's
-**noctalia-shell** is installed but not started; it is the fallback.
-
-- Treat CachyOS Niri as a separate desktop profile, not as a mechanical port
-  of i3.
-- Keep `dot_config/i3/`, Polybar, Picom, Rofi, and the X11 helpers unchanged
-  unless the user explicitly asks to change or retire the Mint profile.
-- `dot_config/waybar/` and `dot_config/fuzzel/` are transcriptions of
-  `dot_config/polybar/config.ini` and `dot_config/rofi/spotlight.rasi`. When
-  either side changes, keep the pair in step and say in the file which
-  polybar/rofi option a value came from.
-- Package provisioning comes first. Capture desktop configuration only after
-  the CachyOS-packaged session works.
-- Do not uninstall `noctalia-shell` or `cachyos-alacritty-config`: both are
-  dependencies of the `cachyos-niri-noctalia` meta package.
-- Never manage `~/.local/state/noctalia/` or `~/.cache/noctalia/`; they contain
-  application-owned state, generated material, and potentially private data.
-- Validate with `niri validate`, `fuzzel --check-config`, and by starting
-  waybar and reading its log — waybar reports CSS and JSON errors on startup
-  instead of exiting non-zero.
+`apt-cache policy <pkg>`.
 
 ## The Mint X11 → Sway transition
 
 The Mint desktop is X11/i3, and much of it is deeply X11-coupled (`xrandr`,
 `xdotool`, `xinput`, Polybar, `i3-resurrect`). If a task proposes adding Sway
 as a second session on Mint, read
-[`X11_TO_WAYLAND_TRANSITION.md`](X11_TO_WAYLAND_TRANSITION.md) first. That
-document is not the CachyOS/Niri transfer plan.
+[`X11_TO_WAYLAND_TRANSITION.md`](X11_TO_WAYLAND_TRANSITION.md) first.
 
 Standing rules from that document:
 

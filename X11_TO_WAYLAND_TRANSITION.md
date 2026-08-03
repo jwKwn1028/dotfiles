@@ -1,8 +1,7 @@
 # X11 to Wayland Transition Notes
 
 > This document is the plan for adding a Sway-style Wayland session beside i3
-> on the Mint/Ubuntu profile. CachyOS uses a separate Niri/Noctalia profile;
-> follow `CACHYOS_TRANSFER_GUIDE.md` for that machine.
+> on the Mint/Ubuntu profile, the only profile this repo carries.
 
 This repository currently contains a working X11/i3 desktop profile. Future
 agents should treat it as a known-good fallback and add a parallel Wayland
@@ -49,9 +48,8 @@ polybar, picom, rofi, feh, flameshot, xdotool, wmctrl, xclip, xsel, lightdm,
 light-locker — and is gated on `class == "desktop"` plus
 `desktopProfile == "linuxmint-i3-x11"`, prompted in `.chezmoi.toml.tmpl`.
 
-During this Mint-only transition, add the Wayland packages to the same
-`i3_x11` list rather than the CachyOS pacman list. Having both stacks installed
-at once is what makes the X11 fallback real:
+Add the Wayland packages to the same `i3_x11` list. Having both stacks
+installed at once is what makes the X11 fallback real:
 
 ```toml
 # .chezmoidata/packages.toml, appended to [packages.apt] i3_x11
@@ -78,8 +76,8 @@ make Sway independently selectable or to retire the combined fallback.
 
 Further notes:
 
-- `.chezmoiignore` already routes i3 and Niri trees by desktop profile. Any
-  future Sway tree needs an explicit Mint-profile rule before it is added.
+- `.chezmoiignore` already routes the i3 tree by desktop profile. Any future
+  Sway tree needs an explicit Mint-profile rule before it is added.
 - `light-locker` is X11-only and pairs with lightdm. Sway uses
   `swayidle`/`swaylock` instead. Leave light-locker installed for the fallback.
 - A Sway session needs a greeter entry. The `sway` package ships a

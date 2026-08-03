@@ -2,15 +2,13 @@
 {{ $class := "desktop" -}}
 {{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
 # Installs the fonts the desktop configs name by family:
-#   - NewComputerModernMono10 : ghostty primary face; rofi/fuzzel launcher
-#   - NewComputerModernSans10 : polybar's font-0 and waybar's bar font
+#   - NewComputerModernMono10 : ghostty primary face; rofi launcher font
+#   - NewComputerModernSans10 : polybar's font-0
 #   - NanumGothicCoding       : Korean monospace fallback in ghostty
-#   - JetBrainsMono Nerd Font : icon glyphs used by polybar/waybar/starship
+#   - JetBrainsMono Nerd Font : icon glyphs used by polybar and starship
 #
-# Installed to ~/.local/share/fonts from upstream archives, so one script
-# works on both distros. New Computer Modern takes an apt fast path because
-# Debian is the only distro packaging it. Hack Nerd Font Mono comes from
-# pacman instead -- see .chezmoidata/packages.toml.
+# Installed to ~/.local/share/fonts from upstream archives. New Computer
+# Modern takes an apt fast path because Debian packages it.
 set -euo pipefail
 
 {{ if ne $class "desktop" -}}
@@ -74,8 +72,8 @@ install_zip() {
 }
 
 # --- New Computer Modern (Mono + Sans) ---
-# Two faces from one archive: Mono is ghostty's primary face and the rofi /
-# fuzzel launcher font, Sans is the polybar and waybar bar font. Debian's
+# Two faces from one archive: Mono is ghostty's primary face and the rofi
+# launcher font, Sans is the polybar bar font. Debian's
 # fonts-newcomputermodern package carries both.
 if { ! have_family "NewComputerModernMono10" || ! have_family "NewComputerModernSans10"; } &&
     command -v apt-get >/dev/null 2>&1; then

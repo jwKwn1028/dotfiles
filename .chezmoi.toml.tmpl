@@ -8,11 +8,9 @@
 {{- if eq .chezmoi.os "linux" -}}
 {{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
 {{-     $desktopProfileDefault = "linuxmint-i3-x11" -}}
-{{-   else if eq .chezmoi.osRelease.id "cachyos" -}}
-{{-     $desktopProfileDefault = "cachyos-niri-noctalia" -}}
 {{-   end -}}
 {{- end -}}
-{{- $desktopProfile := promptStringOnce . "desktopProfile" "Desktop profile [linuxmint-i3-x11|cachyos-niri-noctalia|none]" $desktopProfileDefault -}}
+{{- $desktopProfile := promptStringOnce . "desktopProfile" "Desktop profile [linuxmint-i3-x11|none]" $desktopProfileDefault -}}
 {{- $context7 := promptStringOnce . "context7ApiKey" "Context7 API key (blank to skip)" "" -}}
 {{- $sshRemoteUser := promptStringOnce . "sshRemoteUser" "Remote SSH username" "" -}}
 {{- $sshGpuHost := promptStringOnce . "sshGpuHost" "GPU SSH host alias" "" -}}

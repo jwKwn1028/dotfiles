@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Shared CPU-load calculator for polybar's cpu module, waybar's, and the zsh
-# `sysmon` monitor, so all report the same number.
+# Shared CPU-load calculator for polybar's cpu module and the zsh `sysmon`
+# monitor, so both report the same number.
 #
 # Definition (matches top/htop/mpstat): load% = 100 * busy / total, where
 #   busy = total - (idle + iowait)      # iowait counts as idle, NOT as load

@@ -3,25 +3,10 @@
 {{- if eq .chezmoi.os "linux" -}}
 {{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
 {{-     $desktopProfile = "linuxmint-i3-x11" -}}
-{{-   else if eq .chezmoi.osRelease.id "cachyos" -}}
-{{-     $desktopProfile = "cachyos-niri-noctalia" -}}
 {{-   end -}}
 {{- end -}}
 {{- if hasKey . "desktopProfile" -}}
 {{-   $desktopProfile = .desktopProfile -}}
-{{- end -}}
-{{- /* Arch-family detection, used for packaging differences rather than for
-       desktop routing. CachyOS reports id "cachyos" / idLike "arch". */ -}}
-{{- $archFamily := false -}}
-{{- if eq .chezmoi.os "linux" -}}
-{{-   $id := .chezmoi.osRelease.id -}}
-{{-   $idLike := "" -}}
-{{-   if hasKey .chezmoi.osRelease "idLike" -}}
-{{-     $idLike = .chezmoi.osRelease.idLike -}}
-{{-   end -}}
-{{-   if or (eq $id "arch") (eq $id "cachyos") (contains "arch" $idLike) -}}
-{{-     $archFamily = true -}}
-{{-   end -}}
 {{- end }}
 
 # ─── Repo documentation ───────────────────────────────────────────────────
@@ -30,7 +15,6 @@
 # README.md elsewhere in the target tree still applies.
 /README.md
 /X11_TO_WAYLAND_TRANSITION.md
-/CACHYOS_TRANSFER_GUIDE.md
 /MACOS_PORTING_GUIDE.md
 /CHEZMOI_UPDATE_WORKFLOW.md
 /AGENTS.md
@@ -55,9 +39,8 @@
 /.zsh/hxp-main.zsh
 
 # ─── Desktop profiles ─────────────────────────────────────────────────────
-# Mint's i3 tree is a known-good X11 fallback. CachyOS uses the independently
-# installed Niri + Noctalia desktop and must not receive any of the X11
-# session files or helpers.
+# Mint's i3 tree is the X11 desktop. A machine on any other profile (a server,
+# or `none`) must not receive the X11 session files or helpers.
 {{ if ne $desktopProfile "linuxmint-i3-x11" -}}
 /.config/i3/
 /.config/polybar/
@@ -68,27 +51,3 @@
 /.local/bin/touchpad
 /.local/bin/disable-trackpoint-middle-click
 {{ end -}}
-
-# ─── Distro packaging differences ─────────────────────────────────────────
-# Arch/CachyOS ship Helix as `helix` with no `hx`; Debian and the upstream
-# tarball ship `hx`. The ~/.local/bin/hx compat symlink must exist only where
-# the distro omits the name, or it shadows the real binary.
-{{ if not $archFamily -}}
-/.local/bin/hx
-{{ end -}}
-
-# Niri and its desktop shell belong only to the CachyOS profile: waybar and
-# fuzzel are the Wayland counterparts of the Mint profile's polybar and rofi,
-# and land on exactly the machines that do not get those. Noctalia's runtime
-# state and cache remain local on every profile.
-{{ if ne $desktopProfile "cachyos-niri-noctalia" -}}
-/.config/niri/
-/.config/noctalia/
-/.config/waybar/
-/.config/fuzzel/
-/.config/mako/
-/.config/swaylock/
-/.local/bin/session-menu
-{{ end -}}
-/.local/state/noctalia/
-/.cache/noctalia/
