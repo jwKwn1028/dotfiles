@@ -1,7 +1,14 @@
 # ~/.bashrc — ported to mirror ~/.zshrc behavior where bash allows.
+#
+# Deliberately ONE file, unlike zsh's ~/.zsh/rc.d/ modules: zsh is the login
+# shell and 3x this size, and its split also buys per-module zcompile, which
+# bash has no equivalent for. Section order here matches the rc.d numbering so
+# each block has an obvious zsh counterpart.
+#
 # No bash equivalent (intentionally omitted): zsh-helix-mode modal editing,
-# zsh-autosuggestions, zsh-syntax-highlighting, zcompile, and the
-# AUTO_PUSHD-based `cd --`/`cd +N` multi-dash trick.
+# zsh-autosuggestions, zsh-syntax-highlighting, zcompile, the AUTO_PUSHD-based
+# `cd --`/`cd +N` multi-dash trick, the global alias `Y` (bash has no global
+# aliases), and 30-aliases.zsh's generated tt/tn Taskwarrior shortcuts.
 
 # Bash-only file. If a different shell (e.g. zsh) sources it, bail out at once
 # so it doesn't choke on shopt/bind/complete/etc.
@@ -118,8 +125,65 @@ export PATH
 # --------------------------------------------------------
 # Editor / env
 # --------------------------------------------------------
+# Collected here to mirror ~/.zshenv, which groups the same exports. Bash has
+# no ~/.zshenv equivalent (BASH_ENV only fires for non-interactive shells), so
+# they stay in this file behind the interactive guard.
 export EDITOR=hx
 export VISUAL=hx
+export MICRO_TRUECOLOR=1
+export BAT_THEME="tokyonight_storm"
+export ZK_EDITOR="hx"
+
+# --------------------------------------------------------
+# Shared helpers (mirrors ~/.zsh/rc.d/_lib.zsh)
+# --------------------------------------------------------
+# _have <cmd> -> succeeds if <cmd> is an external command on PATH.
+_have() { type -P -- "$1" >/dev/null 2>&1; }
+
+# Resolve tool variants once so every block below agrees on the same binary.
+#   $_bash_fd  -> fd | fdfind | ''   (Debian/Ubuntu package fd as fdfind)
+#   $_bash_bat -> bat | batcat | cat
+if   _have fd;     then _bash_fd=fd
+elif _have fdfind; then _bash_fd=fdfind
+else                    _bash_fd=
+fi
+if   _have bat;    then _bash_bat=bat
+elif _have batcat; then _bash_bat=batcat
+else                    _bash_bat='cat'
+fi
+
+# _bash_ls_files [-d] [ext]
+#   Print candidate paths under $PWD: hidden included, .git pruned,
+#   .gitignore NOT honored (fd would otherwise hide files the find(1)
+#   fallback lists, making the same call differ per machine).
+#   -d lists directories instead; ext restricts to files with that
+#   extension (case-insensitive).
+_bash_ls_files() {
+  local kind=file ext
+  local -a cmd
+  [ "$1" = -d ] && { kind=dir; shift; }
+  ext="$1"
+
+  if [ -n "$_bash_fd" ]; then
+    cmd=("$_bash_fd" --hidden --no-ignore --exclude .git --strip-cwd-prefix)
+    if [ "$kind" = dir ]; then
+      cmd+=(--type d)
+    elif [ -n "$ext" ]; then
+      cmd+=(-e "$ext")
+    fi
+    "${cmd[@]}"
+  else
+    cmd=(find . -mindepth 1)
+    if [ "$kind" = dir ]; then
+      cmd+=(-type d)
+    else
+      cmd+=(-type f)
+      [ -n "$ext" ] && cmd+=(-iname "*.$ext")
+    fi
+    cmd+=(-not -path '*/.git' -not -path '*/.git/*' -print)
+    "${cmd[@]}" | sed 's|^\./||'
+  fi
+}
 
 # --------------------------------------------------------
 # Aliases
@@ -130,13 +194,40 @@ alias c='code .'
 alias h='hx .'
 alias z='zed .'
 alias vi='vim'
+alias mu='micro'
 alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
-command -v batcat >/dev/null 2>&1 && alias bat='batcat'
-type -P fdfind >/dev/null 2>&1 && alias fd='fdfind'
+[ "$_bash_bat" = batcat ] && alias bat='batcat'
+[ "$_bash_fd" = fdfind ] && alias fd='fdfind'
+alias ':q'='exit'
 alias hb='${EDITOR:-hx} ~/.bashrc'
 alias sb='source ~/.bashrc && echo "Bash config reloaded."'
 alias scpo='echo "shutting down..." && systemctl poweroff'
 alias scrb='echo "reboot ..." && systemctl reboot'
+
+# Auto-list on cd (bash chpwd equivalent; mirrors _auto_ls in
+# ~/.zsh/rc.d/35-navigation.zsh).
+#
+# Names only: the `ls` alias above adds --long --git, which costs a git status
+# per file. This runs on every directory change, so it stays a plain grid --
+# one fork, no git.
+#
+# Skipped past AUTO_LS_MAX entries so `cd /usr/bin` does not scroll the screen
+# away. Counted with a glob rather than `eza | wc -l` so the common case forks
+# once, not twice; dotfiles are excluded, matching eza's default.
+if _have eza; then
+  AUTO_LS_MAX=${AUTO_LS_MAX:-50}
+  __chpwd_last=$PWD
+  __chpwd_auto_ls() {
+    [[ $PWD == "$__chpwd_last" ]] && return
+    __chpwd_last=$PWD
+    local -a entries=(*)
+    (( ${#entries[@]} <= AUTO_LS_MAX )) && eza --color=auto --icons
+  }
+  case ";${PROMPT_COMMAND:-};" in
+    *";__chpwd_auto_ls;"*) ;;
+    *) PROMPT_COMMAND="__chpwd_auto_ls${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;
+  esac
+fi
 
 alias ..='cd ..'
 alias ...='cd ../..'
@@ -162,7 +253,7 @@ fi
 # --------------------------------------------------------
 # zoxide  (note: zsh's multi-dash `cd --`/+N needs AUTO_PUSHD; not ported)
 # --------------------------------------------------------
-if command -v zoxide >/dev/null 2>&1; then
+if _have zoxide; then
   eval "$(zoxide init bash --cmd cd)"
 fi
 
@@ -170,7 +261,7 @@ fi
 # ranger
 # --------------------------------------------------------
 r() {
-  command -v ranger >/dev/null 2>&1 || { echo "r: ranger not found" >&2; return 127; }
+  _have ranger || { echo "r: ranger not found" >&2; return 127; }
   local start_dir="${1:-$PWD}" tempfile dest
   tempfile="$(mktemp "${TMPDIR:-/tmp}/ranger-cd.XXXXXX")" || return 1
   command ranger --choosedir="$tempfile" -- "$start_dir"
@@ -184,7 +275,8 @@ alias rp='r "$HOME/Documents/Workspace/Project"'
 # Yazi
 # --------------------------------------------------------
 y() {
-  local tmp; tmp="$(mktemp -t yazi-cwd.XXXXXX)"
+  _have yazi || { echo "y: yazi not found" >&2; return 127; }
+  local tmp; tmp="$(mktemp -t yazi-cwd.XXXXXX)" || return 1
   yazi "$@" --cwd-file="$tmp"
   local cwd
   if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
@@ -197,78 +289,82 @@ alias yp='y "$HOME/Documents/Workspace/Project"'
 # --------------------------------------------------------
 # Universal Extract
 # --------------------------------------------------------
-ex () {
-  if [ -f "$1" ] ; then
-    case "$1" in
-      *.tar.bz2)   tar xjf "$1"   ;;
-      *.tar.gz)    tar xzf "$1"   ;;
-      *.bz2)       bunzip2 "$1"   ;;
-      *.rar)       unrar x "$1"   ;;
-      *.gz)        gunzip "$1"    ;;
-      *.tar)       tar xf "$1"    ;;
-      *.tbz2)      tar xjf "$1"   ;;
-      *.tgz)       tar xzf "$1"   ;;
-      *.zip)       unzip "$1"     ;;
-      *.Z)         uncompress "$1";;
-      *.7z)        7z x "$1"      ;;
-      *.tar.xz)    tar xJf "$1"   ;;
-      *.xz)        unxz "$1"      ;;
-      *)           echo "'$1' cannot be extracted via ex()" ;;
-    esac
-  else
-    echo "'$1' is not a valid file"
-  fi
+ex() {
+  (( $# )) || { echo "usage: ex <archive>..." >&2; return 2; }
+  local a
+  for a in "$@"; do
+    [ -f "$a" ] || { echo "ex: '$a' is not a valid file" >&2; return 1; }
+    # tar.* patterns must precede the bare-compressor ones so foo.tar.gz
+    # untars instead of merely gunzipping.
+    case "$a" in
+      *.tar.bz2)        tar xjf "$a"        ;;
+      *.tar.gz)         tar xzf "$a"        ;;
+      *.tar.xz)         tar xJf "$a"        ;;
+      *.tar.zst|*.tzst) tar --zstd -xf "$a" ;;
+      *.tar)            tar xf "$a"         ;;
+      *.tbz2)           tar xjf "$a"        ;;
+      *.tgz)            tar xzf "$a"        ;;
+      *.bz2)            bunzip2 "$a"        ;;
+      *.gz)             gunzip "$a"         ;;
+      *.xz)             unxz "$a"           ;;
+      *.zst)            unzstd "$a"         ;;
+      *.rar)            unrar x "$a"        ;;
+      *.zip)            unzip "$a"          ;;
+      *.Z)              uncompress "$a"     ;;
+      *.7z)             7z x "$a"           ;;
+      *)                echo "ex: don't know how to extract '$a'" >&2; return 1 ;;
+    esac || return
+  done
 }
 
 # --------------------------------------------------------
 # fzf integration
 # --------------------------------------------------------
-if command -v fzf >/dev/null 2>&1; then
-  if type -P fd >/dev/null 2>&1; then
-    export FZF_DEFAULT_COMMAND='fd --hidden --follow --exclude .git --type f'
-    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
-    export FZF_ALT_C_COMMAND='fd --hidden --follow --exclude .git --type d'
-    _fzf_compgen_path() { fd --hidden --follow --exclude .git . "$1"; }
-    _fzf_compgen_dir()  { fd --hidden --follow --exclude .git --type d . "$1"; }
-  elif type -P fdfind >/dev/null 2>&1; then
-    export FZF_DEFAULT_COMMAND='fdfind --hidden --follow --exclude .git --type f'
-    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
-    export FZF_ALT_C_COMMAND='fdfind --hidden --follow --exclude .git --type d'
-    _fzf_compgen_path() { fdfind --hidden --follow --exclude .git . "$1"; }
-    _fzf_compgen_dir()  { fdfind --hidden --follow --exclude .git --type d . "$1"; }
-  elif type -P rg >/dev/null 2>&1; then
+# Uses $_bash_fd / $_bash_bat (resolved once above) instead of the old
+# per-block fd -> fdfind -> rg -> find ladder. Mirrors ~/.zsh/rc.d/40-fzf.zsh.
+if _have fzf; then
+  if [ -n "$_bash_fd" ]; then
+    export FZF_DEFAULT_COMMAND="$_bash_fd --hidden --follow --exclude .git --type f"
+    export FZF_ALT_C_COMMAND="$_bash_fd --hidden --follow --exclude .git --type d"
+    _fzf_compgen_path() { "$_bash_fd" --hidden --follow --exclude .git . "$1"; }
+    _fzf_compgen_dir()  { "$_bash_fd" --hidden --follow --exclude .git --type d . "$1"; }
+  elif _have rg; then
     export FZF_DEFAULT_COMMAND='rg --files --no-ignore --hidden --glob "!.git/*"'
-    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
     export FZF_ALT_C_COMMAND='find . -type d -not -path "*/.git/*"'
     _fzf_compgen_path() { rg --files --no-ignore --hidden --glob '!.git/*' "${1:-.}"; }
     _fzf_compgen_dir()  { find "${1:-.}" -type d -not -path '*/.git/*'; }
   else
     export FZF_DEFAULT_COMMAND='find . -type f -not -path "*/.git/*"'
-    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
     export FZF_ALT_C_COMMAND='find . -type d -not -path "*/.git/*"'
     _fzf_compgen_path() { find "${1:-.}" -not -path '*/.git/*'; }
     _fzf_compgen_dir()  { find "${1:-.}" -type d -not -path '*/.git/*'; }
   fi
+  export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 
-  _highlighter="cat"
-  if type -P bat >/dev/null 2>&1; then _highlighter="bat"
-  elif type -P batcat >/dev/null 2>&1; then _highlighter="batcat"; fi
+  # Scratch vars stay out of the session: plain `cat` takes none of bat's flags,
+  # so the highlighter line is built rather than interpolated blindly.
+  _fzf_preview_opts() {
+    local highlight='cat -- {}'
+    [ "$_bash_bat" != cat ] &&
+      highlight="$_bash_bat --color=always --style=numbers --line-range=:500 -- {}"
 
-  _prev_cmd="
+    local prev_cmd="
     if [ -d {} ]; then
       eza --tree --level=2 --color=always --icons --group-directories-first -- {};
     elif echo {} | grep -iq '\.pdf\$'; then
       pdftotext -f 1 -l 10 -- {} - 2>/dev/null;
     else
-      ${_highlighter} --color=always --style=numbers --line-range=:500 -- {};
+      ${highlight};
     fi"
 
-  export FZF_DEFAULT_OPTS="
+    export FZF_DEFAULT_OPTS="
     --height 60%
     --layout=reverse
     --border
-    --preview 'sh -c \"${_prev_cmd//$'\n'/ }\"'"
-  unset _highlighter _prev_cmd
+    --preview 'sh -c \"${prev_cmd//$'\n'/ }\"'"
+  }
+  _fzf_preview_opts
+  unset -f _fzf_preview_opts
 fi
 
 # Source fzf keybindings + completion (Ctrl-T, Ctrl-R, Alt-C, **<Tab>)
@@ -299,77 +395,81 @@ hf() {
 # --------------------------------------------------------
 # PDF / EPUB openers (fzf)
 # --------------------------------------------------------
-so() {
-  local file viewer
-  command -v fzf >/dev/null 2>&1 || { echo "so: fzf not found" >&2; return 127; }
-  if command -v sioyek >/dev/null 2>&1; then viewer=sioyek
-  elif command -v zathura >/dev/null 2>&1; then viewer=zathura
-  else echo "so: neither sioyek nor zathura installed" >&2; return 127; fi
+# One implementation; so/zo just choose the preferred viewer:
+#   so -> sioyek first, zathura as fallback
+#   zo -> zathura first, sioyek as fallback
+# With a path argument the viewer opens it directly; bare, fzf picks.
+# Mirrors _zsh_open_pdf in ~/.zsh/rc.d/45-openers.zsh.
+_bash_open_pdf() {
+  local caller="${FUNCNAME[1]:-open-pdf}"
+  local prefer="$1" viewer='' v file
+  local -a order
+  shift
 
-  if type -P fd >/dev/null 2>&1; then
-    file="$(fd -e pdf --hidden --exclude .git | fzf --prompt='Open PDF> ')" || return 1
-  elif type -P fdfind >/dev/null 2>&1; then
-    file="$(fdfind -e pdf --hidden --exclude .git | fzf --prompt='Open PDF> ')" || return 1
+  case "$prefer" in
+    zathura) order=(zathura sioyek) ;;
+    *)       order=(sioyek zathura) ;;
+  esac
+  for v in "${order[@]}"; do
+    if _have "$v"; then
+      viewer="$v"
+      break
+    fi
+  done
+  [ -n "$viewer" ] || {
+    echo "$caller: neither sioyek nor zathura installed" >&2
+    return 127
+  }
+
+  if [ -n "$1" ]; then
+    file="$1"
+    [ -f "$file" ] || { echo "$caller: '$file' not found" >&2; return 1; }
   else
-    file="$(find . -type f -iname '*.pdf' -not -path '*/.git/*' -print | sed 's|^\./||' | fzf --prompt='Open PDF> ')" || return 1
+    _have fzf || { echo "$caller: fzf not found" >&2; return 127; }
+    file="$(_bash_ls_files pdf | fzf --prompt='Open PDF> ')" || return
+    [ -n "$file" ] || return 1
   fi
-  [ -n "$file" ] || return 1
 
   case "$viewer" in
+    # --new-window overrides our hxp-tuned `should_launch_new_window 0` pref so
+    # ad-hoc browsing opens each PDF in its own window instead of replacing
+    # the hxp preview window.
     sioyek)  nohup sioyek --new-window "$file" >/dev/null 2>&1 & ;;
     zathura) nohup zathura "$file"             >/dev/null 2>&1 & ;;
   esac
 }
 
-zo() {
-  local file viewer
-  command -v fzf >/dev/null 2>&1 || { echo "zo: fzf not found" >&2; return 127; }
-  if command -v sioyek >/dev/null 2>&1; then viewer=zathura
-  elif command -v zathura >/dev/null 2>&1; then viewer=sioyek
-  else echo "zo: neither sioyek nor zathura installed" >&2; return 127; fi
-
-  if type -P fd >/dev/null 2>&1; then
-    file="$(fd -e pdf --hidden --exclude .git | fzf --prompt='Open PDF> ')" || return 1
-  elif type -P fdfind >/dev/null 2>&1; then
-    file="$(fdfind -e pdf --hidden --exclude .git | fzf --prompt='Open PDF> ')" || return 1
-  else
-    file="$(find . -type f -iname '*.pdf' -not -path '*/.git/*' -print | sed 's|^\./||' | fzf --prompt='Open PDF> ')" || return 1
-  fi
-  [ -n "$file" ] || return 1
-
-  case "$viewer" in
-    sioyek)  nohup sioyek --new-window "$file" >/dev/null 2>&1 & ;;
-    zathura) nohup zathura "$file"             >/dev/null 2>&1 & ;;
-  esac
-}
+so() { _bash_open_pdf sioyek "$@"; }
+zo() { _bash_open_pdf zathura "$@"; }
 
 bo() {
   local file
-  command -v fzf >/dev/null 2>&1 || { echo "bo: fzf not found" >&2; return 127; }
-  command -v ebook-viewer >/dev/null 2>&1 || { echo "bo: ebook-viewer not found" >&2; return 127; }
+  _have ebook-viewer || { echo "bo: ebook-viewer not found" >&2; return 127; }
 
-  if type -P fd >/dev/null 2>&1; then
-    file="$(fd -e epub --hidden --exclude .git | fzf --prompt='Open EPUB> ')" || return 1
-  elif type -P fdfind >/dev/null 2>&1; then
-    file="$(fdfind -e epub --hidden --exclude .git | fzf --prompt='Open EPUB> ')" || return 1
+  if [ -n "$1" ]; then
+    file="$1"
+    [ -f "$file" ] || { echo "bo: '$file' not found" >&2; return 1; }
   else
-    file="$(find . -type f -iname '*.epub' -not -path '*/.git/*' -print | sed 's|^\./||' | fzf --prompt='Open EPUB> ')" || return 1
+    _have fzf || { echo "bo: fzf not found" >&2; return 127; }
+    file="$(_bash_ls_files epub | fzf --prompt='Open EPUB> ')" || return
+    [ -n "$file" ] || return 1
   fi
-  [ -n "$file" ] || return 1
+
   nohup ebook-viewer "$file" >/dev/null 2>&1 &
 }
 
 # --------------------------------------------------------
 # Zk
 # --------------------------------------------------------
-export ZK_EDITOR="hx"
-
+# Previews use $_bash_bat (resolved above); plain `cat` takes none of bat's
+# flags, so the preview command is built rather than interpolated blindly.
 zn() {
-  local note _hl
-  _hl="$(type -P bat || type -P batcat || echo cat)"
+  local note preview='cat -- {}'
+  [ "$_bash_bat" != cat ] &&
+    preview="$_bash_bat --color=always --style=header,grid --line-range :500 {}"
   note=$(zk list --format path --sort modified- --quiet | fzf \
       --prompt='Notes> ' \
-      --preview "$_hl --color=always --style=header,grid --line-range :500 {}" \
+      --preview "$preview" \
       --preview-window=right:50%:wrap \
       --height=80% \
       --layout=reverse \
@@ -378,11 +478,12 @@ zn() {
 }
 
 zs() {
-  local note _hl
-  _hl="$(type -P bat || type -P batcat || echo cat)"
+  local note preview='cat -- {}'
+  [ "$_bash_bat" != cat ] &&
+    preview="$_bash_bat --color=always --style=header,numbers --line-range :500 {}"
   note=$(zk grep "$1" --format path --quiet | fzf \
       --prompt='Search Content> ' \
-      --preview "$_hl --color=always --style=header,numbers --line-range :500 {}" \
+      --preview "$preview" \
       --preview-window=right:50%:wrap \
       --header="Search: $1")
   [ -n "$note" ] && hx "$note"
@@ -404,7 +505,7 @@ tcheck () {
 # Clipboard helper: shared with tmux via ~/.local/bin/clipcopy
 # --------------------------------------------------------
 _clipcopy() {
-  if command -v clipcopy >/dev/null 2>&1; then
+  if _have clipcopy; then
     clipcopy
   else
     echo "_clipcopy: ~/.local/bin/clipcopy not found." >&2
@@ -421,18 +522,10 @@ crpf() {
 
 crpd() {
   local p
-  if type -P fd >/dev/null 2>&1; then
-    p="$(fd --type d --hidden --strip-cwd-prefix --exclude .git | fzf --prompt='dir> ')" || return 130
-  elif type -P fdfind >/dev/null 2>&1; then
-    p="$(fdfind --type d --hidden --strip-cwd-prefix --exclude .git | fzf --prompt='dir> ')" || return 130
-  else
-    p="$(find . -type d -not -path '*/.git/*' -print | sed 's|^\./||' | fzf --prompt='dir> ')" || return 130
-  fi
+  p="$(_bash_ls_files -d | fzf --prompt='dir> ')" || return 130
   printf '%s' "$p" | _clipcopy
   printf '%s\n' "$p"
 }
-
-export BAT_THEME="tokyonight_storm"
 
 # make less friendlier for non-text input
 [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
@@ -442,20 +535,42 @@ export BAT_THEME="tokyonight_storm"
 # --------------------------------------------------------
 [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
 
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$("$HOME/miniconda3/bin/conda" 'shell.bash' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "$HOME/miniconda3/etc/profile.d/conda.sh"
-    else
-        export PATH="$HOME/miniconda3/bin:$PATH"
-    fi
-fi
-unset __conda_setup
-# <<< conda initialize <<<
+# Lazy conda, mirroring ~/.zsh/conda-lazy.zsh. The `conda init` block this
+# replaces ran `conda shell.bash hook` (a python start-up) on every interactive
+# shell; these stubs pay that cost only when one of the tools is first used.
+lazy_conda_commands=(conda python pip jupyter mamba)
+
+_conda_init_lazy() {
+  local cmd conda_root="$HOME/miniconda3"
+
+  for cmd in "${lazy_conda_commands[@]}"; do
+    unalias "$cmd" 2>/dev/null
+    unset -f "$cmd" 2>/dev/null
+  done
+  unset -f _conda_init_lazy
+
+  [ -x "$conda_root/bin/conda" ] || {
+    echo "conda not found at $conda_root/bin/conda" >&2
+    return 127
+  }
+  eval "$("$conda_root/bin/conda" shell.bash hook 2>/dev/null)" || return 127
+
+  # auto_activate is off (~/.condarc); make sure the wrapped tools actually
+  # come from conda. Unless the command already resolves inside $conda_root,
+  # activate base first -- this covers both "not found" (python) and "shadowed
+  # by a system binary" (Ubuntu's /usr/bin/pip). `conda` itself is exempt: the
+  # hook defines it as a function.
+  if [ "$1" != conda ] && [[ "$(type -P -- "$1" 2>/dev/null)" != "$conda_root"/* ]]; then
+    conda activate base 2>/dev/null
+  fi
+
+  "$@"
+}
+
+for _lazy_cmd in "${lazy_conda_commands[@]}"; do
+  eval "${_lazy_cmd}() { _conda_init_lazy ${_lazy_cmd} \"\$@\"; }"
+done
+unset _lazy_cmd
 
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
@@ -473,4 +588,6 @@ esac
 # --------------------------------------------------------
 # Starship Prompt (must come last)
 # --------------------------------------------------------
-eval "$(starship init bash)"
+if _have starship; then
+  eval "$(starship init bash)"
+fi
