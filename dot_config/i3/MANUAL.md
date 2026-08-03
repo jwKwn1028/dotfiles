@@ -219,6 +219,10 @@ differs only by `${colors.selection}`, and the cursor swaps the twin in with the
 shape sits on both halves of each pair, so selecting a module never shifts the
 bar sideways.
 
+The two tray stops are the exception: Polybar cannot give them a twin, so
+`bar-nav-marker.py` paints their block. See
+[NetworkManager Tray](#networkmanager-tray).
+
 Inside bar mode:
 
 | Binding | Action |
@@ -255,8 +259,12 @@ and scroll handlers:
 | `date` | Toggle the long date format. | — | — |
 | `pulseaudio` | Toggle mute. | Open `pavucontrol`. | Volume down/up 1%. |
 | `battery` | Open `xfce4-power-manager-settings`. | — | Brightness down/up 5%. |
-| `network` | Open `nm-connection-editor`. | — | — |
-| `bluetooth` | Open `blueman-manager`. | — | — |
+| `wifi` | Open the graphical NetworkManager menu. | `nm-applet`'s context menu. | — |
+| `bluetooth` | Open the graphical Blueman menu. | `blueman-tray`'s context menu. | — |
+
+`wifi` and `bluetooth` are tray icons. Their block is painted by
+`bar-nav-marker.py` rather than by Polybar, and `Return` on one is a real mouse
+click on the icon; see [NetworkManager Tray](#networkmanager-tray).
 | `powermenu` | Open the rofi power menu. | — | — |
 
 Workspaces are deliberately absent: `Super+1`–`Super+0` and `Super+Alt+H/L`
@@ -520,10 +528,16 @@ Polybar is launched from:
 
 The launcher uses a per-user runtime `flock`. Concurrent requests wait for the
 active launch and reuse its Polybar processes, preventing duplicate bars during
-an i3 reload and workspace-peek fallback race. It launches the full `main` bar
+an i3 reload and workspace-peek fallback race. Every process it detaches — the
+bars and the `blueman-tray` redock alike — is spawned with `9>&-`, because a
+process that outlives the launcher while holding the lock fd makes every later
+launch wait its timeout, find Polybar running, and exit without doing anything:
+no hotplugged monitor gets a bar, and the tray never gets reordered. It launches
+the full `main` bar
 on the XRandR primary output and an inherited `external` bar on every other
-active output. The two are identical; only the names differ. See
-[No System Tray](#no-system-tray) for why nothing distinguishes them any more.
+active output. The first external output gets the `tray` bar; without an
+external output, the primary output gets it instead. Other outputs use the same
+layout without the tray because X11 permits only one tray owner.
 
 `display-setup.sh` starts it after arranging the outputs on every i3
 reload/restart and after a manual `Super+Shift+P` layout refresh.
@@ -541,29 +555,56 @@ reload/restart and after a manual `Super+Shift+P` layout refresh.
 - Calls `resnap.sh` so snapped windows shrink/grow with the usable screen area.
 - Uses a runtime lock to avoid concurrent toggles.
 
-### No System Tray
+### NetworkManager Tray
 
 X11 has a single system-tray owner, so a tray can only ever appear on one
 monitor's bar, and what it holds are bitmaps the applets paint themselves —
-Polybar can neither mirror them onto the other bars nor restyle them. Keeping
-the tray meant the primary bar could never match the rest, so there is no `tray`
-module and `bar/main` and `bar/external` are now the same bar. `bar/external`
-overrides nothing on purpose; the moment it carries its own module list, the two
-stop matching.
+Polybar can neither mirror them onto the other bars nor restyle them. The
+launcher therefore assigns `[module/tray]` to the first external monitor, or
+to the primary monitor when no external is active.
 
-`[module/network]` and `[module/bluetooth]` replace the wifi and bluetooth tray
-icons. Bluetooth has no internal Polybar module, so its state comes from
-`polybar/scripts/bluetooth.sh`, which checks `rfkill` before `bluetoothctl` so a
-soft-blocked adapter is not reported as merely switched off.
+`nm-applet` supplies the graphical wifi menu and remains NetworkManager's
+secret agent for password prompts. `blueman-applet` supplies the Bluetooth
+backend and `blueman-tray` its icon. The former custom wifi and Bluetooth
+modules remain removed.
 
-`nm-applet` and `blueman-applet` must keep running even though they no longer
-draw anything. `nm-applet` is NetworkManager's secret agent — the thing that
-prompts for a wifi password — and `blueman-applet` answers pairing requests;
-neither job moves to a Polybar module. Both simply stop displaying an icon when
-no tray exists.
+Tray position is arrival order, and every applet re-docks on its own schedule
+once it notices a new tray owner, so `launch.sh` restarts `blueman-tray` and
+waits for `nm-applet`'s icon to reappear before it does. That puts Wi-Fi left
+of Bluetooth, which is the order bar mode's `H`/`L` walks the two stops in.
+Other applets — Fcitx5 docks here too — land wherever they land; only the
+relative order of these two is enforced. `bar-nav.sh` reads each icon's real
+position when it selects the stop, so a block never lands on the wrong icon
+even when the order is not the intended one.
 
-Dropbox loses its tray icon along with the tray. It keeps syncing; only the
-menu goes away.
+Polybar cannot give these two the block every other bar-mode stop wears. The
+tray is a single module holding whatever icons the session's applets dock into
+it — Fcitx5 is a third — so `format-background` paints behind all of them at
+once, and a marker module beside the tray can only sit on its outer edges, two
+icons away from the one it names.
+
+`bar-nav-marker.py` paints the block instead: an override-redirect ARGB window
+filled with `${colors.selection}`, which Picom blends over the icon exactly as
+Polybar blends a module's background over the wallpaper. It spans the bar, like
+every other stop's block. Its input region is empty, so the click still reaches
+the icon underneath. `bar-nav.sh` writes `x y width height` into
+`$XDG_RUNTIME_DIR/i3-polybar-nav.marker` to aim it and truncates that file to
+hide it; the painter stops when the mode's index file goes, so nothing upstream
+can strand a block on the bar. One painter per mode, guarded by `flock`.
+
+Nothing on the bar changes width for these stops, which matters: hiding and
+showing a module beside the tray makes it re-lay out its embedded icons, and
+that reads as a flicker on every `H`/`L`.
+
+`Return` and `Shift+Return` are real mouse clicks — Polybar's click handlers
+cannot reach an icon it does not own — so the pointer moves onto the icon and
+presses button 1 or 3 there. Right-click reaches each applet's own context menu
+(`nm-applet`'s networking toggles, `blueman-tray`'s send and setup entries),
+which nothing else in this profile offers the keyboard. Either menu outlives
+bar mode, which exits and restores the bar's prior visibility around it.
+
+The stops are `wifi` then `bluetooth`, so the launcher has to dock them in that
+order or `L` walks the cursor leftward; see below.
 
 `polybar_show_persistent` in `_polybar-common.sh` makes the bar visible and
 keeps it that way for a binding mode, promoting a transient peek to persistent
@@ -947,7 +988,7 @@ One-shot startup:
 - `xfce4-power-manager` if not already running.
 - `picom -b` if not already running.
 - `nm-applet` if not already running.
-- `blueman-applet` if not already running.
+- `blueman-applet` and, two seconds later, `blueman-tray` if not already running.
 - `unclutter-xfixes --timeout 3` if not already running.
 - `dropbox start -i`; the Dropbox launcher no-ops if the daemon is already running.
 - `xss-lock -- xflock4`.
@@ -1008,6 +1049,8 @@ Desktop integration:
 - `picom`
 - `nm-applet`
 - `blueman-applet`
+- `blueman-tray`
+- `blueman-manager`
 - `unclutter-xfixes`
 - `polkit-gnome-authentication-agent-1`
 
@@ -1070,6 +1113,8 @@ Inside this directory:
   that requests a peek.
 - `show-polybar-or-kill-workspace.sh`: shows Polybar before kill mode.
 - `bar-nav.sh`: keyboard cursor over Polybar's own modules.
+- `bar-nav-marker.py`: paints that cursor's block over a tray icon, which
+  Polybar cannot style.
 - `toggle-titles.sh`: toggles title bars globally.
 - `toggle-titles-resnap.sh`: toggles title bars and resnaps.
 - `focus-tracker.sh`: records current and previous focus.

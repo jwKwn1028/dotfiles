@@ -304,6 +304,8 @@ exec --no-startup-id sh -c 'pgrep -x xfce4-power-manager >/dev/null || xfce4-pow
 exec --no-startup-id sh -c 'pgrep -x picom               >/dev/null || picom -b'
 exec --no-startup-id sh -c 'pgrep -x nm-applet           >/dev/null || nm-applet &'
 exec --no-startup-id sh -c 'pgrep -x blueman-applet      >/dev/null || blueman-applet &'
+# Dock Blueman after nm-applet so the tray order is Wi-Fi, then Bluetooth.
+exec --no-startup-id sh -c 'sleep 2; pgrep -x blueman-tray >/dev/null || blueman-tray &'
 exec --no-startup-id sh -c 'pgrep -x unclutter-xfixes    >/dev/null || unclutter-xfixes --timeout 3 &'
 exec --no-startup-id dropbox start -i
 exec_always --no-startup-id ~/.config/i3/display-setup.sh

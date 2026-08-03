@@ -37,6 +37,7 @@ i3_x11 = [
     "zathura", "zathura-pdf-poppler",
     "thunar", "thunar-archive-plugin", "thunar-media-tags-plugin", "thunar-volman",
     "pavucontrol", "blueman", "brightnessctl", "playerctl",
+    # nm-applet supplies the graphical wifi menu embedded by Polybar's tray.
     "network-manager-gnome",
     # i3ipc bindings for dot_config/i3/overflow-watcher.py, started from the i3
     # autostart. Without it the watcher dies on import and windows that land

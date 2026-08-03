@@ -16,6 +16,14 @@ if ! flock -n 9; then
     pgrep -x polybar >/dev/null && exit 0
 fi
 
+# Redock Blueman after nm-applet when the tray is recreated, preserving the
+# visible Wi-Fi, Bluetooth order across monitor hotplug and manual relaunches.
+RESTART_BLUEMAN_TRAY=0
+if pgrep -x blueman-tray >/dev/null 2>&1; then
+    RESTART_BLUEMAN_TRAY=1
+    pkill -x blueman-tray >/dev/null 2>&1 || true
+fi
+
 # A wedged Polybar (its i3 IPC socket died with the previous i3) never acts on
 # SIGTERM, and an unbounded `--wait` would then hold the launcher lock forever,
 # so every later relaunch -- including the one that adds a hotplugged monitor's
@@ -54,6 +62,20 @@ PRIMARY=$(
 mkdir -p "$POLYBAR_LOG_DIR" 2>/dev/null || exit 1
 STAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
+# True once an applet's tray icon is embedded and mapped. The applet also owns
+# invisible 10x10 helper windows, so size is what tells the icon apart.
+icon_docked() {
+    local win info
+    for win in $(xdotool search --class "$1" 2>/dev/null); do
+        info=$(xwininfo -id "$win" 2>/dev/null) || continue
+        case "$info" in *IsViewable*) ;; *) continue ;; esac
+        awk '$1 == "Width:" { w = $2 } $1 == "Height:" { h = $2 }
+             END { exit !(w > 10 && w <= 64 && h > 10 && h <= 64) }' <<<"$info" &&
+            return 0
+    done
+    return 1
+}
+
 launch_bar() {
     local monitor="$1"
     local bar="$2"
@@ -66,12 +88,22 @@ launch_bar() {
     MONITOR="$monitor" setsid -f polybar --reload "$bar" >>"$log" 2>&1 9>&-
 }
 
-# Every bar carries the same layout and modules; `main` and `external` differ
-# only in name. There is no system tray to make the primary bar special.
-launch_bar "$PRIMARY" main
+TRAY_OUTPUT="$PRIMARY"
 for monitor in "${ACTIVE_OUTPUTS[@]}"; do
-    [ "$monitor" = "$PRIMARY" ] && continue
-    launch_bar "$monitor" external
+    if [ "$monitor" != "$PRIMARY" ]; then
+        TRAY_OUTPUT="$monitor"
+        break
+    fi
+done
+
+for monitor in "${ACTIVE_OUTPUTS[@]}"; do
+    if [ "$monitor" = "$TRAY_OUTPUT" ]; then
+        launch_bar "$monitor" tray
+    elif [ "$monitor" = "$PRIMARY" ]; then
+        launch_bar "$monitor" main
+    else
+        launch_bar "$monitor" external
+    fi
 done
 
 # Start every instance hidden. Keep broadcasting briefly after the first IPC
@@ -90,3 +122,17 @@ for _ in $(seq 1 25); do
     sleep 0.1
 done
 polybar-msg cmd hide >/dev/null 2>&1 || true
+
+if [ "$RESTART_BLUEMAN_TRAY" = 1 ]; then
+    # Dock order is arrival order, and the applets re-dock on their own schedule
+    # once they notice the new tray owner. Wait for nm-applet's icon so Wi-Fi
+    # lands left of Bluetooth -- the order bar mode's H/L walks the two stops in.
+    for _ in $(seq 1 30); do
+        icon_docked '^Nm-applet$' && break
+        sleep 0.1
+    done
+    # 9>&- for the same reason the bars get it: blueman-tray outlives this
+    # script, and an inherited lock fd would make every later launch wait five
+    # seconds, find Polybar already running, and exit without doing anything.
+    setsid -f blueman-tray >/dev/null 2>&1 9>&-
+fi
