@@ -129,6 +129,13 @@ for _ in $(seq 1 25); do
 done
 polybar-msg cmd hide >/dev/null 2>&1 || true
 
+# Tray icons are foreign client windows, so Polybar's cursor-click never applies
+# to them; this helper paints them itself. It re-finds the bars from root events,
+# so it survives a relaunch and only one is ever needed -- and it must outlive
+# this script, hence 9>&- as above.
+pgrep -f 'polybar/scripts/tray-cursor.py' >/dev/null 2>&1 ||
+    setsid -f "$HOME/.config/polybar/scripts/tray-cursor.py" >/dev/null 2>&1 9>&-
+
 if [ "$RESTART_BLUEMAN_TRAY" = 1 ]; then
     # Dock order is arrival order, and the applets re-dock on their own schedule
     # once they notice the new tray owner. Wait for nm-applet's icon so Wi-Fi

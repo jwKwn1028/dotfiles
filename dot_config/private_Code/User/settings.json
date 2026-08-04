@@ -55,10 +55,13 @@
     "chat.viewTitle.enabled": false,
     "chat.viewSessions.enabled": false,
     "chat.viewWelcome.enabled": false,
-    "terminal.integrated.fontSize": 18,
-    "editor.fontSize": 22,
-    "editor.fontFamily": "'NewComputerModernMono10', monospace",
-    "terminal.integrated.fontFamily": "'NewComputerModernMono10'",
+    // JuliaMono, matching ghostty/rofi. Sizes dropped ~17% from the New
+    // Computer Modern Mono values (22/18) because JuliaMono's x-height is
+    // ~28% larger, so 18/15 reads about the same on screen.
+    "terminal.integrated.fontSize": 15,
+    "editor.fontSize": 18,
+    "editor.fontFamily": "'JuliaMono', monospace",
+    "terminal.integrated.fontFamily": "'JuliaMono', 'Hack Nerd Font Mono'",
     "editor.fontLigatures": true,
     "explorer.fileNesting.patterns": {
         "*.ts": "${capture}.js",

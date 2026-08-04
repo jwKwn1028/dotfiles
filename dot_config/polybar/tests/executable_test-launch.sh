@@ -49,6 +49,14 @@ if [ "$*" = "-f blueman-tray" ]; then
     printf '%s|%s\n' "$lock_fd" "$*" >>"$POLYBAR_TEST_STATE_DIR/applet-events"
     exit 0
 fi
+# The tray cursor helper outlives the launcher too, and it is not a bar -- keep
+# it out of the file the bar-count assertions read.
+case "$*" in
+    *tray-cursor.py*)
+        printf '%s|%s\n' "$lock_fd" "$*" >>"$POLYBAR_TEST_STATE_DIR/cursor-events"
+        exit 0
+        ;;
+esac
 printf '%s|%s|%s\n' "${MONITOR:-}" "$lock_fd" "$*" >>"$POLYBAR_TEST_STATE_DIR/launch-events"
 EOF
 
@@ -106,6 +114,7 @@ EOF
 : >"$MOCK_STATE/launch-events"
 : >"$MOCK_STATE/ipc-events"
 : >"$MOCK_STATE/applet-events"
+: >"$MOCK_STATE/cursor-events"
 bash "$LAUNCHER"
 
 # The tray is pinned to the internal panel, so eDP gets it even with an external
@@ -134,6 +143,11 @@ grep -Fqx -- 'closed|-f blueman-tray' "$MOCK_STATE/applet-events" ||
       cat "$MOCK_STATE/applet-events" >&2; exit 1; }
 [ "$(grep -c '^probe ' "$MOCK_STATE/applet-events")" -ge 3 ] ||
     { printf 'FAIL: the redock did not wait for nm-applet\n' >&2; exit 1; }
+# The helper holding the tray icons' cursor outlives Polybar, so an inherited
+# lock fd would wedge every later launch the same way an applet's would.
+grep -q '^closed|.*tray-cursor\.py' "$MOCK_STATE/cursor-events" ||
+    { printf 'FAIL: the tray cursor helper was not started with the lock fd closed\n' >&2
+      cat "$MOCK_STATE/cursor-events" >&2; exit 1; }
 
 # With no external output, the laptop panel still owns the one X11 tray.
 cat >"$MOCK_STATE/xrandr-output" <<'EOF'
