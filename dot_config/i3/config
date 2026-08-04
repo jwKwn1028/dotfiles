@@ -287,7 +287,9 @@ exec_always --no-startup-id sh -c 'pkill -f "bash .*/snap-watcher\.sh$"; setsid 
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/kakaotalk-float-watcher\.sh$"; setsid ~/.config/i3/kakaotalk-float-watcher.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/super-polybar-listener\.py$"; exec /usr/bin/python3 ~/.config/i3/super-polybar-listener.py'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 /home/kjw1028/.local/bin/autotiling"; exec /home/kjw1028/.local/bin/autotiling --limit 6'
-exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/overflow-watcher\.py$"; exec /usr/bin/python3 ~/.config/i3/overflow-watcher.py'
+# -d until the "tiling goes wild after idle" bug is caught: decisions land in
+# ~/.xsession-errors. The pkill pattern has no `$` so it still matches with args.
+exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/overflow-watcher\.py"; exec /usr/bin/python3 ~/.config/i3/overflow-watcher.py -d'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/top-edge-peek\.py$"; exec /usr/bin/python3 ~/.config/i3/top-edge-peek.py'
 exec --no-startup-id xrdb -merge ~/.Xresources
 exec --no-startup-id xsetroot -cursor_name left_ptr
