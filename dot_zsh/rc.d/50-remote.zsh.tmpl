@@ -25,7 +25,9 @@ grem() {
   fi
 
   local -a rsync_opts remotes
-  rsync_opts=(-aPzh --info=progress2 --protect-args)
+  # --checksum: compare by content hash, not size+mtime, so an edit that keeps
+  # both is still transferred. Override with --no-checksum for large trees.
+  rsync_opts=(-aPzh --checksum --info=progress2 --protect-args)
 
   # If the first argument starts with '-', treat leading args as rsync options.
   if [[ $1 == -* ]]; then
@@ -68,7 +70,8 @@ prem() {
   fi
 
   local -a rsync_opts
-  rsync_opts=(-aPzh --info=progress2 --protect-args)
+  # See grem: content-hash comparison so same-size, same-mtime edits transfer.
+  rsync_opts=(-aPzh --checksum --info=progress2 --protect-args)
 
   # Keep rsync filter globs quoted so zsh passes them through unchanged, e.g.
   # prem --exclude='*.safetensors' -- model-dir/ /remote/dest

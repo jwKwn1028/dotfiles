@@ -1,3 +1,8 @@
+" Must be first: guarantees nocompatible even when Vim's auto-detection
+" doesn't kick in (e.g. `vim -u`, launched from another tool). Without this,
+" compatible mode breaks arrow keys in insert mode (they type A/B/C/D).
+set nocompatible
+
 " --- Theme: match Helix (tokyonight_storm in ~/.config/helix/config.toml) -
 packadd! tokyonight-vim
 set termguicolors
@@ -23,7 +28,10 @@ nnoremap x V
 xnoremap x j
 
 " --- Full Helix emulation (https://github.com/chtenb/helix.vim) ----------
-source ~/helix.vim/helix.vim
+source ~/.vim/helix.vim/helix.vim
+
+" Return to normal mode by pressing jk in insert mode
+inoremap jk <Esc>
 
 " --- Clipboard to LOCAL machine over SSH via OSC 52 ---
 " Space-y pushes a selection to your laptop clipboard (Helix muscle memory)

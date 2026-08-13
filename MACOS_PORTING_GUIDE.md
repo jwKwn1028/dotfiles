@@ -263,7 +263,6 @@ These are normally portable, but must still be rendered and tested on macOS:
 | `dot_config/ghostty/` | Share the XDG path. Ghostty supports `~/.config/ghostty` on macOS, avoiding a duplicate file under `Library/Application Support`. |
 | `dot_config/zed/` | Share; Zed documents `~/.config/zed/settings.json` and `keymap.json` on both platforms. Keep SSH connections local. |
 | `dot_config/bat/`, `btop/`, `fastfetch/`, `micro/`, `ranger/`, `rtk/`, `yazi/` | Share after installing each command and checking tool-specific platform options. |
-| `dot_config/private_glow/` | Share; render the home-relative style path and verify the Homebrew `glow` package. |
 | `dot_condarc.tmpl`, `private_dot_npmrc.tmpl` | Share the rendered policy, but select platform/architecture-specific runtime installations separately. |
 | `dot_nanorc`, `dot_vimrc`, `dot_visidatarc`, `dot_taskrc` | Share after syntax and command-availability checks; do not infer that a similarly named Homebrew formula provides the same program. |
 | `private_dot_claude/`, `private_dot_codex/` | Mostly share; validate status-line interpreters and command paths. The Codex Google Workspace MCP entry depends on an untracked `~/mcp/google-workspace` checkout, so install/document it separately or omit that server on Darwin. Keep credentials, auth caches, and project trust local. |

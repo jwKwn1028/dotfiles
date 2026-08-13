@@ -97,3 +97,14 @@ bo() {
 
   ebook-viewer "$file" >/dev/null 2>&1 &!
 }
+
+# --------------------------------------------------------
+# File manager
+# --------------------------------------------------------
+# Bare `thunar` opens $PWD rather than $HOME, and detaches so the terminal
+# stays usable. `command` keeps ~/.local/bin/thunar (the GTK_THEME wrapper)
+# in play; the .desktop and systemd launch paths never see this function.
+thunar() {
+  emulate -L zsh
+  command thunar "${@:-$PWD}" >/dev/null 2>&1 &!
+}

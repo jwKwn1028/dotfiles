@@ -1,0 +1,15 @@
+set selection-clipboard clipboard
+set selection-notification false
+
+# Hide the statusbar by default; Ctrl+n still toggles it.
+set guioptions ""
+
+# SyncTeX: Ctrl+click jumps from PDF into the source. hxp-jump reads the state
+# file hxp() writes in $XDG_RUNTIME_DIR/hxp and drives the existing helix tmux
+# pane, or spawns a fresh `hx`. Zathura reloads on change by itself, so hxp's
+# SIGHUP lands each compile instantly.
+set synctex true
+set synctex-editor-command "hxp-jump %{input}:%{line}"
+
+set incremental-search true
+set adjust-open "width"

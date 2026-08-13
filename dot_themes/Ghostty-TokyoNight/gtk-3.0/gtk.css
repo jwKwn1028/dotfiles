@@ -34,13 +34,13 @@
 @define-color gt_cyan      #7dcfff;
 
 /* --- typography ----------------------------------------------------------
-   Ghostty's font stack, in its own fallback order.  Ghostty runs this at 18pt;
-   that is oversized for a file manager, so the UI sits at 12pt.  Change the
-   two font-size lines below together if you want to go bigger or smaller.     */
+   Ghostty's font stack, in its own fallback order, at 10pt -- Ghostty's own
+   15pt is oversized for a file manager.  This `font-family` beats the XSETTINGS
+   `Gtk/FontName`, so retune it here, not with xfconf-query.                    */
 * {
-  font-family: "NewComputerModernMono10", "NanumGothicCoding",
+  font-family: "JuliaMono", "NanumGothicCoding",
                "Noto Sans CJK KR", "Hack Nerd Font Mono", monospace;
-  font-size: 12pt;
+  font-size: 10pt;
   font-weight: normal;              /* ghostty: font-style-bold = false */
 
   /* Terminal geometry: Ghostty is a square, flat, shadowless rectangle.

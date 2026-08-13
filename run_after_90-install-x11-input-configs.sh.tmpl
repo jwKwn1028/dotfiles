@@ -1,0 +1,54 @@
+{{- $desktopProfile := "none" -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{-     $desktopProfile = "linuxmint-i3-x11" -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey . "desktopProfile" -}}
+{{-   $desktopProfile = .desktopProfile -}}
+{{- end -}}
+{{- if and (eq .chezmoi.os "linux") (eq $desktopProfile "linuxmint-i3-x11") -}}
+#!/bin/sh
+set -eu
+
+temporary=
+trap 'rm -f "${temporary:-}"' EXIT HUP INT TERM
+
+install_config() {
+    target=$1
+    temporary=$(mktemp)
+    cat >"$temporary"
+
+    metadata=$(stat -c '%u:%g:%a' "$target" 2>/dev/null || true)
+    if ! cmp -s "$temporary" "$target" || [ "$metadata" != "0:0:644" ]; then
+        echo "==> Installing $target (sudo may prompt for your password)"
+        sudo install -o root -g root -m 0644 "$temporary" "$target"
+    fi
+
+    rm -f "$temporary"
+    temporary=
+}
+
+install_config /etc/X11/90-trackpoint-kbd.conf <<'EOF'
+Section "InputClass"
+    Identifier "Lenovo TrackPoint Keyboard II pointer"
+    MatchProduct "Lenovo TrackPoint Keyboard II"
+    MatchIsPointer "on"
+    Driver "libinput"
+    Option "AccelSpeed" "0.8"
+EndSection
+EOF
+
+install_config /etc/default/keyboard <<'EOF'
+# KEYBOARD CONFIGURATION FILE
+
+# Consult the keyboard(5) manual page.
+
+XKBMODEL="pc105"
+XKBLAYOUT="us"
+XKBVARIANT=""
+XKBOPTIONS="ctrl:swapcaps"
+
+BACKSPACE="guess"
+EOF
+{{- end }}

@@ -7,12 +7,13 @@
 #   SNAP_TITLES_STATE    - title-bar on/off state file
 #   SNAP_FOCUS_HISTORY   - last/current focus ids for focus-prev
 #   SNAP_LOG             - rolling debug log
-#   snap_log <msg>       - append to log, auto-rotate at 200 KB
+#   snap_log <msg>       - timestamped line; caps the file at ~200 KB, no-op if
+#                          the log dir cannot be created
 #   mark_to_quads <r>    - region -> covered quadrants (ul ur dl dr subset)
 #   region_size <r>      - region area in quadrants (4, 2, 1)
-#   regions_by_size      - newline list: full, halves, quadrants
+#   regions_by_size      - full, halves, quadrants, largest first
 #   apply_autotiling_split <con_id> [depth_limit]
-#                         - apply the same split h/v rule used by autotiling
+#                        - apply the same split h/v rule used by autotiling
 
 SNAP_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 SNAP_TITLES_STATE="$SNAP_RUNTIME_DIR/i3-titles.state"
@@ -21,8 +22,6 @@ SNAP_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/i3"
 SNAP_LOG="$SNAP_LOG_DIR/snap.log"
 export SNAP_RUNTIME_DIR SNAP_TITLES_STATE SNAP_FOCUS_HISTORY
 
-# Append a timestamped line to the log. Caps file at ~200KB by trimming to the
-# last 500 lines when exceeded. No-op (silently) if the log dir can't be made.
 snap_log() {
   mkdir -p "$SNAP_LOG_DIR" 2>/dev/null || return 0
   if [ -f "$SNAP_LOG" ]; then
@@ -55,8 +54,6 @@ region_size() {
   esac
 }
 
-# Region names from largest to smallest. Used when picking the best region
-# that still contains a given set of quadrants.
 regions_by_size() {
   printf '%s\n' full left right up down ul ur dl dr
 }

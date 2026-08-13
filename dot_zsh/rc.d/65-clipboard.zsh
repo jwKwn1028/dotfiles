@@ -1,6 +1,6 @@
-# --------------------------------------------------------
-# Clipboard helper: shared with tmux via ~/.local/bin/clipcopy
-# --------------------------------------------------------
+# Clipboard helper: shared with tmux via ~/.local/bin/clipcopy.
+# Also defines the postfix pipeline shorthand, `command Y`.
+
 _clipcopy() {
   if _have clipcopy; then
     clipcopy
@@ -10,7 +10,6 @@ _clipcopy() {
   fi
 }
 
-# Postfix pipeline shorthand: command Y
 alias -g Y='| _clipcopy'
 
 crpf() {

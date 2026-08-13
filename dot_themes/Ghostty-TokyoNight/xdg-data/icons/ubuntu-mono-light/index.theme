@@ -1,0 +1,15 @@
+[Icon Theme]
+Name=ubuntu-mono-light
+Comment=Redirect shim: shadows the system ubuntu-mono-light so Thunar
+Comment[en]=resolves every icon through Papirus-Dark instead. Only visible to
+Comment[x-note]=processes launched with this theme's XDG_DATA_DIRS prefix.
+Inherits=Papirus-Dark,Adwaita,hicolor
+# Deliberately declares one empty directory: with no real subdirs of its own,
+# every lookup falls through to the Inherits chain above, so none of the system
+# ubuntu-mono-light artwork (light-on-dark panel glyphs) can win.
+Directories=empty
+Hidden=true
+
+[empty]
+Size=16
+Type=Fixed

@@ -1,11 +1,32 @@
-# --------------------------------------------------------
-# Startup Banner (Centered and Bold)
-# --------------------------------------------------------
-# Optional configuration (set these before this file is sourced, or edit the
-# defaults below):
+# Startup banner: a centered, bold greeting drawn through the first live prompt.
+#
+# Optional configuration, set before this file is sourced or edited into the
+# defaults below:
+#
 #   ZSH_BANNER_SPECIAL_MESSAGES=("Message one" "Message two")
 #   ZSH_BANNER_SPECIAL_COLORS=("#FFAF00")
-#   ZSH_BANNER_SPECIAL_CHANCE=1/100  # ratio, or an integer percentage (e.g. 5)
+#   ZSH_BANNER_SPECIAL_CHANCE=1/100  # ratio, or an integer percentage
+#
+# Colors correspond to the messages above; a shorter color list is cycled.
+#
+# Rendered through PROMPT rather than written directly, so leading spaces never
+# reach the scrollback and ZLE re-expands the padding against COLUMNS after a
+# resize. Consequences of living inside a prompt:
+#
+#   - Width is measured in terminal cells, not code points, so wide and
+#     combining characters still center.
+#   - Literal percent signs in messages or task descriptions must be doubled.
+#   - A zero-width prompt escape preserves the blank line before Starship, which
+#     command substitution would strip with the trailing newlines.
+#   - Raw ANSI color bytes confuse ZLE's prompt-width accounting.
+#
+# The anonymous function keeps scratch variables out of the session.
+#
+# Selection: birthday beats normal and rare. Today's task list shows on the
+# first top-level terminal opened between 06:00 and 08:59, with a state file
+# holding the day it last showed. ZSH_BANNER_SPECIAL_CHANCE takes odds (1/100)
+# or a legacy integer percentage, falling back to 1/100 when invalid; two RANDOM
+# values are combined so denominators above 32767 still work.
 
 if (( ! ${+ZSH_BANNER_SPECIAL_MESSAGES} )); then
   typeset -ga ZSH_BANNER_SPECIAL_MESSAGES=(
@@ -19,10 +40,10 @@ if (( ! ${+ZSH_BANNER_SPECIAL_MESSAGES} )); then
     "행복은 하찮은 것에 있다"
     "All those moments will be lost in time, like tears in rain"
     "The Matrix is Everywhere"
+    "L'uomo verrà portato dalla sua creazione"
     )
 fi
 
-# Colors correspond to the messages above; a shorter color list is cycled.
 if (( ! ${+ZSH_BANNER_SPECIAL_COLORS} )); then
   typeset -ga ZSH_BANNER_SPECIAL_COLORS=(
     "#FFAF00"
@@ -33,10 +54,6 @@ if (( ! ${+ZSH_BANNER_SPECIAL_CHANCE} )); then
   typeset -g ZSH_BANNER_SPECIAL_CHANCE=1/100
 fi
 
-# Render the banner through the first live prompt instead of writing fixed
-# leading spaces into the scrollback. ZLE re-expands prompts after a terminal
-# resize, so the padding follows the current value of COLUMNS while that first
-# command line is active.
 _zsh_banner_prompt() {
   emulate -L zsh
   (( ${ZSH_BANNER_ACTIVE:-0} )) || return 0
@@ -46,8 +63,6 @@ _zsh_banner_prompt() {
   local tasklist=$ZSH_BANNER_TASKLIST
   local -i banner_width padding_banner padding_time
 
-  # Measure terminal cells rather than Unicode code points so wide and
-  # combining characters are centered correctly.
   banner_width=${(m)#banner_text}
   (( padding_banner = (${COLUMNS:-80} - banner_width) / 2 ))
   (( padding_banner < 0 )) && padding_banner=0
@@ -57,8 +72,6 @@ _zsh_banner_prompt() {
   (( padding_time < 0 )) && padding_time=0
   local indent_time=$(printf "%*s" "$padding_time")
 
-  # The returned text is expanded as part of PROMPT, so literal percent signs
-  # in user-configured messages or task descriptions must be doubled.
   banner_text=${banner_text//\%/%%}
   current_time=${current_time//\%/%%}
   tasklist=${tasklist//\%/%%}
@@ -68,8 +81,6 @@ _zsh_banner_prompt() {
   print -nr -- "%F{245}${indent_time}${current_time}%f"$'\n\n'
   [[ -n $tasklist ]] && print -nr -- "${tasklist}"$'\n\n'
 
-  # Command substitution strips trailing newlines. This zero-width prompt
-  # escape preserves the blank line before Starship without adding a cell.
   print -nr -- '%f%b'
 }
 
@@ -96,8 +107,6 @@ _zsh_banner_install() {
   add-zsh-hook preexec _zsh_banner_finish
 }
 
-# Anonymous function keeps the scratch variables out of the session
-# (the old top-level version leaked messages/size/index/... globals).
 if (( SHLVL <= 2 )); then
   () {
     local -a messages=(
@@ -109,16 +118,12 @@ if (( SHLVL <= 2 )); then
       "One at a Time"
     )
 
-    # Format: YYYY-MM-DD HH:MM:SS
     local current_time=$(date '+%Y-%m-%d %H:%M:%S')
     local current_date="${current_time[1,10]}"
     local current_hour=$(( 10#${current_time[12,13]} ))
     local month_day="${current_time[6,10]}"
     local banner_text banner_color="#86BE43"
 
-    # Show today's task list on the first top-level terminal opened between
-    # 06:00 and 08:59. The state file records the day it was last shown, so an
-    # earlier terminal does not consume the day's slot.
     local banner_state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/zsh"
     local tasklist_date_file="$banner_state_dir/banner-terminal-date"
     local last_tasklist_date show_tasklist=0
@@ -129,8 +134,6 @@ if (( SHLVL <= 2 )); then
       [[ $last_tasklist_date != $current_date ]] && show_tasklist=1
     fi
 
-    # Accept either odds such as 1/100 or a backward-compatible integer
-    # percentage such as 5. Invalid values fall back to 1/100.
     local special_chance=$ZSH_BANNER_SPECIAL_CHANCE
     local special_numerator special_denominator
     if [[ $special_chance == <->/<-> ]]; then
@@ -153,11 +156,9 @@ if (( SHLVL <= 2 )); then
       special_numerator=$special_denominator
     fi
 
-    # Combine two RANDOM values so ratios can use denominators above 32768.
     local special_roll=$(( (RANDOM * 32768 + RANDOM) % special_denominator ))
 
     if [[ $month_day == "10-28" ]]; then
-      # The birthday message always wins over normal and rare messages.
       banner_text="Happy Birthday!"
     elif (( ${#ZSH_BANNER_SPECIAL_MESSAGES[@]} > 0 &&
              special_roll < special_numerator )); then
@@ -185,7 +186,6 @@ if (( SHLVL <= 2 )); then
       if [[ -d $banner_state_dir ]] || mkdir -p -- "$banner_state_dir" 2>/dev/null; then
         { print -r -- "$current_date" >! "$tasklist_date_file" } 2>/dev/null
       fi
-      # Raw ANSI color bytes confuse ZLE's prompt-width accounting.
       ZSH_BANNER_TASKLIST=$(command task rc.verbose=nothing rc.color=off list)
     fi
   }

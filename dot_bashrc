@@ -203,6 +203,10 @@ alias hb='${EDITOR:-hx} ~/.bashrc'
 alias sb='source ~/.bashrc && echo "Bash config reloaded."'
 alias scpo='echo "shutting down..." && systemctl poweroff'
 alias scrb='echo "reboot ..." && systemctl reboot'
+if _have sinfo; then
+  alias wtail='watch -n 10 tail -n 10'
+  alias sidle='sinfo -t idle -o "%.20P %.6D %N"'
+fi
 
 # Auto-list on cd (bash chpwd equivalent; mirrors _auto_ls in
 # ~/.zsh/rc.d/35-navigation.zsh).
@@ -373,8 +377,6 @@ if [[ $- == *i* ]]; then
     source "$HOME/.fzf.bash"
   elif [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
     source /usr/share/doc/fzf/examples/key-bindings.bash
-  elif [ -f /usr/share/fzf/key-bindings.bash ]; then
-    source /usr/share/fzf/key-bindings.bash
   fi
   if [ -f /usr/share/bash-completion/completions/fzf ]; then
     source /usr/share/bash-completion/completions/fzf
@@ -456,6 +458,16 @@ bo() {
   fi
 
   nohup ebook-viewer "$file" >/dev/null 2>&1 &
+}
+
+# --------------------------------------------------------
+# File manager
+# --------------------------------------------------------
+# Mirrors thunar() in ~/.zsh/rc.d/45-openers.zsh: bare `thunar` opens $PWD
+# rather than $HOME, detached. `command` keeps ~/.local/bin/thunar (the
+# GTK_THEME wrapper) in play; .desktop and systemd launches never see this.
+thunar() {
+  nohup command thunar "${@:-$PWD}" >/dev/null 2>&1 &
 }
 
 # --------------------------------------------------------

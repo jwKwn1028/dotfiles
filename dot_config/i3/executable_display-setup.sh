@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Apply the monitor layout for the current set of connected outputs.
+#
+# Xfce's settings daemon and hotplug detection get a moment to settle before the
+# layout is applied. Afterwards the monitor-specific Polybar instances are
+# recreated, which is also what makes the Super+Shift+P display shortcut pick up
+# a hotplugged output.
 
 DIR="$(dirname "$(readlink -f "$0")")"
 LAPTOP_OUTPUT="${I3_LAPTOP_OUTPUT:-eDP}"
@@ -29,7 +35,6 @@ apply_laptop_only_layout() {
         --output "$LAPTOP_OUTPUT" --primary --auto --pos 0x0 --rotate normal
 }
 
-# Give Xfce's settings daemon and hotplug detection a moment to settle during login.
 sleep "${I3_DISPLAY_SETUP_DELAY:-1}"
 
 if ! command -v xrandr >/dev/null 2>&1 || ! xrandr --query >/dev/null 2>&1; then
@@ -53,8 +58,6 @@ sleep 0.2
 
 "$DIR/wallpaper.sh"
 
-# Recreate the monitor-specific bar instances after the output layout changes.
-# This also makes the Super+Shift+P display shortcut pick up hotplugged outputs.
 POLYBAR_LAUNCHER="${I3_POLYBAR_LAUNCHER:-$DIR/../polybar/launch.sh}"
 if [ -x "$POLYBAR_LAUNCHER" ]; then
     "$POLYBAR_LAUNCHER"

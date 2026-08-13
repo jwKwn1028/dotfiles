@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Flip the built-in touchpad on/off, defaulting to OFF.
 #
-# The ELAN pad exposes TWO X pointer nodes, "Touchpad" and a shadow "Mouse";
+# The ELAN pad exposes TWO X pointer nodes, "Touchpad" and a shadow "Mouse":
 # both are the same physical pad and both must be switched or the surface stays
 # alive. External mice and the TrackPoint are left alone.
 #
@@ -9,14 +9,15 @@
 #   toggle  flip current state; when the state can't be read, DISABLE
 #   on      force enable
 #   off     force disable
-# Any ambiguous case (device unreadable / unknown state) falls back to DISABLED.
+# The state counts as disabled ONLY when every node is readable and confirmed
+# disabled, so anything ambiguous makes a toggle turn the pad off.
+#
+# TOUCHPAD_MATCH matches the built-in pad's node names case-insensitively --
+# "ELAN0688:00 04F3:320B Touchpad" and its "... Mouse" shadow, not external mice
+# or "TPPS/2 Elan TrackPoint". Override it if the hardware changes.
 
 set -u
 
-# Case-insensitive match for the built-in touchpad's node names. Matches
-# "ELAN0688:00 04F3:320B Touchpad" and its shadow "... Mouse", but NOT external
-# mice or "TPPS/2 Elan TrackPoint". Override with TOUCHPAD_MATCH=... if hardware
-# changes.
 MATCH="${TOUCHPAD_MATCH:-ELAN0688}"
 
 export DISPLAY="${DISPLAY:-:0}"
@@ -26,12 +27,10 @@ fi
 
 command -v xinput > /dev/null 2>&1 || { echo "toggle-touchpad: xinput not found" >&2; exit 1; }
 
-# IDs of every X node belonging to the built-in touchpad.
 touchpad_ids() {
   xinput list 2> /dev/null | grep -iE "$MATCH" | grep -oE 'id=[0-9]+' | cut -d= -f2
 }
 
-# Switch every touchpad node. set_state enable|disable
 set_state() {
   local action=$1 ids id name any=0
   ids=$(touchpad_ids)
@@ -46,8 +45,6 @@ set_state() {
   [ "$any" = 1 ]
 }
 
-# True ONLY when every node is readable and confirmed disabled. Any node still
-# enabled, or an unreadable/unknown state, yields false -> toggle then disables.
 all_disabled() {
   local id en saw=0
   for id in $(touchpad_ids); do

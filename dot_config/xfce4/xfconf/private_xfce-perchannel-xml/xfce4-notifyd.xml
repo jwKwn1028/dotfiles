@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<channel name="xfce4-notifyd" version="1.0">
+  <property name="notify-location" type="string" value="top-right"/>
+  <property name="theme" type="empty"/>
+  <property name="initial-opacity" type="empty"/>
+  <property name="expire-timeout" type="empty"/>
+  <property name="primary-monitor" type="empty"/>
+  <property name="do-fadeout" type="empty"/>
+  <property name="log-max-size-enabled" type="bool" value="true"/>
+  <property name="show-notifications-on" type="string" value="active-monitor"/>
+  <property name="applications" type="empty">
+    <property name="known_applications" type="array">
+      <value type="string" value="app.zen_browser.zen"/>
+      <value type="string" value="blueman"/>
+      <value type="string" value="chromium-browser"/>
+      <value type="string" value="com.mitchellh.ghostty"/>
+      <value type="string" value="com.super_productivity.SuperProductivity"/>
+      <value type="string" value="Dropbox"/>
+      <value type="string" value="firefox"/>
+      <value type="string" value="Firefox"/>
+      <value type="string" value="io.github.alainm23.planify"/>
+      <value type="string" value="notify-send"/>
+      <value type="string" value="one.ablaze.floorp"/>
+      <value type="string" value="org.freedesktop.network-manager-applet"/>
+      <value type="string" value="org.gnome.baobab"/>
+      <value type="string" value="org.gnome.Rhythmbox3"/>
+      <value type="string" value="org.xfce.Thunar"/>
+      <value type="string" value="Spotify"/>
+      <value type="string" value="thunar-volman"/>
+      <value type="string" value="Xfce volume control"/>
+      <value type="string" value="xfce4-power-manager"/>
+    </property>
+    <property name="muted_applications" type="array">
+      <value type="string" value="Spotify"/>
+      <value type="string" value="com.mitchellh.ghostty"/>
+    </property>
+    <property name="denied-critical-notifications" type="array">
+      <value type="string" value="Spotify"/>
+    </property>
+  </property>
+  <property name="date-time-custom-format" type="string" value="%a %H:%M:%S"/>
+  <property name="do-not-disturb" type="bool" value="true"/>
+</channel>

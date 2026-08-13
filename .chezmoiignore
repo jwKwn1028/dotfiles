@@ -7,6 +7,10 @@
 {{- end -}}
 {{- if hasKey . "desktopProfile" -}}
 {{-   $desktopProfile = .desktopProfile -}}
+{{- end -}}
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" -}}
+{{-   $class = .class -}}
 {{- end }}
 
 # ─── Repo documentation ───────────────────────────────────────────────────
@@ -20,6 +24,7 @@
 /AGENTS.md
 /CLAUDE.md
 /LICENSE
+/desktop.nix
 
 # ─── Browser profiles ──────────────────────────────────────────────────────
 # Browser profiles stay local: bookmarks, sync identifiers, site-engagement
@@ -50,14 +55,21 @@
 /.config/i3/resurrect*
 **/__pycache__
 **/.git
-**/.codex
+/.config/**/.codex
 **/.agents
+
+# Codex mixes machine state (per-project trust levels, hook trust hashes,
+# plugin registration, nux counters) into its own config.toml with no include
+# directive to split them, so it stays local like ~/.claude.json.
+# ~/.codex/rules and ~/.codex/statusline.toml are static and stay managed.
+/.codex/config.toml
 
 # ─── Desktop profiles ─────────────────────────────────────────────────────
 # Mint's i3 tree is the X11 desktop. A machine on any other profile (a server,
 # or `none`) must not receive the X11 session files or helpers.
 {{ if ne $desktopProfile "linuxmint-i3-x11" -}}
 /.config/i3/
+/.config/xfce4/
 /.config/polybar/
 /.config/picom/
 /.config/rofi/
@@ -65,6 +77,20 @@
 /.toggle-touchpad.sh
 /.local/bin/touchpad
 /.local/bin/disable-trackpoint-middle-click
+
+# Thunar's Ghostty-TokyoNight theme (~1M of assets), the GTK_THEME wrapper that
+# switches it on, and the two launch paths through it. Ship all or none.
+/.themes/Ghostty-TokyoNight/
+/.local/bin/thunar
+/.local/share/applications/thunar.desktop
+/.config/systemd/user/thunar.service.d/
+{{ end -}}
+
+# ─── Desktop-class payloads ───────────────────────────────────────────────
+# Zen's chrome/ source, a 3.3M wallpaper included. Gated on class like the
+# script that installs it: a macOS desktop wants these, a server does not.
+{{ if ne $class "desktop" -}}
+/.local/share/zen-chrome/
 {{ end -}}
 
 /prospect.md

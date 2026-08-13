@@ -24,7 +24,14 @@ common = [
     "fd-find", "fzf", "ripgrep", "jq", "tree",
     "unzip", "zip", "7zip", "p7zip-full", "bzip2", "gzip",
     "nodejs", "npm", "pipx",
-    "ranger", "taskwarrior-tui",
+    "ranger",
+    # The TUI only; `task` itself is deliberately not here. Ubuntu ships 2.6.2,
+    # which uses the old flat-file store, while dot_taskrc targets 3.x
+    # (news.version=3.4.2, ~/.task/taskchampion.sqlite3). Installing the apt one
+    # gives a binary that cannot read this data. Until 24.04 carries 3.x, install
+    # it by hand from the upstream release; without it the TUI has no backend and
+    # 15-banner.zsh skips its morning task list (guarded on $+commands[task]).
+    "taskwarrior-tui",
     # AGENTS.md requires linting the run_once_* scripts before changing them,
     # so treat it as a dependency of working in this repo, not an optional tool.
     "shellcheck",
@@ -36,7 +43,10 @@ i3_x11 = [
     "feh", "flameshot", "xdotool", "wmctrl", "xclip", "xsel",
     "zathura", "zathura-pdf-poppler",
     "thunar", "thunar-archive-plugin", "thunar-media-tags-plugin", "thunar-volman",
-    "pavucontrol", "blueman", "brightnessctl", "playerctl",
+    # ~/.local/bin/thunar shadows the XSETTINGS icon name onto Papirus-Dark;
+    # without this the themed Thunar renders with missing icons.
+    "papirus-icon-theme",
+    "pavucontrol", "blueman", "brightnessctl", "playerctl", "thunderbird",
     # nm-applet supplies the graphical wifi menu embedded by Polybar's tray.
     "network-manager-gnome",
     # i3ipc bindings for dot_config/i3/overflow-watcher.py, started from the i3
@@ -97,7 +107,8 @@ registry = [
 # Optional `package` names one crate inside a repo that contains several with
 # binaries; cargo refuses to guess and aborts without it.
 git = [
-    # rtk (see RTK.md)
+    # rtk: CLI output filter; wired into Claude Code by the `rtk hook claude`
+    # PreToolUse hook in private_dot_claude/private_settings.json.tmpl.
     { url = "https://github.com/rtk-ai/rtk",                     bin = "rtk" },
     # markdown LSP
     { url = "https://github.com/Feel-ix-343/markdown-oxide.git", bin = "markdown-oxide" },

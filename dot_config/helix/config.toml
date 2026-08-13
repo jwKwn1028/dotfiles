@@ -33,14 +33,14 @@ select = "underline"
 cursor-line = "warning"
 other-lines = "disable"
 
-# Soft wrapping: enabled globally. Per-language overrides in languages.toml
-# can still adjust wrapping for specific filetypes.
+# Soft wrapping: enabled globally, wrapping at the viewport edge so code uses
+# the full terminal width. Prose languages (markdown/latex/typst/text) opt into
+# wrap-at-text-width in languages.toml instead.
 [editor.soft-wrap]
 enable = true
 max-wrap = 25
 max-indent-retain = 0
 wrap-indicator = "↪ "
-wrap-at-text-width = true
 
 [editor.lsp]
 display-progress-messages = true

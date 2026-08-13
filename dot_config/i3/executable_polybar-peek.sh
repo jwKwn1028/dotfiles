@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # Briefly show Polybar after a workspace keybinding, or hold it open for a
 # standalone Super-key gesture, but only if the bar was hidden. No resnap is
-# performed because a transient peek should not resize snapped windows twice.
+# performed, because a transient peek should not resize snapped windows.
+#
+# The caller must hold POLYBAR_CONTROL_LOCK where noted, so the final
+# state/deadline check and the hide are serialized against new peeks, Super
+# holds, and the explicit toggle.
+#
+# Ownership: a bar changed outside this helper discards stale ownership and
+# counts as a fresh hidden-state peek; a bar already visible is not ours to hide.
 
 set -u
 
@@ -37,7 +44,6 @@ hold_is_live() {
   [[ "$holder_pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$holder_pid" 2>/dev/null
 }
 
-# The caller must hold POLYBAR_CONTROL_LOCK.
 hide_owned_peek() {
   local after
 
@@ -75,8 +81,6 @@ run_worker() {
       fi
     fi
 
-    # Serialize the final state/deadline check and hide against new peeks,
-    # standalone-Super holds, and the explicit Polybar toggle.
     if ! flock -w 2 9; then
       sleep 0.05
       continue
@@ -137,15 +141,12 @@ trigger_peek() {
       polybar_raise
       should_start=1
     else
-      # The bar was changed outside this helper; discard stale ownership and
-      # treat this keypress as a fresh hidden-state peek.
       polybar_cancel_peek
     fi
   fi
 
   if [ "$should_start" = 0 ]; then
     if polybar_visible; then
-      # It was already visible and therefore is not ours to hide.
       flock -u 9
       exec 9>&-
       return 0

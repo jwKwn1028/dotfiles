@@ -15,6 +15,9 @@ dot_config/i3/MANUAL.pdf
 # also excluded from chezmoi's target state in .chezmoiignore.
 /CHEZMOI_UPDATE_WORKFLOW.md
 
+# Local NixOS bootstrap module; copied manually to /etc/nixos when testing.
+/desktop.nix
+
 # Browser profiles contain bookmarks, account/sync identifiers, history-like
 # metadata, and other machine state. Keep the entire source trees local.
 dot_config/private_net.imput.helium/

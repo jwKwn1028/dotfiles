@@ -3,9 +3,26 @@
 #   CPU temp  -> k10temp / Tctl        (AMD die temp)
 #   GPU temp  -> amdgpu  / edge        (integrated Radeon)
 #   fans      -> thinkpad-isa fan1/fan2
-# echo a zsh color for a temperature.  Args: <temp> <green_thr> <yellow_thr>
-# Matches fastfetch (~/.config/fastfetch/config.jsonc) semantics + colors:
-#   temp >  yellow -> light_red (9)     temp >  green -> light_yellow (11)     else -> green
+#
+# Temperature colors match fastfetch (~/.config/fastfetch/config.jsonc): above
+# the yellow threshold is light_red (9), above the green one light_yellow (11).
+#
+# CPU load goes through the shared calculator so sysmon and polybar's module
+# agree on the method (iowait counted as idle); it takes the refresh interval
+# because cpu-load sizes its measurement window from it. RAM uses MemAvailable
+# so reclaimable cache is not counted as used. GPU busy comes from amdgpu sysfs.
+#
+# Drawing rules:
+#
+#   - print -P emits SGR sequences, so those bytes are ignored when measuring
+#     width and the visible frame centers rather than its escapes.
+#   - Every destination line is cleared before writing, so shorter values leave
+#     nothing trailing; a resize erases the old placement.
+#   - Signal handlers are local to the display loop.
+#   - The delay is a waited-on background timer, not a foreground sleep, which
+#     would hold WINCH traps until it exits. A resize can then reposition the
+#     cached frame without collecting sensors again.
+
 _sysmon_tcolor () {
   if   (( $1 > $3 )); then print -n 9
   elif (( $1 > $2 )); then print -n 11
@@ -13,16 +30,10 @@ _sysmon_tcolor () {
   fi
 }
 
-# CPU utilization %, via the shared calculator so sysmon and polybar's cpu
-# module always agree on the method (iowait counted as idle).  Arg 1 is the
-# refresh interval, which cpu-load needs to size its measurement window.
-# See ~/.local/bin/cpu-load for the details.
 _sysmon_cpu_load () {
   "$HOME/.local/bin/cpu-load" sysmon "${1:-2}"
 }
 
-# RAM utilization %, using MemAvailable so reclaimable cache is not counted as
-# used memory. Round to the nearest whole percent to match CPU/GPU load output.
 _sysmon_ram_load () {
   awk '
     /^MemTotal:/     { total=$2 }
@@ -34,7 +45,6 @@ _sysmon_ram_load () {
   ' /proc/meminfo
 }
 
-# AMD integrated GPU busy %, straight from amdgpu sysfs.
 _sysmon_gpu_load () {
   local f
   for f in /sys/class/drm/card*/device/gpu_busy_percent; do
@@ -46,7 +56,6 @@ _sysmon_gpu_load () {
 _sysmon_frame () {           # render one snapshot.  Arg 1: refresh interval.
   emulate -L zsh
   setopt prompt_percent      # local (LOCAL_OPTIONS): guarantee %% -> % in print -P,
-                             # even if the session left prompt_percent unset
 
   local cpu_name gpu_name
   cpu_name="$(awk -F': ' '/^model name/{print $2; exit}' /proc/cpuinfo)"
@@ -57,7 +66,6 @@ _sysmon_frame () {           # render one snapshot.  Arg 1: refresh interval.
     [[ -z $gpu_name ]] && gpu_name="unknown"
   fi
 
-  # One pass over machine-readable sensor output; match by chip prefix + label.
   local vals cpu_temp gpu_temp fan1 fan2
   vals="$(sensors -u 2>/dev/null | awk '
     /^[^ ]/ && !/:/  { chip=$0; next }                     # chip header line
@@ -102,9 +110,6 @@ _sysmon_draw () {            # center and draw an already-collected snapshot
   frame_lines=("${(@f)frame}")
   frame_height=${#frame_lines}
 
-  # print -P emits SGR color sequences.  Ignore those non-printing bytes when
-  # finding the width so that the visible frame, rather than its escapes, is
-  # centered.  The frame contains no tabs or double-width characters.
   for line in "${frame_lines[@]}"; do
     plain=${line//$'\e'\[[0-9;]##m/}
     line_width=${#plain}
@@ -116,8 +121,6 @@ _sysmon_draw () {            # center and draw an already-collected snapshot
   (( left = cols > frame_width  ? (cols - frame_width) / 2 + 1 : 1 ))
   (( top  = rows > frame_height ? (rows - frame_height) / 2 + 1 : 1 ))
 
-  # Erase the old placement after a resize, then clear each destination line
-  # on ordinary refreshes so shorter values cannot leave trailing characters.
   (( $2 )) && printf '\e[2J'
   row=$top
   for line in "${frame_lines[@]}"; do
@@ -134,7 +137,6 @@ sysmon () {
   local frame
   local -i interrupted=0 resized=1 clear_frame timer_pid
 
-  # Keep the invoking shell intact and make signal handlers local to sysmon.
   tput smcup 2>/dev/null                                   # alternate screen
   tput civis 2>/dev/null                                   # hide cursor
   trap 'interrupted=1' HUP INT TERM
@@ -146,9 +148,6 @@ sysmon () {
     (( clear_frame = resized, resized = 0 ))
     _sysmon_draw "$frame" "$clear_frame"
 
-    # A foreground sleep delays WINCH traps until it exits.  Waiting on a
-    # background timer lets a resize interrupt wait, so the cached frame can
-    # be repositioned immediately without collecting the sensors again.
     sleep "$interval" &
     timer_pid=$!
     while kill -0 "$timer_pid" 2>/dev/null; do

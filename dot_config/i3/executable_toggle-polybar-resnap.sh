@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
-# Toggle polybar visibility, wait for the change to be reflected in the X
-# server, keep the bar above existing windows, then re-fit snapped windows.
+# Toggle polybar visibility, wait for the change to reach the X server, keep the
+# bar above existing windows, then re-fit snapped windows.
+#
+# An explicit toggle owns the final state, so cancelling the transient ownership
+# stops a peek's delayed worker from applying a second, stale hide.
+#
+# Polybar's wm-restack is ignored with override-redirect, so raising here is what
+# keeps the binding deterministic when i3's workspace stack still covers the bar.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"
@@ -14,8 +20,6 @@ if command -v flock >/dev/null 2>&1; then
   }
 fi
 
-# An explicit toggle owns the final state. Cancelling the transient ownership
-# prevents its delayed worker from applying a second, stale hide.
 if [ -e "$POLYBAR_PEEK_OWNER" ]; then
   polybar_cancel_peek
   snap_log "polybar peek cancelled by explicit toggle"
@@ -34,9 +38,6 @@ polybar_set_state "$cmd" "$wanted" || true
 after=$(polybar_wait_for_state "$wanted") || true
 
 if [ "${after:-$before}" = 1 ]; then
-  # The polybar log shows wm-restack is ignored with override-redirect=false.
-  # Raising here makes the keybinding deterministic even when i3 keeps an old
-  # workspace stack where existing windows still cover the bar area.
   polybar_raise
 fi
 

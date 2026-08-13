@@ -1,0 +1,240 @@
+/*
+ * Thunderbird UI styled to match the scoped Ghostty-TokyoNight Thunar theme.
+ * Message documents get the palette as a *fallback* only: the rules at the
+ * bottom carry no !important, so author-styled HTML mail still wins the
+ * cascade and keeps its own colors and typography.
+ */
+@-moz-document url-prefix("chrome://messenger/"),
+               url-prefix("about:3pane"),
+               url-prefix("about:message") {
+  :root {
+    color-scheme: dark !important;
+    font-size: 10pt !important;
+
+    --layout-background-0: #292d3e !important;
+    --layout-background-1: #292d3e !important;
+    --layout-background-2: #292d3e !important;
+    --layout-background-3: #2f3447 !important;
+    --layout-background-4: #363b52 !important;
+    --layout-color-0: #c0caf5 !important;
+    --layout-color-1: #c0caf5 !important;
+    --layout-color-2: #a9b1d6 !important;
+    --layout-color-3: #4e5575 !important;
+    --layout-border-0: #1a1d2a !important;
+    --layout-border-1: #1a1d2a !important;
+    --layout-border-2: #4e5575 !important;
+
+    --color-surface-base: #292d3e !important;
+    --color-surface-subtle: #292d3e !important;
+    --color-surface-lower: #1d202f !important;
+    --color-surface-deep: #1d202f !important;
+    --color-surface-raised: #2f3447 !important;
+    --color-surface-border: #1a1d2a !important;
+    --color-surface-border-intense: #4e5575 !important;
+    --color-text-base: #c0caf5 !important;
+    --color-text-secondary: #a9b1d6 !important;
+    --color-text-muted: #4e5575 !important;
+    --color-text-brand: #7aa2f7 !important;
+    --color-text-highlight: #7dcfff !important;
+    --color-text-warning: #e0af68 !important;
+    --color-text-critical: #f7768e !important;
+    --color-text-success: #9ece6a !important;
+
+    --selected-item-color: #364a82 !important;
+    --selected-item-text-color: #c0caf5 !important;
+    --sidebar-highlight-background-color: #364a82 !important;
+    --sidebar-highlight-text-color: #c0caf5 !important;
+    --sidebar-background-color: #292d3e !important;
+    --sidebar-background: #292d3e !important;
+    --sidebar-text-color: #c0caf5 !important;
+    --sidebar-color: #c0caf5 !important;
+    --sidebar-border-color: #1a1d2a !important;
+    --sidebar-border: #1a1d2a !important;
+
+    --toolbar-background-color: #292d3e !important;
+    --toolbar-text-color: #c0caf5 !important;
+    --toolbar-field-background-color: #292d3e !important;
+    --toolbar-field-color: #c0caf5 !important;
+    --toolbar-field-border-color: #4e5575 !important;
+    --toolbar-field-focus-border-color: #86be43 !important;
+    --toolbar-field-highlight: #364a82 !important;
+    --toolbar-field-highlight-color: #c0caf5 !important;
+    --toolbarbutton-background-color-hover: #2f3447 !important;
+    --toolbarbutton-background-color-active: #364a82 !important;
+    --toolbarbutton-hover-boxshadow: none !important;
+    --toolbarbutton-active-boxshadow: none !important;
+    --toolbarseparator-color: #1a1d2a !important;
+
+    --button-background-color: transparent !important;
+    --button-hover-background-color: #2f3447 !important;
+    --button-active-background-color: #364a82 !important;
+    --button-border-color: #1a1d2a !important;
+    --button-text-color: #a9b1d6 !important;
+    --button-primary-background-color: #86be43 !important;
+    --button-primary-hover-background-color: #9ece6a !important;
+    --button-primary-active-background-color: #86be43 !important;
+    --button-primary-text-color: #1d202f !important;
+    --button-primary-border-color: #86be43 !important;
+    --button-primary-shadow: none !important;
+    --button-primary-hover-shadow: none !important;
+    --button-border-radius: 0 !important;
+    --input-text-border-radius: 0 !important;
+    --panel-border-radius: 0 !important;
+    --listbox-border-radius: 0 !important;
+    --border-radius-small: 0 !important;
+    --border-radius-medium: 0 !important;
+    --border-radius-large: 0 !important;
+
+    --focus-outline-color: #86be43 !important;
+    --tabline-color: #86be43 !important;
+    --link-color: #7aa2f7 !important;
+    --link-color-hover: #7dcfff !important;
+    --link-color-active: #bb9af7 !important;
+    --link-color-visited: #bb9af7 !important;
+    --tabs-toolbar-background-color: #292d3e !important;
+    --tabs-toolbar-box-shadow: none !important;
+    --spaces-bg-color: #292d3e !important;
+    --spaces-bg-image: none !important;
+    --spaces-button-active-text-color: #c0caf5 !important;
+    --spaces-button-active-bg-color: #364a82 !important;
+
+    --tree-pane-background: #292d3e !important;
+    --tree-card-background: #292d3e !important;
+    --tree-card-border: #1a1d2a !important;
+    --tree-card-border-hover: #4e5575 !important;
+    --tree-card-border-focus: #86be43 !important;
+    --tree-view-bg: #292d3e !important;
+    --tree-view-color: #c0caf5 !important;
+    --tree-view-header-hover-bg: #2f3447 !important;
+    --tree-view-header-hover-active-bg: #363b52 !important;
+    --listbox-hover: #2f3447 !important;
+    --listbox-selected-bg: #364a82 !important;
+    --listbox-focused-selected-bg: #364a82 !important;
+    --listbox-selected-color: #c0caf5 !important;
+    --listbox-focused-selected-color: #c0caf5 !important;
+    --unread-color: #c0caf5 !important;
+
+    --treeitem-background-selected: #364a82 !important;
+    --treeitem-background-hover: #2f3447 !important;
+    --treeitem-text-active: #c0caf5 !important;
+    --treeitem-background-active: #364a82 !important;
+    --folderpane-unread-count-background: #4e5575 !important;
+    --folderpane-unread-count-text: #c0caf5 !important;
+    --folderpane-total-count-background: #2f3447 !important;
+    --folderpane-total-count-text: #a9b1d6 !important;
+    --folderpane-unread-new-count-background: #86be43 !important;
+
+    --panel-background: #292d3e !important;
+    --panel-color: #c0caf5 !important;
+    --panel-border-color: #1a1d2a !important;
+    --panel-separator-color: #1a1d2a !important;
+    --panel-shadow: none !important;
+    --panel-item-hover-bgcolor: #2f3447 !important;
+    --panel-item-active-bgcolor: #364a82 !important;
+    --arrowpanel-background: #292d3e !important;
+    --arrowpanel-color: #c0caf5 !important;
+    --arrowpanel-border-color: #1a1d2a !important;
+    --menu-background-color: #292d3e !important;
+    --menu-color: #c0caf5 !important;
+    --menu-border-color: #1a1d2a !important;
+    --menu-disabled-color: #4e5575 !important;
+    --menuitem-hover-background-color: #364a82 !important;
+    --menuitem-disabled-hover-background-color: #2f3447 !important;
+
+    scrollbar-color: #4e5575 #292d3e !important;
+    scrollbar-width: thin !important;
+  }
+
+  /* Popups are widget-backed on Linux, so the vars alone are not enough. */
+  :is(menupopup, panel, .menupopup-arrowscrollbox, tooltip) {
+    appearance: none !important;
+    background-color: #292d3e !important;
+    color: #c0caf5 !important;
+    border: 1px solid #1a1d2a !important;
+  }
+
+  :is(menupopup, panel) :is(menuitem, menu, toolbarbutton) {
+    appearance: none !important;
+    background-color: transparent !important;
+    color: #c0caf5 !important;
+  }
+
+  :is(menuitem, menu)[_moz-menuactive="true"]:not([disabled="true"]),
+  :is(menupopup, panel) toolbarbutton:hover {
+    background-color: #364a82 !important;
+    color: #c0caf5 !important;
+  }
+
+  :is(menuitem, menu)[disabled="true"] {
+    color: #4e5575 !important;
+  }
+
+  menuseparator {
+    appearance: none !important;
+    border-top: 1px solid #1a1d2a !important;
+    border-bottom: none !important;
+  }
+
+  * {
+    font-family: "JuliaMono", "NanumGothicCoding", "Noto Sans CJK KR",
+                 "Hack Nerd Font Mono", monospace !important;
+  }
+
+  :is(#messengerWindow, #navigation-toolbox, #tabs-toolbar, #unifiedToolbar,
+      #spacesToolbar, #folderPane, #threadPane, #messagePane, #messagepanebox) {
+    color: #c0caf5 !important;
+    background-color: #292d3e !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  :is(#folderPaneSplitter, #messagePaneSplitter) {
+    background-color: #1a1d2a !important;
+  }
+
+  :where(button, input, select, textarea, toolbarbutton, menulist,
+         search-textbox, menupopup, panel, tooltip, .tab-line,
+         .tab-background, .tree-view-row) {
+    border-radius: 0 !important;
+  }
+
+  :where(button, input, select, textarea, toolbarbutton, menulist,
+         search-textbox, menupopup, panel, tooltip) {
+    box-shadow: none !important;
+  }
+
+  .tab-line[selected="true"] {
+    background-color: #86be43 !important;
+  }
+
+  ::selection {
+    color: #c0caf5 !important;
+    background-color: #364a82 !important;
+  }
+}
+
+/*
+ * Message bodies. Thunderbird's dark reader (mail.dark-reader.enabled, on by
+ * default) already paints these, from chrome://messenger/skin/colors.css — an
+ * author sheet, so its near-black --color-gray-90 outranks any user-origin
+ * normal declaration. Recolor its variables instead of restating its rules:
+ * one !important each, and mail that sets colors on its own elements is
+ * untouched, exactly as under the stock dark reader.
+ */
+@-moz-document url-prefix("mailbox:"), url-prefix("imap:"),
+               url-prefix("news:"), url-prefix("snews:") {
+  :root {
+    --color-gray-90: #292d3e !important; /* message body background */
+    --color-gray-80: #2f3447 !important; /* .moz-header-part2, -part3 */
+    --color-gray-70: #363b52 !important; /* .moz-header-part1 */
+    --color-text-base-dark: #c0caf5 !important; /* message body text */
+    --color-text-highlight-dark: #7aa2f7 !important; /* links */
+
+    scrollbar-color: #4e5575 #292d3e;
+  }
+
+  ::selection {
+    color: #c0caf5;
+    background-color: #364a82;
+  }
+}

@@ -1,4 +1,11 @@
 #!/usr/bin/python3
+"""Target selection and packing rules for overflow-watcher.py.
+
+Pure functions only: wrap order, target choice, and the room-for-one-more test
+are fed synthetic workspace occupancy, so no i3 connection is involved. The
+method names carry the cases; the non-obvious input is focus[0], which may name
+a floating container that is not among `nodes`.
+"""
 
 from __future__ import annotations
 
@@ -32,12 +39,9 @@ class PickTargetTests(unittest.TestCase):
         self.assertEqual(WATCHER.pick_target(2, {1: True, 5: True, 9: True}), 5)
 
     def test_cascades_past_packed_workspaces(self) -> None:
-        # ws1 and ws3 packed, ws4 has one window: a new window on ws1 lands on ws4.
         self.assertEqual(WATCHER.pick_target(1, {1: False, 3: False, 4: True}), 4)
 
     def test_skips_empty_workspaces_in_favour_of_one_with_room(self) -> None:
-        # No external monitor, ws7-10 never opened: wrap past 6 to the first
-        # occupied workspace that still has room.
         self.assertEqual(WATCHER.pick_target(6, {1: True, 2: True, 6: False}), 1)
 
     def test_takes_occupied_above_before_wrapping(self) -> None:
@@ -116,7 +120,6 @@ class InsertionParentTests(unittest.TestCase):
 
     def test_floating_focus_falls_back_to_the_workspace(self) -> None:
         tiled = FakeCon(11)
-        # focus[0] names a floating container, which is not among `nodes`.
         ws = FakeCon(1, nodes=[tiled], focus=[99, 11])
         self.assertIs(WATCHER.insertion_parent(ws), ws)
 

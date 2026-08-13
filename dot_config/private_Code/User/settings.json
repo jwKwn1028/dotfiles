@@ -55,11 +55,9 @@
     "chat.viewTitle.enabled": false,
     "chat.viewSessions.enabled": false,
     "chat.viewWelcome.enabled": false,
-    // JuliaMono, matching ghostty/rofi. Sizes dropped ~17% from the New
-    // Computer Modern Mono values (22/18) because JuliaMono's x-height is
-    // ~28% larger, so 18/15 reads about the same on screen.
-    "terminal.integrated.fontSize": 15,
-    "editor.fontSize": 18,
+    // JuliaMono, matching ghostty/rofi.
+    "terminal.integrated.fontSize": 14,
+    "editor.fontSize": 14,
     "editor.fontFamily": "'JuliaMono', monospace",
     "terminal.integrated.fontFamily": "'JuliaMono', 'Hack Nerd Font Mono'",
     "editor.fontLigatures": true,

@@ -1,0 +1,21 @@
+#!/bin/sh
+# Launch Thunar wearing the Ghostty-TokyoNight GTK theme, scoped to this process.
+# The only place the theme is switched on; the .desktop override and the systemd
+# user unit both route through here. See ~/.themes/Ghostty-TokyoNight/README.md
+
+THEME=Ghostty-TokyoNight
+THEME_DIR="${HOME}/.themes/${THEME}"
+
+GTK_THEME="${THEME}"
+export GTK_THEME
+
+# Icons cannot come from CSS: Thunar asks GtkIconTheme directly, and under Xfce
+# the name comes from XSETTINGS (ubuntu-mono-light), which no per-app setting
+# overrides. So shadow the name -- ${THEME_DIR}/xdg-data/icons/ubuntu-mono-light
+# is an empty theme inheriting Papirus-Dark, first on XDG_DATA_DIRS.
+XDG_DATA_DIRS="${THEME_DIR}/xdg-data:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+export XDG_DATA_DIRS
+
+# Capitalised: argv[0] becomes WM_CLASS, and the lowercase symlink would make it
+# "thunar.Thunar" and break xfwm4/panel rules.
+exec /usr/bin/Thunar "$@"

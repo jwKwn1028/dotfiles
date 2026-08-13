@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+{{ $class := "desktop" -}}
+{{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
+{{ $nativeProfilesIni := joinPath .chezmoi.homeDir ".thunderbird/profiles.ini" -}}
+{{ $snapProfilesIni := joinPath .chezmoi.homeDir "snap/thunderbird/common/.thunderbird/profiles.ini" -}}
+{{ $chromeSrc := joinPath .chezmoi.sourceDir "dot_local/share/thunderbird-chrome" -}}
+# Installs portable UI preferences and chrome assets into Thunderbird's
+# installation-selected profile. Account and message data remain local.
+# Native profile state: {{ if lstat $nativeProfilesIni }}{{ include $nativeProfilesIni | sha256sum }}{{ else }}missing{{ end }}
+# Snap profile state: {{ if lstat $snapProfilesIni }}{{ include $snapProfilesIni | sha256sum }}{{ else }}missing{{ end }}
+# Theme asset state, so this re-runs when the customization changes:
+{{ range $asset := list "thunar.css" "userChrome.css" "userContent.css" -}}
+#   {{ $asset }}: {{ $assetPath := joinPath $chromeSrc $asset }}{{ if lstat $assetPath }}{{ include $assetPath | sha256sum }}{{ else }}missing{{ end }}
+{{ end -}}
+set -euo pipefail
+
+{{ if or (ne .chezmoi.os "linux") (ne $class "desktop") -}}
+echo "Non-Linux desktop; skipping Thunderbird profile configuration."
+exit 0
+{{- else -}}
+case "${1:-}" in
+    "" | --check) ;;
+    *) echo "Usage: $0 [--check]" >&2; exit 2 ;;
+esac
+
+readonly native_root={{ joinPath .chezmoi.homeDir ".thunderbird" | quote }}
+readonly snap_root={{ joinPath .chezmoi.homeDir "snap/thunderbird/common/.thunderbird" | quote }}
+readonly default_chrome_src={{ joinPath .chezmoi.homeDir ".local/share/thunderbird-chrome" | quote }}
+readonly chrome_src="${THUNDERBIRD_CHROME_SRC:-$default_chrome_src}"
+
+if [[ -n "${THUNDERBIRD_ROOT:-}" ]]; then
+    profile_roots=("$THUNDERBIRD_ROOT")
+else
+    profile_roots=("$native_root" "$snap_root")
+fi
+
+thunderbird_root=""
+profiles_ini=""
+for candidate_root in "${profile_roots[@]}"; do
+    if [[ -f "${candidate_root}/profiles.ini" ]]; then
+        thunderbird_root="$candidate_root"
+        profiles_ini="${candidate_root}/profiles.ini"
+        break
+    fi
+done
+
+if [[ -z "$profiles_ini" ]]; then
+    echo "Thunderbird has not created a profile yet; skipping profile configuration."
+    exit 0
+fi
+
+# Candidate order is: installation-selected profile, profile marked default,
+# then every remaining profile. This avoids committing a machine-specific ID.
+profile_dir=""
+while IFS= read -r candidate; do
+    case "$candidate" in
+        "" | "." | ".." | /* | ../* | */../* | */..)
+            continue
+            ;;
+    esac
+
+    candidate_dir="${thunderbird_root}/${candidate}"
+    if [[ -d "$candidate_dir" ]]; then
+        profile_dir="$candidate_dir"
+        break
+    fi
+done < <(
+    awk '
+        /^\[/ {
+            section = $0
+            sub(/\r$/, "", section)
+
+            if (section ~ /^\[Install[^]]*\]$/) {
+                mode = "install"
+                next
+            }
+            if (section ~ /^\[Profile[0-9]+\]$/) {
+                mode = "profile"
+                profile_count++
+                next
+            }
+
+            mode = ""
+            next
+        }
+
+        mode == "install" && /^Default=/ {
+            value = $0
+            sub(/^Default=/, "", value)
+            sub(/\r$/, "", value)
+            install_paths[++install_count] = value
+            next
+        }
+
+        mode == "profile" && /^Path=/ {
+            value = $0
+            sub(/^Path=/, "", value)
+            sub(/\r$/, "", value)
+            profile_paths[profile_count] = value
+            next
+        }
+
+        mode == "profile" && /^Default=1\r?$/ {
+            profile_defaults[profile_count] = 1
+        }
+
+        END {
+            for (i = 1; i <= install_count; i++) {
+                print install_paths[i]
+            }
+            for (i = 1; i <= profile_count; i++) {
+                if (profile_defaults[i]) {
+                    print profile_paths[i]
+                }
+            }
+            for (i = 1; i <= profile_count; i++) {
+                if (!profile_defaults[i]) {
+                    print profile_paths[i]
+                }
+            }
+        }
+    ' "$profiles_ini"
+)
+
+if [[ -z "$profile_dir" ]]; then
+    echo "No usable Thunderbird profile found; skipping profile configuration."
+    exit 0
+fi
+
+assets=(thunar.css userChrome.css userContent.css)
+for asset in "${assets[@]}"; do
+    if [[ ! -f "${chrome_src}/${asset}" ]]; then
+        echo "Missing Thunderbird theme asset: ${chrome_src}/${asset}" >&2
+        exit 1
+    fi
+done
+
+temp_user_js="$(mktemp "${profile_dir}/.user.js.XXXXXX")"
+trap 'rm -f -- "$temp_user_js"' EXIT
+cat >"$temp_user_js" <<'THUNDERBIRD_USER_JS_EOF'
+{{ template "thunderbird-user.js" . -}}
+THUNDERBIRD_USER_JS_EOF
+chmod 0600 "$temp_user_js"
+
+if [[ "${1:-}" == "--check" ]]; then
+    for asset in "${assets[@]}"; do
+        cmp -s "${chrome_src}/${asset}" "${profile_dir}/chrome/${asset}" || {
+            echo "Thunderbird chrome/${asset} is not up to date." >&2
+            exit 1
+        }
+    done
+    cmp -s "$temp_user_js" "${profile_dir}/user.js" || {
+        echo "Thunderbird user.js is not up to date." >&2
+        exit 1
+    }
+    echo "Thunderbird profile theme check passed."
+    exit 0
+fi
+
+mkdir -p -- "${profile_dir}/chrome"
+for asset in "${assets[@]}"; do
+    src="${chrome_src}/${asset}"
+    dest="${profile_dir}/chrome/${asset}"
+    if [[ ! -f "$dest" ]] || ! cmp -s "$src" "$dest"; then
+        cp -f -- "$src" "$dest"
+        echo "Updated chrome/${asset}."
+    fi
+done
+
+readonly user_js="${profile_dir}/user.js"
+if [[ -f "$user_js" ]] && cmp -s "$temp_user_js" "$user_js"; then
+    echo "Thunderbird user.js is already up to date."
+    exit 0
+fi
+
+mv -f -- "$temp_user_js" "$user_js"
+trap - EXIT
+echo "Installed Thunderbird UI preferences; restart Thunderbird to load the theme."
+{{- end }}

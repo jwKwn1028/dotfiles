@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Makes zsh the login shell (the whole dotfile set targets zsh).
+# Makes zsh the login shell (the whole dotfile set targets zsh), first ensuring
+# zsh is listed in /etc/shells as a valid login shell.
+
 set -euo pipefail
 
 zsh_path="$(command -v zsh || true)"
@@ -8,7 +10,6 @@ if [ -z "$zsh_path" ]; then
     exit 0
 fi
 
-# Ensure zsh is a valid login shell.
 if ! grep -qxF "$zsh_path" /etc/shells 2>/dev/null; then
     echo "$zsh_path" | sudo tee -a /etc/shells >/dev/null
 fi

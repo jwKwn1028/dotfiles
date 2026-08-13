@@ -4,12 +4,9 @@
 
 [tui]
 status_line_use_colors = true
+# Keep fixed-width information first so a long cwd is clipped instead.
 status_line = [
-  "current-dir",
-  "git-branch",
-  "branch-changes",
   "model-with-reasoning",
-  "fast-mode",
-  "context-used",
   "context-remaining",
+  "current-dir",
 ]

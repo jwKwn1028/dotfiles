@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+# Save every i3 workspace layout, plus the extra state i3-resurrect does not
+# capture on its own.
+#
+# i3-resurrect saves whatever a running AppImage exposed in /proc/<pid>/cmdline,
+# often an ephemeral /tmp/.mount_helium*/... path that is gone after a reboot.
+# So every Helium entry is rewritten to a reusable command resolved from the
+# .desktop Exec line (field codes stripped), falling back to the newest AppImage
+# under ~/Applications, emitted as a JSON array. Hardcoding a version would break
+# on upgrade.
+
 set -euo pipefail
 
 STATE_DIR="${I3_RESURRECT_STATE_DIR:-$HOME/.config/i3/resurrect}"
@@ -72,11 +82,6 @@ ensure_zen_browser_programs() {
     mv "$tmp" "$programs_file"
 }
 
-# Print the Helium launch command as a JSON array, e.g.
-# ["/home/me/Applications/helium-0.13.1.1-x86_64.AppImage"]. Helium is shipped
-# as a versioned AppImage, so resolve the path from the .desktop Exec line
-# (falling back to the newest AppImage under ~/Applications) instead of
-# hardcoding a version that breaks on upgrade.
 helium_launch_command() {
     local exec_line=""
     local cand=""
@@ -84,7 +89,6 @@ helium_launch_command() {
     if [ -r "$HELIUM_DESKTOP_FILE" ]; then
         exec_line="$(awk -F= '/^Exec=/{sub(/^Exec=/, ""); print; exit}' "$HELIUM_DESKTOP_FILE")"
     fi
-    # Drop desktop-entry field codes (%U %f ...) and trailing whitespace.
     exec_line="$(printf '%s' "$exec_line" | sed -E 's/[[:space:]]*%[A-Za-z]//g; s/[[:space:]]+$//')"
 
     if [ -z "$exec_line" ]; then
@@ -121,10 +125,6 @@ ensure_helium_browser_programs() {
     helium_cmd="$(helium_launch_command)" || return 0
     [ -n "$helium_cmd" ] || return 0
 
-    # i3-resurrect captures whatever the running AppImage exposed in
-    # /proc/<pid>/cmdline (often an ephemeral /tmp/.mount_helium*/... path that
-    # won't exist after a reboot). Replace any Helium-ish entry with the clean,
-    # reusable launch command, one per Helium window in the layout.
     tmp="$programs_file.tmp"
     jq --argjson count "$helium_windows" --argjson cmd "$helium_cmd" --arg wd "$HOME" '
         def is_helium_command($c):

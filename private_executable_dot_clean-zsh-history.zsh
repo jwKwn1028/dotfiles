@@ -2,9 +2,32 @@
 
 # Conservatively prune zsh history for history-based suggestions.
 #
-# The script starts an isolated interactive zsh so aliases and functions from the
-# user's normal configuration count as valid commands. The isolated shell never
-# writes to the real history file.
+# Drops exact duplicates (keeping the most recent), unresolved command names,
+# trivial standalone commands, and commands carrying credential-like values.
+# Names in $XDG_CONFIG_HOME/zsh-history-cleaner/keep are always treated as real
+# -- uninstalled software, virtualenv-only functions, tools from another machine
+# sharing this history. An unresolved name is also kept when it looks like an
+# explicitly invoked script; path-shaped diagnostics are rejected. A timestamped
+# backup is written before the history is replaced.
+#
+# Load-bearing, each having broken this script before:
+#
+#   - It re-enters through an isolated interactive zsh so the user's aliases and
+#     functions count as valid commands; that shell never writes the real
+#     history file. `shift` before `source` is required: `source` with no
+#     arguments leaves the caller's positional parameters visible to the sourced
+#     file, which handed this script its own path as HISTORY_FILE and destroyed
+#     it on a no-argument run.
+#   - In an interactive shell $history hides the newest event, so a sentinel
+#     occupies that slot; without it the last real entry was dropped.
+#   - Kept entries are copied as raw file records, not replayed with `print -s`:
+#     replaying restamps every entry (SHARE_HISTORY writes timestamps even with
+#     EXTENDED_HISTORY unset) and loses zsh's metafied encoding of non-ASCII.
+#     One record is one entry byte-for-byte -- optional ": <timestamp>:<elapsed>;"
+#     prefix plus the continuation lines of a multi-line command, which zsh marks
+#     with a trailing odd number of backslashes.
+#   - `print -s` also ignores the HIST_* discard options, so exact duplicates are
+#     resolved here rather than by HIST_IGNORE_ALL_DUPS.
 
 emulate -L zsh
 
@@ -20,6 +43,10 @@ usage() {
   print -r -- "  - trivial standalone commands"
   print -r -- "  - commands containing credential-like values"
   print -r -- ""
+  print -r -- "Command names listed in \$XDG_CONFIG_HOME/zsh-history-cleaner/keep"
+  print -r -- "(or ~/.config/zsh-history-cleaner/keep) are never treated as unresolved."
+  print -r -- ""
+  print -r -- "Entries that survive keep their original timestamps."
   print -r -- "A timestamped backup is created before the history is replaced."
   print -r -- "With no HISTORY_FILE, an exported HISTFILE is used; otherwise"
   print -r -- "\$XDG_STATE_HOME/zsh/history (or ~/.local/state/zsh/history) is used."
@@ -29,23 +56,18 @@ usage() {
   print -r -- "  -h, --help     Show this help"
 }
 
-# A non-interactive script does not normally have the user's aliases/functions.
-# Re-enter through an isolated interactive shell, suppressing startup stdout while
-# preserving this script's own output on descriptor 3.
 if [[ ${ZSH_HISTORY_CLEANER_INTERNAL:-0} != 1 ]]; then
   default_history=${HISTFILE:-${state_dir}/zsh/history}
   HISTFILE='' \
     ZSH_HISTORY_CLEANER_INTERNAL=1 \
     ZSH_HISTORY_CLEANER_DEFAULT_HISTORY=$default_history \
     ZSH_HISTORY_CLEANER_OUTPUT_FD=3 \
-    zsh -ic 'HISTFILE=""; source "$1" "${@:2}"' \
+    zsh -ic 'HISTFILE=""; cleaner_script=$1; shift; source "$cleaner_script" "$@"' \
       clean-zsh-history "$script_path" "$@" 3>&1 >/dev/null
   cleaner_status=$?
   return $cleaner_status 2>/dev/null || exit $cleaner_status
 fi
 
-# Prevent startup hooks in the isolated interactive shell from saving any of its
-# in-memory history to the user's history file.
 HISTFILE=''
 umask 077
 setopt EXTENDED_GLOB
@@ -97,11 +119,17 @@ done
 history_file=${history_arg:-${ZSH_HISTORY_CLEANER_DEFAULT_HISTORY:-${state_dir}/zsh/history}}
 history_file=${history_file:P}
 
+if [[ $history_file == ${script_path:P} ]]; then
+  fail "refusing to clean this script itself: $history_file" || return
+fi
 if [[ ! -f $history_file ]]; then
   fail "history file does not exist: $history_file" || return
 fi
 if [[ ! -r $history_file ]]; then
   fail "history file is not readable: $history_file" || return
+fi
+if IFS= read -r shebang_line < "$history_file" && [[ $shebang_line == '#!'* ]]; then
+  fail "refusing to clean what looks like a script, not a history file: $history_file" || return
 fi
 if (( ! dry_run )) && [[ ! -w $history_file || ! -w ${history_file:h} ]]; then
   fail "history file and its directory must be writable: $history_file" || return
@@ -116,6 +144,7 @@ done
 snapshot_file=''
 cleaned_file=''
 context_file=''
+history_sentinel=': zsh-history-cleaner sentinel, never written to disk'
 integer history_contexts=0
 
 cleanup() {
@@ -142,7 +171,6 @@ cleaned_file=$(mktemp "${history_file:h}/.${history_file:t}.cleaned.XXXXXX") ||
 context_file=$(mktemp "${history_file:h}/.${history_file:t}.context.XXXXXX") ||
   { fail "could not create a private history context" || return; }
 
-# Verify that the source did not change while it was being copied.
 source_hash=$(sha256sum -- "$history_file") || { fail "could not hash history" || return; }
 source_hash=${source_hash%%[[:space:]]*}
 cp -p -- "$history_file" "$snapshot_file" ||
@@ -158,7 +186,37 @@ if [[ $source_hash != $snapshot_hash || $source_hash != $current_hash ]]; then
   fail "history changed while it was being read; no changes made (run again)" || return
 fi
 
-# Read only the stable snapshot into a private history context.
+records=()
+record=''
+record_line=''
+integer record_open=0
+while IFS= read -r record_line || [[ -n $record_line ]]; do
+  if (( record_open )); then
+    record+=$'\n'$record_line
+  else
+    record=$record_line
+    record_open=1
+  fi
+  record_trailing=${record##*[^\\]}
+  (( ${#record_trailing} % 2 )) && continue
+  records+=("$record")
+  record_open=0
+  record_line=''
+done < "$snapshot_file"
+(( record_open )) && records+=("$record")
+
+unsetopt \
+  APPEND_HISTORY \
+  EXTENDED_HISTORY \
+  HIST_IGNORE_ALL_DUPS \
+  HIST_IGNORE_DUPS \
+  HIST_IGNORE_SPACE \
+  HIST_REDUCE_BLANKS \
+  HIST_SAVE_NO_DUPS \
+  INC_APPEND_HISTORY \
+  INC_APPEND_HISTORY_TIME \
+  SHARE_HISTORY
+
 HISTSIZE=200000
 SAVEHIST=200000
 fc -p "$context_file" $HISTSIZE $SAVEHIST
@@ -167,35 +225,38 @@ fc -R -- "$snapshot_file" ||
   { fail "zsh could not read the history snapshot" || return; }
 zmodload zsh/parameter ||
   { fail "could not load zsh history parameters" || return; }
+print -s -- "$history_sentinel"
 
 entries=()
 for event_number in ${(on)${(k)history}}; do
   entries+=("$history[$event_number]")
 done
 
+if (( $#records != $#entries )); then
+  fail "could not match $#records history records to $#entries parsed entries; no changes made" || return
+fi
+
 integer original_count=$#entries
-integer candidate_count=0
 integer dropped_empty=0
+integer dropped_duplicate=0
 integer dropped_sensitive=0
 integer dropped_trivial=0
 integer dropped_unresolved=0
 
-# Build the cleaned result in another private context. Only exact duplicate
-# suppression is enabled; other user history-discard settings are disabled so
-# they cannot silently make this filter more aggressive.
-fc -p "$context_file" $HISTSIZE $SAVEHIST
-(( ++history_contexts ))
-unsetopt \
-  APPEND_HISTORY \
-  EXTENDED_HISTORY \
-  HIST_IGNORE_DUPS \
-  HIST_IGNORE_SPACE \
-  HIST_REDUCE_BLANKS \
-  HIST_SAVE_NO_DUPS \
-  INC_APPEND_HISTORY \
-  INC_APPEND_HISTORY_TIME \
-  SHARE_HISTORY
-setopt HIST_IGNORE_ALL_DUPS
+typeset -A last_index
+for (( entry_index = 1; entry_index <= $#entries; entry_index++ )); do
+  [[ -n ${entries[$entry_index]} ]] && last_index[${entries[$entry_index]}]=$entry_index
+done
+
+keep_file=${XDG_CONFIG_HOME:-${HOME}/.config}/zsh-history-cleaner/keep
+typeset -A keep_commands
+if [[ -r $keep_file ]]; then
+  while IFS= read -r keep_line; do
+    keep_line=${keep_line%%\#*}
+    keep_line=${${keep_line##[[:space:]]#}%%[[:space:]]#}
+    [[ -n $keep_line ]] && keep_commands[$keep_line]=1
+  done < "$keep_file"
+fi
 
 trivial_commands=(
   :
@@ -219,10 +280,18 @@ trivial_commands=(
   y
 )
 
-for entry in "${entries[@]}"; do
+kept_records=()
+
+for (( entry_index = 1; entry_index <= $#entries; entry_index++ )); do
+  entry=${entries[$entry_index]}
   words=(${(z)entry})
   if (( $#words == 0 )); then
     (( ++dropped_empty ))
+    continue
+  fi
+
+  if [[ ${last_index[$entry]} != $entry_index ]]; then
+    (( ++dropped_duplicate ))
     continue
   fi
 
@@ -249,9 +318,8 @@ for entry in "${entries[@]}"; do
 
     integer recognized=0
     whence -w -- "$command_head" >/dev/null 2>&1 && recognized=1
+    [[ -n ${keep_commands[$command_head]} ]] && recognized=1
 
-    # Keep plausible explicit scripts even if they only exist in the directory
-    # from which they were originally invoked. Reject path-shaped diagnostics.
     if (( ! recognized )); then
       if [[ $command_head == ./* && $command_head != (./|./.) ]]; then
         recognized=1
@@ -272,39 +340,44 @@ for entry in "${entries[@]}"; do
     fi
   fi
 
-  print -s -- "$entry"
-  (( ++candidate_count ))
+  kept_records+=("$records[$entry_index]")
 done
 
-zmodload zsh/parameter
-integer final_count=${#history}
-integer duplicate_count=$(( candidate_count - final_count ))
+integer final_count=$#kept_records
+integer expected_count=$(( original_count - dropped_empty - dropped_duplicate -
+                           dropped_sensitive - dropped_trivial - dropped_unresolved ))
+if (( final_count != expected_count )); then
+  fail "internal count mismatch: kept $final_count, expected $expected_count" || return
+fi
 
-fc -W -- "$cleaned_file" ||
-  { fail "zsh could not write the cleaned history" || return; }
+if (( final_count )); then
+  print -rl -- "${kept_records[@]}" > "$cleaned_file" ||
+    { fail "could not write the cleaned history" || return; }
+else
+  : > "$cleaned_file" || { fail "could not write the cleaned history" || return; }
+fi
 chmod --reference="$history_file" -- "$cleaned_file" ||
   { fail "could not preserve history permissions" || return; }
 
-# Confirm the generated file is fully reloadable before considering replacement.
 fc -p "$context_file" $HISTSIZE $SAVEHIST
 (( ++history_contexts ))
 fc -R -- "$cleaned_file" ||
   { fail "generated history failed validation" || return; }
 zmodload zsh/parameter
+print -s -- "$history_sentinel"
 if (( ${#history} != final_count )); then
-  fail "generated history count changed during validation" || return
+  fail "generated history holds ${#history} entries, expected $final_count" || return
 fi
 
 report "History: $history_file"
 report "Entries: $original_count -> $final_count"
-report "Removed: unresolved/noise=$dropped_unresolved, trivial=$dropped_trivial, sensitive=$dropped_sensitive, empty=$dropped_empty, exact-duplicates=$duplicate_count"
+report "Removed: unresolved/noise=$dropped_unresolved, trivial=$dropped_trivial, sensitive=$dropped_sensitive, empty=$dropped_empty, exact-duplicates=$dropped_duplicate"
 
 if (( dry_run )); then
   report "Dry run: no files changed."
   return 0
 fi
 
-# Refuse to replace a file that another shell changed after the snapshot.
 current_hash=$(sha256sum -- "$history_file") ||
   { fail "could not perform final history check" || return; }
 current_hash=${current_hash%%[[:space:]]*}

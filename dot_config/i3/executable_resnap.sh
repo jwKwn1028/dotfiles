@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 # Re-applies tile-snap.sh to every window currently marked `_snap_<region>`.
-# Called after toggle-titles.sh or `polybar-msg cmd toggle` so snapped
-# windows re-fit the workspace's new usable rect / border state. Each window
-# is re-snapped concurrently — tile-snap targets disjoint windows so there
-# is no cross-window contention.
+# Called after toggle-titles.sh or `polybar-msg cmd toggle` so snapped windows
+# re-fit the workspace's new usable rect and border state. Concurrent: tile-snap
+# targets disjoint windows.
+#
+# One entry per window, not per mark -- a window with stale duplicate _snap_*
+# marks gets its largest one picked, and tile-snap unmarks the rest.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_snap-common.sh"
 
-# One entry per window (not per mark). If a window has stale duplicate
-# _snap_* marks from before tile-snap learned to strip them, pick the first
-# one; tile-snap will then unmark the rest as part of re-snapping.
 mapfile -t entries < <(i3-msg -t get_tree | jq -r '
   .. | objects | select(.window? != null) |
   . as $n |

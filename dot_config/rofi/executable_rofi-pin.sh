@@ -6,19 +6,21 @@
 # anything reachable organically. Only the empty-query list is ordered; typing
 # re-ranks via fzf.
 #
-# Two rofi behaviours constrain the numbers below (verified against 1.7.5):
+# Two rofi behaviours constrain the numbers below (verified against 1.7):
 #   - Launching a pin increments its count, so pins must be spaced or they
 #     reorder each other. STEP is the launches needed to pass one pin.
-#   - Every write subtracts the lowest count from all entries, so the bottom
+#   - Every write subtracts the lowest count from all entries, so the lowest
 #     pin would normalise to 0 and lose its pin. FLOOR is an inert entry
 #     matching no real app that holds the minimum at 0, evicted once real
 #     history fills max-history-size.
 #
 #   ./rofi-pin.sh                            # apply the PINS list below
-#   ./rofi-pin.sh foo.desktop bar.desktop    # pin these instead (first = topmost)
+#   ./rofi-pin.sh foo.desktop bar.desktop    # pin these instead (first is top)
 #
-# Desktop files stored beside this script are installed into the user's XDG
-# applications directory so rofi can resolve their desktop IDs.
+# Desktop files stored beside this script are installed into the user's
+# applications directory so rofi can resolve their desktop IDs. Real history is
+# kept below the pins, dropping any entry just pinned.
+
 set -euo pipefail
 
 PINS=(
@@ -56,7 +58,6 @@ for app in "${PINS[@]}"; do
   n=$((n - STEP))
 done > "$tmp"
 
-# Keep real history below the pins, dropping any entry we just pinned so it can't duplicate.
 if [ -f "$CACHE" ]; then
   awk 'NR==FNR { pin[$0]=1; next }
        { name = $0; sub(/^[0-9]+ /, "", name); if (!(name in pin)) print }' \

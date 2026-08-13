@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+"""Collect and restore Zen/Firefox tab URLs for i3-resurrect.
+
+Reads the browsers' mozlz4 session stores to recover each window's selected tab,
+matches those pages against the live i3 tree, and falls back to asking the
+focused window directly when the session file is behind.
+
+That fallback goes through the clipboard and restores its previous contents. The
+save binding may still have modifiers physically down, so it lets them settle
+and clears any that remain before synthesizing keys.
+"""
+
 import json
 import os
 import pathlib
@@ -325,8 +336,6 @@ def live_url_for_window(window_id):
     if not window_id:
         return None
 
-    # The save binding may still have modifiers physically down. Let them
-    # settle, then ask xdotool to clear any remaining modifiers for each key.
     xdotool("windowactivate", "--sync", str(window_id), timeout=2.0)
     time.sleep(0.08)
     xdotool("key", "--clearmodifiers", "ctrl+l")

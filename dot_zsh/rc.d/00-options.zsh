@@ -1,6 +1,5 @@
-# --------------------------------------------------------
-# Shell options, history, base ZLE widgets
-# --------------------------------------------------------
+# Shell options, history, and base ZLE widgets.
+
 setopt AUTO_CD
 setopt INTERACTIVE_COMMENTS
 setopt NO_BEEP

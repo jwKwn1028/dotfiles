@@ -1,6 +1,10 @@
 # macOS compatibility prelude for the unchanged rc.d modules.
 # Source this from ~/.zshenv so PATH and clipboard variables are ready before
 # ~/.zshrc loads _lib.zsh and the numbered modules.
+#
+# The narrow shims stay ahead of both Homebrew and Apple's system utilities.
+# zsh-helix-mode only auto-detects X11 and Wayland, so an explicit override is
+# respected and the native macOS clipboard commands are used otherwise.
 
 [[ $OSTYPE == darwin* ]] || return 0
 
@@ -22,7 +26,6 @@ for _macos_compat_prefix in "${_macos_compat_prefixes[@]}"; do
     _macos_compat_paths+=("$_macos_compat_prefix/sbin")
 done
 
-# Keep the narrow shims ahead of both Homebrew and Apple's system utilities.
 path=(
   "$MACOS_ZSH_COMPAT_ROOT/bin"
   "${_macos_compat_paths[@]}"
@@ -30,8 +33,6 @@ path=(
 )
 export PATH MACOS_ZSH_COMPAT_ROOT
 
-# zsh-helix-mode only auto-detects X11 and Wayland. Respect an explicit user
-# override, otherwise use the native macOS clipboard commands.
 (( ${+ZHM_CLIPBOARD_PIPE_CONTENT_TO} )) ||
   ZHM_CLIPBOARD_PIPE_CONTENT_TO=pbcopy
 (( ${+ZHM_CLIPBOARD_READ_CONTENT_FROM} )) ||

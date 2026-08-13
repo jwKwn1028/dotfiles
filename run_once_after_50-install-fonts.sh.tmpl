@@ -2,13 +2,13 @@
 {{ $class := "desktop" -}}
 {{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
 # Installs the fonts the desktop configs name by family:
-#   - NewComputerModernMono10 : ghostty primary face; rofi launcher font
-#   - NewComputerModernSans10 : polybar's font-0
+#   - JuliaMono               : the UI face everywhere -- ghostty, polybar,
+#                               rofi, editors, XSETTINGS, Thunar's GTK theme
 #   - NanumGothicCoding       : Korean monospace fallback in ghostty
 #   - JetBrainsMono Nerd Font : icon glyphs used by polybar and starship
 #
-# Installed to ~/.local/share/fonts from upstream archives. New Computer
-# Modern takes an apt fast path because Debian packages it.
+# Installed to ~/.local/share/fonts from upstream archives. New Computer Modern
+# was the previous UI face; no longer installed, existing copies left in place.
 set -euo pipefail
 
 {{ if ne $class "desktop" -}}
@@ -71,21 +71,13 @@ install_zip() {
     rm -rf "$tmp"
 }
 
-# --- New Computer Modern (Mono + Sans) ---
-# Two faces from one archive: Mono is ghostty's primary face and the rofi
-# launcher font, Sans is the polybar bar font. Debian's
-# fonts-newcomputermodern package carries both.
-if { ! have_family "NewComputerModernMono10" || ! have_family "NewComputerModernSans10"; } &&
-    command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get install -y fonts-newcomputermodern 2>/dev/null || true
-    fc-cache -f >/dev/null 2>&1 || true
-fi
-# Upstream CTAN archive, used wherever apt did not supply it.
+# --- JuliaMono ---
+# No apt package on Mint 22.3. All weights, because the configs use the real
+# italic rather than a synthetic slant.
 install_zip \
-    "https://mirrors.ctan.org/fonts/newcomputermodern.zip" \
-    "$fontdir/NewComputerModern" \
-    'NewComputerModernMono10=NewCMMono10-*.otf' \
-    'NewComputerModernSans10=NewCMSans10-*.otf' || true
+    "https://github.com/cormullion/juliamono/releases/latest/download/JuliaMono-ttf.zip" \
+    "$fontdir/JuliaMono" \
+    'JuliaMono=JuliaMono-*.ttf' || true
 
 # --- NanumGothicCoding ---
 # Naver's own GitHub release. Do not substitute the AUR package or the older
@@ -107,8 +99,7 @@ echo "==> fonts done."
 
 # Surface anything the desktop configs still cannot resolve, rather than
 # leaving it to be discovered as tofu in the terminal later.
-for family in "NewComputerModernMono10" "NewComputerModernSans10" \
-    "NanumGothicCoding" "JetBrainsMono Nerd Font"; do
+for family in "JuliaMono" "NanumGothicCoding" "JetBrainsMono Nerd Font"; do
     have_family "$family" || echo "WARN: $family is still unresolved."
 done
 {{- end }}

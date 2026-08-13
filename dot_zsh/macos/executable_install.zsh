@@ -1,4 +1,8 @@
 #!/bin/zsh
+# Install the macOS prelude hook and the packages the rc.d modules need there.
+#
+# Three packages only, covering the real macOS/GNU incompatibilities. Everything
+# else rc.d references is an optional user-facing tool, left to the user.
 
 emulate -L zsh
 setopt errexit nounset pipefail
@@ -16,8 +20,6 @@ if ! (( $+commands[brew] )); then
   exit 1
 fi
 
-# These three packages cover the actual macOS/GNU incompatibilities. The
-# remaining applications referenced by rc.d are user-facing optional tools.
 brew install coreutils rsync fzf
 
 if [[ ! -e "$HOME/.zshenv" ]]; then

@@ -1,0 +1,29 @@
+:root[zen-has-empty-tab="true"] #zen-browser-background::before,
+:root[zen-has-empty-tab="true"] #zen-browser-background::after {
+  background: url("zen-newtab-wallpaper.png") center center / cover no-repeat fixed !important;
+  opacity: 1 !important;
+}
+
+:root[zen-has-empty-tab="true"] #tabbrowser-tabpanels,
+:root[zen-has-empty-tab="true"] .browserSidebarContainer,
+:root[zen-has-empty-tab="true"] .browserContainer,
+:root[zen-has-empty-tab="true"] browser[type="content"][transparent="true"] {
+  background: transparent !important;
+}
+
+:root[zen-compact-mode="true"][zen-has-empty-tab="true"]:not([customizing]):not([inDOMFullscreen="true"])
+  #navigator-toolbox:not([animate="true"]):not([zen-has-hover]):not([zen-user-show]):not([has-popup-menu]):not([movingtab]):not([zen-compact-mode-active]) {
+  left: calc(-1 * var(--actual-zen-sidebar-width) + var(--zen-element-separation) / 2 + 1px) !important;
+}
+
+:root[zen-compact-mode="true"][zen-has-empty-tab="true"][zen-right-side="true"]:not([customizing]):not([inDOMFullscreen="true"])
+  #navigator-toolbox:not([animate="true"]):not([zen-has-hover]):not([zen-user-show]):not([has-popup-menu]):not([movingtab]):not([zen-compact-mode-active]) {
+  right: calc(-1 * var(--actual-zen-sidebar-width) + var(--zen-element-separation) / 2 + 1px) !important;
+  left: auto !important;
+}
+
+:root[zen-compact-mode="true"][zen-has-empty-tab="true"]:not([customizing]):not([inDOMFullscreen="true"])
+  #navigator-toolbox:not([animate="true"]):not([zen-has-hover]):not([zen-user-show]):not([has-popup-menu]):not([movingtab]):not([zen-compact-mode-active])
+  #titlebar {
+  visibility: hidden !important;
+}

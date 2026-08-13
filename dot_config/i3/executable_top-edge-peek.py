@@ -8,6 +8,14 @@ bar that was already visible, and hides the bar itself if the holder dies.
 Polling, not an input region at the edge. An InputOnly window there would
 swallow the clicks Polybar's modules need, and stacking it underneath flaps
 instead -- showing the bar puts it above the region, which reads as a leave.
+
+Raise and drop thresholds differ on purpose: the bar is tall and appears under
+the pointer, so one threshold would dismiss it the moment the pointer moved onto
+what it just revealed. Re-arming uses the release threshold, so a pointer parked
+at the top of a fullscreen screen asks i3 once rather than once per poll. A
+pointer off every known monitor (mid-hotplug) counts as away. On reconnect the
+hold is dropped first: this process is still alive, so the helper's worker would
+not release it.
 """
 
 from __future__ import annotations
@@ -23,14 +31,9 @@ import time
 
 from Xlib import display as xdisplay
 
-# The pointer must reach this close to a monitor's top edge to raise the bar.
 ENTER_PX = 2
-# ...and get this far away to drop it. The gap is deliberate: the bar is 28px
-# tall and appears under the pointer, so a single threshold would dismiss it the
-# moment the pointer moved onto what it just revealed.
 LEAVE_PX = 40
 POLL_SECONDS = 0.1
-# Outputs changing already restarts this process; re-reading is just insurance.
 MONITOR_REFRESH_SECONDS = 5.0
 
 
@@ -55,7 +58,6 @@ class EdgeGesture:
     def update(self, monitors, x, y) -> None:
         top = monitor_top(monitors, x, y)
         if top is None:
-            # Off every known monitor (mid-hotplug); treat as away.
             self.release()
             return
 
@@ -67,9 +69,6 @@ class EdgeGesture:
             return
 
         if self.blocked:
-            # Re-arm on the same threshold a hold releases at, so a pointer
-            # parked at the top of a fullscreen screen asks i3 once rather than
-            # once per poll.
             if offset > self.leave_px:
                 self.blocked = False
             return
@@ -251,8 +250,6 @@ def main() -> int:
             except StopWatcher:
                 raise
             except Exception:
-                # Drop the hold before reconnecting: this process is still
-                # alive, so the helper's worker will not release it for us.
                 gesture.release()
                 time.sleep(1)
     except (StopWatcher, KeyboardInterrupt):

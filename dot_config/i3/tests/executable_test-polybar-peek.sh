@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# Transient Polybar peek, and the workspace navigation that triggers it.
+#
+# Each failure message names what its case pins down. The mock keeps three
+# pieces of state a real session has: `visibility` (what X maps), `belief`
+# (polybar's own flag, drivable apart from visibility the way i3 does for a
+# fullscreen dock), and `parent` (i3's grip -- reparented means i3 still holds
+# the dock, root means polybar really withdrew it).
 
 set -euo pipefail
 
@@ -33,6 +40,7 @@ case "${1:-}" in
 esac
 EOF
 
+# `-tree` names the root on every window, so Root and Parent stay separate lines.
 cat > "$MOCK_BIN/xwininfo" <<'EOF'
 #!/usr/bin/env bash
 if [ "$(cat "$POLYBAR_TEST_STATE_DIR/visibility")" = visible ]; then
@@ -40,14 +48,39 @@ if [ "$(cat "$POLYBAR_TEST_STATE_DIR/visibility")" = visible ]; then
 else
   printf 'Map State: IsUnMapped\n'
 fi
+case " $* " in
+  *" -tree "*)
+    printf '  Root window id: 0x3c9 (the root window)\n'
+    if [ "$(cat "$POLYBAR_TEST_STATE_DIR/parent")" = reparented ]; then
+      printf '  Parent window id: 0x4002ba "[i3 con] container"\n'
+    else
+      printf '  Parent window id: 0x3c9 (the root window)\n'
+    fi
+    ;;
+esac
 EOF
 
+# Stands in for the Xlib withdraw: i3 lets go of the dock it was holding.
+cat > "$MOCK_BIN/python3" <<'EOF'
+#!/usr/bin/env bash
+cat > /dev/null
+printf 'withdraw %s\n' "$*" >> "$POLYBAR_TEST_STATE_DIR/x-events"
+printf 'root\n' > "$POLYBAR_TEST_STATE_DIR/parent"
+printf 'hidden\n' > "$POLYBAR_TEST_STATE_DIR/visibility"
+EOF
+
+# A command matching the flag is a no-op, exactly as in polybar.
 cat > "$MOCK_BIN/polybar-msg" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$POLYBAR_TEST_STATE_DIR/polybar-events"
+belief=$(cat "$POLYBAR_TEST_STATE_DIR/belief")
 case "${2:-}" in
-  show) printf 'visible\n' > "$POLYBAR_TEST_STATE_DIR/visibility" ;;
-  hide) printf 'hidden\n' > "$POLYBAR_TEST_STATE_DIR/visibility" ;;
+  show) [ "$belief" = visible ] && exit 0
+        printf 'visible\n' | tee "$POLYBAR_TEST_STATE_DIR/belief" \
+          > "$POLYBAR_TEST_STATE_DIR/visibility" ;;
+  hide) [ "$belief" = hidden ] && exit 0
+        printf 'hidden\n' | tee "$POLYBAR_TEST_STATE_DIR/belief" \
+          > "$POLYBAR_TEST_STATE_DIR/visibility" ;;
   *) exit 1 ;;
 esac
 EOF
@@ -73,7 +106,8 @@ printf 'eDP connected primary 1920x1080+0+0\n'
 EOF
 
 chmod +x "$MOCK_BIN/xdotool" "$MOCK_BIN/xwininfo" \
-  "$MOCK_BIN/polybar-msg" "$MOCK_BIN/i3-msg" "$MOCK_BIN/xrandr"
+  "$MOCK_BIN/polybar-msg" "$MOCK_BIN/i3-msg" "$MOCK_BIN/xrandr" \
+  "$MOCK_BIN/python3"
 printf '5\n' > "$MOCK_STATE/current-workspace"
 
 fail() {
@@ -117,12 +151,13 @@ reset_case() {
 
   wait_for_peek_exit
   printf '%s\n' "$initial" > "$MOCK_STATE/visibility"
+  printf '%s\n' "$initial" > "$MOCK_STATE/belief"
+  printf 'root\n' > "$MOCK_STATE/parent"
   : > "$MOCK_STATE/polybar-events"
   : > "$MOCK_STATE/i3-events"
   : > "$MOCK_STATE/x-events"
 }
 
-# Hidden bars are shown after the workspace changes, then hidden by the worker.
 reset_case hidden
 "$ROOT/workspace-action.sh" switch 3
 assert_state visible
@@ -138,8 +173,6 @@ if grep -Fqx 'get_tree' "$MOCK_STATE/i3-events"; then
   fail "transient peek unexpectedly ran resnap.sh"
 fi
 
-# A standalone-Super hold stays visible beyond the normal deadline and hides
-# immediately when its matching listener releases it.
 reset_case hidden
 "$ROOT/polybar-peek.sh" --hold-start "$$"
 assert_state visible
@@ -149,7 +182,6 @@ assert_state visible
 assert_state hidden
 wait_for_peek_exit
 
-# A different/stale listener is not allowed to end the current hold.
 reset_case hidden
 "$ROOT/polybar-peek.sh" --hold-start "$$"
 "$ROOT/polybar-peek.sh" --hold-end "$(($$ + 1))"
@@ -159,7 +191,6 @@ assert_state visible
 assert_state hidden
 wait_for_peek_exit
 
-# Turning a hold into a chord starts the ordinary peek inactivity deadline.
 reset_case hidden
 "$ROOT/polybar-peek.sh" --hold-start "$$"
 sleep 0.3
@@ -169,7 +200,6 @@ assert_state visible
 wait_for_state hidden
 wait_for_peek_exit
 
-# A bar that was visible before the binding remains untouched.
 reset_case visible
 "$ROOT/workspace-action.sh" switch 4
 sleep 0.3
@@ -177,7 +207,6 @@ assert_state visible
 [ ! -s "$MOCK_STATE/polybar-events" ] ||
   fail "an already-visible bar received an IPC visibility command"
 
-# A Super hold also leaves an already-visible bar untouched.
 reset_case visible
 "$ROOT/polybar-peek.sh" --hold-start "$$"
 sleep 0.3
@@ -186,7 +215,6 @@ assert_state visible
 [ ! -s "$MOCK_STATE/polybar-events" ] ||
   fail "a Super hold changed an already-visible bar"
 
-# A second workspace press renews the single inactivity deadline.
 reset_case hidden
 "$ROOT/workspace-action.sh" switch 1
 sleep 0.14
@@ -200,7 +228,6 @@ wait_for_peek_exit
 [ "$(grep -Fc 'cmd hide' "$MOCK_STATE/polybar-events")" -eq 1 ] ||
   fail "repeated keypress launched more than one hide"
 
-# Concurrent i3 exec processes also converge on one owned show/hide cycle.
 reset_case hidden
 for workspace in 1 2 3 4 5 6; do
   "$ROOT/workspace-action.sh" switch "$workspace" &
@@ -214,7 +241,6 @@ wait_for_peek_exit
 [ "$(grep -Fc 'cmd hide' "$MOCK_STATE/polybar-events")" -eq 1 ] ||
   fail "concurrent keypresses launched more than one hide"
 
-# Previous/next workspace actions use the same transient feedback.
 reset_case hidden
 "$ROOT/workspace-action.sh" prev
 grep -Fqx 'workspace prev' "$MOCK_STATE/i3-events" ||
@@ -229,8 +255,6 @@ grep -Fqx 'workspace next' "$MOCK_STATE/i3-events" ||
 wait_for_state hidden
 wait_for_peek_exit
 
-# Relative actions select the exact numeric neighbor even when the target is
-# absent from i3's current workspace list.
 reset_case hidden
 printf '5\n' > "$MOCK_STATE/current-workspace"
 "$ROOT/workspace-action.sh" relative -1
@@ -251,8 +275,6 @@ assert_state visible
 wait_for_state hidden
 wait_for_peek_exit
 
-# Numeric navigation stops at the configured 1-10 boundaries. Re-selecting the
-# current workspace would trigger workspace_auto_back_and_forth.
 reset_case hidden
 printf '1\n' > "$MOCK_STATE/current-workspace"
 "$ROOT/workspace-action.sh" relative -1
@@ -273,8 +295,6 @@ if [ -s "$MOCK_STATE/polybar-events" ]; then
   fail "relative +1 peeked Polybar at workspace 10"
 fi
 
-# Relative moves follow the focused window to the adjacent numbered workspace
-# and wrap across the configured 1-10 boundary.
 reset_case hidden
 printf '5\n' > "$MOCK_STATE/current-workspace"
 "$ROOT/workspace-action.sh" move-relative -1
@@ -311,7 +331,6 @@ grep -Fqx 'move container to workspace number 1; workspace number 1' \
 wait_for_state hidden
 wait_for_peek_exit
 
-# The move path delegates to the validated move command and also peeks.
 reset_case hidden
 "$ROOT/workspace-action.sh" move 2
 grep -Fqx 'move container to workspace number 2; workspace number 2' \
@@ -320,8 +339,6 @@ grep -Fqx 'move container to workspace number 2; workspace number 2' \
 wait_for_state hidden
 wait_for_peek_exit
 
-# External-preferred workspaces remain valid move targets when xrandr reports
-# only the laptop output.
 reset_case hidden
 "$ROOT/workspace-action.sh" move 7
 grep -Fqx 'move container to workspace number 7; workspace number 7' \
@@ -330,7 +347,6 @@ grep -Fqx 'move container to workspace number 7; workspace number 7' \
 wait_for_state hidden
 wait_for_peek_exit
 
-# An explicit toggle cancels ownership, so its hide is not repeated later.
 reset_case hidden
 "$ROOT/workspace-action.sh" switch 5
 assert_state visible
@@ -342,7 +358,6 @@ sleep 0.35
 [ "$(grep -Fc 'cmd hide' "$MOCK_STATE/polybar-events")" -eq 1 ] ||
   fail "peek worker hid the bar after the explicit toggle"
 
-# Entering kill-workspace mode promotes a current peek to persistent visibility.
 reset_case hidden
 "$ROOT/workspace-action.sh" switch 6
 assert_state visible
@@ -354,5 +369,24 @@ grep -Fqx 'get_tree' "$MOCK_STATE/i3-events" ||
   fail "promoting a peek to persistent visibility did not resnap"
 sleep 0.35
 assert_state visible
+
+# Hiding a bar i3 already unmapped for fullscreen: polybar clears its flag
+# without unmapping, so the withdraw has to take the dock away now.
+reset_case visible
+printf 'reparented\n' > "$MOCK_STATE/parent"
+"$ROOT/toggle-polybar-resnap.sh"
+assert_state hidden
+grep -q '^withdraw ' "$MOCK_STATE/x-events" ||
+  fail "a dock i3 still held after the hide was not withdrawn"
+[ "$(cat "$MOCK_STATE/parent")" = root ] ||
+  fail "i3 still holds the dock after the withdraw"
+
+# An ordinary hide leaves nothing reparented, so it must not reach the withdraw.
+reset_case visible
+"$ROOT/toggle-polybar-resnap.sh"
+assert_state hidden
+if grep -q '^withdraw ' "$MOCK_STATE/x-events"; then
+  fail "an ordinary hide withdrew a dock i3 had already released"
+fi
 
 printf 'PASS: Polybar workspace peek behavior\n'

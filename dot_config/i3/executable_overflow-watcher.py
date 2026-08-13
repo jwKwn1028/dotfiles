@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-
 """Send a window to another workspace when it lands smaller than a quarter of the screen.
 
 Companion to autotiling: autotiling picks the split direction, this decides when
@@ -13,7 +12,21 @@ Target selection, walking workspace numbers upward and wrapping 10 -> 1:
 
 Both freshly opened windows and hand-offs from the manual bindings
 (``$mod+Shift+h/l``, ``$mod+Shift+<number>``) go through the same rule. Moving a
-window around inside one workspace does not.
+window around inside one workspace is a rearrange, not an arrival, and does not.
+
+A moved window requests the same transient Polybar peek the workspace keybindings
+do. The peek command is overridable because Polybar IPC is not scoped to a
+display, and a nested test session must not drive the real bar.
+
+Easy to get wrong:
+
+- i3's integer division puts container rects a pixel or two under the ideal
+  fraction, so an exact quarter must not read as smaller than a quarter.
+- The event payload predates placement, so geometry is re-read from the tree.
+- Two maps guard against self-judgement: con ids this watcher just moved, and
+  con id -> workspace, which tells a rearrange from a hand-off.
+- Nothing may focus the target workspace first: a criteria-matched move into the
+  *visible* workspace silently does nothing while reporting success.
 """
 
 from __future__ import annotations
@@ -26,17 +39,10 @@ from i3ipc import Connection, Event
 
 MAX_WS = 10
 
-# Same transient Polybar peek the workspace keybindings request, so a window
-# handed to another workspace is as visible as one you moved yourself.
-# Overridable so a nested test session cannot drive the real bar: peek scripts
-# talk to Polybar over IPC, which is not scoped to a display.
 PEEK = os.environ.get("I3_OVERFLOW_PEEK") or os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "polybar-peek.sh"
 )
 
-# Container rects come back a pixel or two under the ideal fraction (borders,
-# integer division), so an exact quarter must not read as "smaller than a
-# quarter".
 EPSILON = 0.01
 
 
@@ -102,8 +108,6 @@ def insertion_parent(ws):
 
 def workspace_has_room(ws, fraction: float) -> bool:
     # ponytail: only the arriving window is measured. Attaching next to a leaf
-    # whose siblings are nested splits shrinks those below the floor as well;
-    # revisit if lopsided layouts turn out to matter in practice.
     parent = insertion_parent(ws)
     return room_for_one_more(
         area(parent),
@@ -119,9 +123,7 @@ class Watcher:
         self.fraction = fraction
         self.follow = follow
         self.debug = debug
-        # con id -> workspace number, to tell a rearrange from a hand-off.
         self.workspace_of: dict[int, int] = {}
-        # con ids this watcher just moved, so it does not judge its own work.
         self.self_moved: set[int] = set()
 
     def log(self, message: str) -> None:
@@ -145,12 +147,9 @@ class Watcher:
 
         if con_id in self.self_moved:
             # ponytail: cleared when our own move event arrives. A move that
-            # somehow emits no event leaves one stale id that swallows the next
-            # manual hand-off of that window; add a timestamp if that shows up.
             self.self_moved.discard(con_id)
             return
 
-        # The event payload predates placement, so re-read from the tree.
         tree = i3.get_tree()
         con = tree.find_by_id(con_id)
         if con is None:
@@ -162,7 +161,6 @@ class Watcher:
 
         if ws is None or not 1 <= ws.num <= MAX_WS:  # scratchpad reports num -1
             return
-        # Shuffling a window inside one workspace is a rearrange, not a hand-off.
         if event.change == "move" and previous == ws.num:
             return
         if is_floating(con) or con.fullscreen_mode:
@@ -190,9 +188,6 @@ class Watcher:
         self.relocate(i3, con_id, target)
 
     def relocate(self, i3, con_id: int, target: int) -> None:
-        # Nothing may focus the target workspace first: a criteria-matched move
-        # into the *visible* workspace silently does nothing while still
-        # reporting success, so the window has to be sent from where it sits.
         commands = [f"[con_id={con_id}] move container to workspace number {target}"]
         if self.follow:
             commands.append(f"[con_id={con_id}] focus")

@@ -10,8 +10,11 @@ next to the icon it names.
 
 So draw it here instead: an override-redirect ARGB window over the icon, filled
 with ${colors.selection}, which the compositor blends over the icon exactly as
-Polybar blends a module's background over the wallpaper. Its input region is
-empty, so the click bar-nav sends still reaches the icon underneath.
+Polybar blends a module's background over the wallpaper. That color is #4dffffff
+premultiplied for a 32-bit ARGB visual, each channel 0xff scaled by the 0x4d
+alpha. The window has no input region at all, so the click bar-nav sends still
+reaches the icon underneath -- Return is a real pointer click that has to land
+on the icon, not on the block.
 
 bar-nav.sh writes "x y width height" into the marker file to place the block
 and truncates the file to hide it. This exits when bar mode does, taking the
@@ -28,8 +31,6 @@ from Xlib import X, display
 from Xlib.ext import shape
 
 POLL_SECONDS = 0.04
-# ${colors.selection}, #4dffffff, premultiplied for a 32-bit ARGB visual:
-# each channel is 0xff scaled by the 0x4d alpha.
 FILL = 0x4D4D4D4D
 
 
@@ -58,8 +59,6 @@ def make_block(dsp):
         override_redirect=True,
         event_mask=0,
     )
-    # No input region at all: the block sits over the icon, and bar mode's
-    # Return is a real pointer click that has to land on the icon, not on this.
     win.shape_rectangles(shape.SO.Set, shape.SK.Input, X.Unsorted, 0, 0, [])
     return win
 

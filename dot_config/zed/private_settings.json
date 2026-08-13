@@ -54,7 +54,7 @@
   },
   "terminal": {
     "shell": "system",
-    "font_size": 12,
+    "font_size": 14,
     "font_family": "JuliaMono",
   },
   "base_keymap": "VSCode",
@@ -72,7 +72,7 @@
   "buffer_font_family": "JuliaMono",
   "soft_wrap": "editor_width",
   "ui_font_size": 14.5,
-  "buffer_font_size": 12,
+  "buffer_font_size": 14,
   "theme": {
     "mode": "dark",
     "light": "One Light",

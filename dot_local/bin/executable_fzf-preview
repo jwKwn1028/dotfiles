@@ -9,9 +9,6 @@ if [ -d "$file" ]; then
 fi
 
 case $(printf '%s' "$file" | tr '[:upper:]' '[:lower:]') in
-  *.md|*.markdown|*.mdown|*.mkd|*.rmd|*.qmd)
-    exec glow --config "$HOME/.config/glow/glow.yml" -- "$file"
-    ;;
   *.csv|*.tsv|*.json|*.jsonl|*.ndjson|*.xls|*.xlsx|*.sqlite|*.sqlite3|*.db|*.db3|*.parquet)
     vd --batch -o - -- "$file" 2>/dev/null | sed -n '1,200p'
     exit 0

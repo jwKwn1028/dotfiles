@@ -1,11 +1,31 @@
 #!/usr/bin/env bash
-# Launch one synchronized Polybar instance on every active monitor.
-# Visibility commands are broadcast through Polybar IPC, so i3's explicit
-# toggle and transient peek behavior affect every monitor together.
+# Launch one synchronized Polybar instance on every active monitor. Visibility
+# commands are broadcast through Polybar IPC, so i3's explicit toggle and the
+# transient peek behave the same on every monitor at once.
+#
+# The launcher lock serializes i3 reloads and visibility-fallback launches: a
+# second launcher waits for the running one and reuses its Polybar processes
+# instead of racing through killall into duplicate bars. Long-lived children get
+# 9>&- so they cannot inherit that lock; one holding fd 9 open makes every later
+# reload wait five seconds, see Polybar running, and exit without rebuilding the
+# monitor set. Kills escalate to SIGKILL rather than waiting: a Polybar wedged on
+# a dead i3 IPC socket never answers SIGTERM, and an unbounded `--wait` would
+# hold the lock forever.
+#
+# X11 permits one tray owner, so the icons stay on the laptop panel (primary
+# output if there is no internal panel) -- an external output plugged in
+# mid-session must not carry the tray to a screen that can be unplugged. Dock
+# order is arrival order, so the launcher waits for nm-applet's icon before
+# starting blueman-tray, keeping Wi-Fi left of Bluetooth, the order bar mode's
+# h/l walks. Applets also own invisible 10x10 helper windows, so size is what
+# tells a real icon apart.
+#
+# Instances start hidden, and the initial hide keeps broadcasting briefly after
+# the first IPC endpoint appears so a slower secondary process cannot miss it.
+# Tray icons are foreign client windows Polybar's cursor-click never reaches, so
+# the tray-cursor helper paints them itself; it re-finds the bars from its own
+# runtime state and only one is ever needed.
 
-# Serialize i3 reloads and visibility-fallback launches. If another launcher is
-# already active, wait for it and reuse the Polybar processes it started instead
-# of racing through killall and creating duplicate bars.
 POLYBAR_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 POLYBAR_LAUNCH_LOCK="$POLYBAR_RUNTIME_DIR/polybar-launch.lock"
 POLYBAR_LOG_DIR="${POLYBAR_LOG_DIR:-/tmp}"
@@ -16,18 +36,12 @@ if ! flock -n 9; then
     pgrep -x polybar >/dev/null && exit 0
 fi
 
-# Redock Blueman after nm-applet when the tray is recreated, preserving the
-# visible Wi-Fi, Bluetooth order across monitor hotplug and manual relaunches.
 RESTART_BLUEMAN_TRAY=0
 if pgrep -x blueman-tray >/dev/null 2>&1; then
     RESTART_BLUEMAN_TRAY=1
     pkill -x blueman-tray >/dev/null 2>&1 || true
 fi
 
-# A wedged Polybar (its i3 IPC socket died with the previous i3) never acts on
-# SIGTERM, and an unbounded `--wait` would then hold the launcher lock forever,
-# so every later relaunch -- including the one that adds a hotplugged monitor's
-# bar -- exits without doing anything. Escalate to SIGKILL instead of waiting.
 timeout 5 killall -q --wait polybar 2>/dev/null || killall -q -9 polybar 2>/dev/null
 
 XRANDR_OUTPUT=$(xrandr --query 2>/dev/null) || exit 0
@@ -62,8 +76,6 @@ PRIMARY=$(
 mkdir -p "$POLYBAR_LOG_DIR" 2>/dev/null || exit 1
 STAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
-# True once an applet's tray icon is embedded and mapped. The applet also owns
-# invisible 10x10 helper windows, so size is what tells the icon apart.
 icon_docked() {
     local win info
     for win in $(xdotool search --class "$1" 2>/dev/null); do
@@ -82,16 +94,9 @@ launch_bar() {
     local log="$POLYBAR_LOG_DIR/polybar-$monitor.log"
 
     printf '\n===== %s =====\n' "$STAMP" >>"$log"
-    # Do not let the detached Polybar child inherit the launcher lock. If it
-    # keeps fd 9 open, every later reload waits five seconds and then reuses the
-    # stale monitor set instead of rebuilding it.
     MONITOR="$monitor" setsid -f polybar --reload "$bar" >>"$log" 2>&1 9>&-
 }
 
-# X11 permits only one tray owner, so the icons live on the laptop panel and
-# stay there: an external output plugged in mid-session must not carry them off
-# to a screen that goes away when it is unplugged. Fall back to the primary
-# output on a machine with no internal panel.
 TRAY_OUTPUT="$PRIMARY"
 for monitor in "${ACTIVE_OUTPUTS[@]}"; do
     case "$monitor" in
@@ -112,8 +117,6 @@ for monitor in "${ACTIVE_OUTPUTS[@]}"; do
     fi
 done
 
-# Start every instance hidden. Keep broadcasting briefly after the first IPC
-# endpoint appears so a slower secondary process cannot miss the initial hide.
 EXPECTED_BARS="${#ACTIVE_OUTPUTS[@]}"
 READY_PASSES=0
 for _ in $(seq 1 25); do
@@ -129,23 +132,13 @@ for _ in $(seq 1 25); do
 done
 polybar-msg cmd hide >/dev/null 2>&1 || true
 
-# Tray icons are foreign client windows, so Polybar's cursor-click never applies
-# to them; this helper paints them itself. It re-finds the bars from root events,
-# so it survives a relaunch and only one is ever needed -- and it must outlive
-# this script, hence 9>&- as above.
 pgrep -f 'polybar/scripts/tray-cursor.py' >/dev/null 2>&1 ||
     setsid -f "$HOME/.config/polybar/scripts/tray-cursor.py" >/dev/null 2>&1 9>&-
 
 if [ "$RESTART_BLUEMAN_TRAY" = 1 ]; then
-    # Dock order is arrival order, and the applets re-dock on their own schedule
-    # once they notice the new tray owner. Wait for nm-applet's icon so Wi-Fi
-    # lands left of Bluetooth -- the order bar mode's H/L walks the two stops in.
     for _ in $(seq 1 30); do
         icon_docked '^Nm-applet$' && break
         sleep 0.1
     done
-    # 9>&- for the same reason the bars get it: blueman-tray outlives this
-    # script, and an inherited lock fd would make every later launch wait five
-    # seconds, find Polybar already running, and exit without doing anything.
     setsid -f blueman-tray >/dev/null 2>&1 9>&-
 fi

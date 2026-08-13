@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Polybar multi-monitor launch behavior.
+#
+# Each failure message names what its case pins down. The mocks make nm-applet's
+# icon appear only on the third probe (redocking before it is back leaves
+# Bluetooth left of Wi-Fi, the wrong order for bar mode's h/l) and make one
+# Polybar ignore SIGTERM (without the kill timeout the launcher never returns).
 
 set -euo pipefail
 
@@ -60,7 +66,6 @@ esac
 printf '%s|%s|%s\n' "${MONITOR:-}" "$lock_fd" "$*" >>"$POLYBAR_TEST_STATE_DIR/launch-events"
 EOF
 
-# nm-applet's icon shows up on the third probe, so the redock has to wait.
 cat >"$MOCK_BIN/xdotool" <<'EOF'
 #!/usr/bin/env bash
 printf 'probe %s\n' "$*" >>"$POLYBAR_TEST_STATE_DIR/applet-events"
@@ -117,8 +122,6 @@ EOF
 : >"$MOCK_STATE/cursor-events"
 bash "$LAUNCHER"
 
-# The tray is pinned to the internal panel, so eDP gets it even with an external
-# output attached, and the external output gets the trayless layout.
 grep -Fqx 'eDP|closed|-f polybar --reload tray' "$MOCK_STATE/launch-events" ||
     { printf 'FAIL: tray bar was not launched on eDP\n' >&2; exit 1; }
 grep -Fqx 'HDMI-A-0|closed|-f polybar --reload external' "$MOCK_STATE/launch-events" ||
@@ -136,20 +139,15 @@ grep -Fqx -- '-x blueman-tray' "$MOCK_STATE/applet-events" ||
 grep -Fqx -- 'closed|-f blueman-tray' "$MOCK_STATE/applet-events" ||
     { printf 'FAIL: blueman-tray was not redocked with the lock fd closed\n' >&2
       cat "$MOCK_STATE/applet-events" >&2; exit 1; }
-# Dock order is arrival order: redocking before nm-applet's icon is back puts
-# Bluetooth left of Wi-Fi, and bar mode's H/L then walks the two stops leftward.
 [ "$(tail -n 1 "$MOCK_STATE/applet-events")" = 'closed|-f blueman-tray' ] ||
     { printf 'FAIL: blueman-tray was redocked before nm-applet had docked\n' >&2
       cat "$MOCK_STATE/applet-events" >&2; exit 1; }
 [ "$(grep -c '^probe ' "$MOCK_STATE/applet-events")" -ge 3 ] ||
     { printf 'FAIL: the redock did not wait for nm-applet\n' >&2; exit 1; }
-# The helper holding the tray icons' cursor outlives Polybar, so an inherited
-# lock fd would wedge every later launch the same way an applet's would.
 grep -q '^closed|.*tray-cursor\.py' "$MOCK_STATE/cursor-events" ||
     { printf 'FAIL: the tray cursor helper was not started with the lock fd closed\n' >&2
       cat "$MOCK_STATE/cursor-events" >&2; exit 1; }
 
-# With no external output, the laptop panel still owns the one X11 tray.
 cat >"$MOCK_STATE/xrandr-output" <<'EOF'
 Screen 0: minimum 8 x 8, current 1920 x 1080, maximum 32767 x 32767
 eDP connected primary 1920x1080+0+0 (normal left inverted right x axis y axis)
@@ -167,8 +165,6 @@ HDMI-A-0 connected 2560x1440+0+0 (normal left inverted right x axis y axis)
 DP-1 connected (normal left inverted right x axis y axis)
 EOF
 
-# A Polybar that ignores SIGTERM must not wedge the launcher: without the kill
-# timeout the run below never returns and no bar reaches the second monitor.
 cat >"$MOCK_BIN/killall" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$POLYBAR_TEST_STATE_DIR/killall-events"

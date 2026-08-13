@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=X-GNOME-Metatheme
+Name=Ghostty-TokyoNight
+Comment=GTK3 theme matching the Ghostty terminal (TokyoNight Storm, bg #292d3e)
+Encoding=UTF-8
+
+[X-GNOME-Metatheme]
+GtkTheme=Ghostty-TokyoNight
+IconTheme=Papirus-Dark
+ButtonLayout=menu:minimize,maximize,close

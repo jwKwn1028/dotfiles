@@ -1,14 +1,15 @@
-# --------------------------------------------------------
-# Starship Prompt
-# --------------------------------------------------------
+# Starship prompt.
+#
 # Fallback if starship is ever missing:
-# PROMPT='%n %{%F{#86BE43}%}%~%{%f%} %# '
+#   PROMPT='%n %{%F{#86BE43}%}%~%{%f%} %# '
+#
+# The banner goes in after Starship, so it prefixes the final PROMPT instead of
+# being overwritten by prompt initialization.
+
 if _have starship; then
   eval "$(starship init zsh)"
 fi
 
-# Install after Starship so the resize-aware startup banner prefixes the final
-# prompt definition instead of being overwritten by prompt initialization.
 if (( $+functions[_zsh_banner_install] )); then
   setopt promptsubst
   _zsh_banner_install

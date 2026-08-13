@@ -1,16 +1,19 @@
-# --------------------------------------------------------
-# Shared helpers for the rc.d modules
-# --------------------------------------------------------
-# Sourced by ~/.zshrc before the numbered modules.
-
-# _have <cmd>  ->  succeeds if <cmd> is an external command on PATH.
-# Centralizes the `command -v x >/dev/null 2>&1` / `whence -p x` guard that the
-# numbered modules would otherwise repeat for every optional tool.
-_have() { whence -p -- "$1" >/dev/null 2>&1; }
-
-# Resolve tool variants once so every module agrees on the same binary.
+# Shared helpers for the rc.d modules. Sourced by ~/.zshrc before the numbered
+# ones.
+#
+# _have <cmd> is the shared "is this optional tool on PATH" guard.
+#
+# Tool variants are resolved once so every module agrees on the same binary:
 #   _zsh_fd  -> fd | fdfind | ''    (Debian/Ubuntu package fd as fdfind)
 #   _zsh_bat -> bat | batcat | cat
+#
+# _zsh_ls_files [-d] [ext] prints candidate paths under $PWD, via fd or find(1):
+# hidden included, .git pruned, .gitignore NOT honored -- fd would otherwise hide
+# files the find(1) fallback lists, making the same call differ per machine. -d
+# lists directories; ext restricts by extension, case-insensitively.
+
+_have() { whence -p -- "$1" >/dev/null 2>&1; }
+
 if _have fd; then
   _zsh_fd=fd
 elif _have fdfind; then
@@ -27,13 +30,6 @@ else
   _zsh_bat=cat
 fi
 
-# _zsh_ls_files [-d] [ext]
-#   Print candidate paths under $PWD: hidden included, .git pruned,
-#   .gitignore NOT honored (fd would otherwise hide files the find(1)
-#   fallback lists, making the same call differ per machine).
-#   -d lists directories instead; ext restricts to files with that
-#   extension (case-insensitive). fd/fdfind when available, find(1)
-#   otherwise.
 _zsh_ls_files() {
   emulate -L zsh
   local kind=file ext
