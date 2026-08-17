@@ -28,12 +28,12 @@ if _have fdfind; then
   alias fd='fdfind'
 fi
 alias scpo='print "shutting down..." && systemctl poweroff'
-alias scrb='print "reboot ..." && systemctl reboot'
 
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../..'
+alias wtail='watch -n 10 tail -n 10'
 
 # --------------------------------------------------------
 # Ripgrep (rg)

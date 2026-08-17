@@ -4,27 +4,25 @@
 #
 # Polybar never takes keyboard focus, so the cursor lives in the calling i3
 # mode. The highlight is a hidden twin module swapped in over IPC (see
-# config.ini) -- except the tray: one module holding XEmbed windows polybar
-# does not own, so it gets no `-sel` twin and bar-nav-marker.py paints a block.
-# Sticky mode: only a stop that opens a window leaves it.
+# config.ini) -- except the tray, which holds XEmbed windows polybar does not
+# own, so it gets no `-sel` twin and bar-nav-marker.py paints a block. Sticky:
+# only a stop that opens a window leaves the mode.
 #
 # Runtime state: .idx cursor position; .restore-hidden, written only when the
-# bar was not already persistent, so leaving restores it; .marker, "x y width
-# height" for the tray block, bar-height so it reads like the other stops.
+# bar was not already persistent; .marker, "x y width height" for the tray
+# block, bar-height so it reads like the other stops.
 #
 # The arrays below are parallel, indexed by stop, left to right. Empty action =
-# no-op, not an error. `*_opens = 1` takes the keyboard, so the mode exits
-# first. Volume steps by 1, not the wheel's 5: parking the cursor is the fine
-# adjustment.
+# no-op. `*_opens = 1` takes the keyboard, so the mode exits first. Volume steps
+# by 1, not the wheel's 5: parking the cursor is the fine adjustment.
 #
 # Easy to break:
-#   - reset_pairs skips $1. Hiding and showing one module twice in quick
-#     succession makes polybar collapse the pair and keep the plain half.
-#   - power_menu deselects its stop first, or the block washes over the menu
-#     entries it opens.
+#   - reset_pairs skips $1. Hide and show one module twice quickly and polybar
+#     collapses the pair, keeping the plain half.
+#   - power_menu deselects its stop first, or the block washes over its menu.
 #   - close() clears .marker before .idx (bar-nav-marker.py exits with .idx and
-#     would leave the last block painted) and resets every pair, since a
-#     polybar restart mid-mode desyncs .idx.
+#     would leave a block painted) and resets every pair, since a polybar
+#     restart mid-mode desyncs .idx.
 #   - flock keeps one painter per mode.
 #   - A bar up only for a transient peek counts as hidden on open.
 #

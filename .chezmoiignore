@@ -28,8 +28,9 @@
 
 # ─── Browser profiles ──────────────────────────────────────────────────────
 # Browser profiles stay local: bookmarks, sync identifiers, site-engagement
-# records. The sanitized Zen user.js allowlist is installed separately by the
-# profile-discovery script.
+# records. The publishable settings are installed separately by the
+# run_onchange_ profile scripts -- the sanitized Zen user.js allowlist, and the
+# Helium preference subset merged into its Chromium prefs blob.
 .config/net.imput.helium/
 .var/app/app.zen_browser.zen/
 
@@ -53,6 +54,7 @@
 # Ignoring never deletes a target, so the existing ~/.config/i3/resurrect* stay
 # where they are -- i3-resurrect keeps owning them, chezmoi stops.
 /.config/i3/resurrect*
+/.config/ghostty/tabbar-state.conf
 **/__pycache__
 **/.git
 /.config/**/.codex
@@ -60,9 +62,9 @@
 
 # Codex mixes machine state (per-project trust levels, hook trust hashes,
 # plugin registration, nux counters) into its own config.toml with no include
-# directive to split them, so it stays local like ~/.claude.json.
+# directive to split them. A modify_ script manages only the selected model and
+# reasoning effort; the remaining state stays local.
 # ~/.codex/rules and ~/.codex/statusline.toml are static and stay managed.
-/.codex/config.toml
 
 # ─── Desktop profiles ─────────────────────────────────────────────────────
 # Mint's i3 tree is the X11 desktop. A machine on any other profile (a server,

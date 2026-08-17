@@ -1,0 +1,55 @@
+# Figure geometry: conservative single-column width
+figure.figsize: 3.25, 2.35
+figure.dpi: 120
+figure.facecolor: white
+figure.constrained_layout.use: True
+
+# LaTeX text
+text.usetex: True
+font.family: Helvetica
+font.size: 8
+
+# Axes
+axes.titlesize: 9
+axes.labelsize: 8
+axes.linewidth: 0.7
+axes.axisbelow: True
+axes.grid: False
+
+# Ticks
+xtick.labelsize: 8
+ytick.labelsize: 8
+xtick.major.size: 3
+ytick.major.size: 3
+xtick.major.width: 0.7
+ytick.major.width: 0.7
+xtick.minor.size: 1.8
+ytick.minor.size: 1.8
+xtick.minor.width: 0.6
+ytick.minor.width: 0.6
+xtick.direction: out
+ytick.direction: out
+
+# Lines and markers
+lines.linewidth: 1.2
+lines.markersize: 4
+patch.linewidth: 0.7
+errorbar.capsize: 2
+
+# Colour-blind-friendly Okabe-Ito palette
+axes.prop_cycle: cycler("color", ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#000000"])
+
+# Legends
+legend.fontsize: 8
+legend.frameon: False
+
+# Images and export
+image.cmap: viridis
+savefig.format: pdf
+savefig.dpi: 600
+savefig.facecolor: white
+savefig.transparent: False
+
+# Fallback when text.usetex is disabled
+pdf.fonttype: 42
+ps.fonttype: 42

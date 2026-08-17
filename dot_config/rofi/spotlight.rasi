@@ -19,9 +19,8 @@ configuration {
 
     background-color: transparent;
     text-color:       @tn-fg;
-    /* JuliaMono matches the Ghostty terminal font. Size 13, not 16: JuliaMono's
-       x-height is 0.550em against New Computer Modern Mono's 0.431em, and the
-       list is mostly lowercase application names. */
+    /* Matches Ghostty. 13, not 16: JuliaMono's x-height is 0.550em against
+       New Computer Modern Mono's 0.431em. */
     font: "JuliaMono Regular 13";
 }
 

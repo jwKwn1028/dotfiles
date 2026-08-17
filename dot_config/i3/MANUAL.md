@@ -423,7 +423,7 @@ ends.
 
 ## Autotiling Integration
 
-The external daemon `/home/kjw1028/.local/bin/autotiling --limit 6` is started
+The external daemon `~/.local/bin/autotiling --limit 6` is started
 from i3 autostart on every reload/restart.
 
 `_snap-common.sh` also implements `apply_autotiling_split`, a local helper used
@@ -1021,14 +1021,14 @@ Always on reload/restart:
 - Stop and restart `snap-watcher.sh`.
 - Stop and restart `kakaotalk-float-watcher.sh`.
 - Stop and restart `super-polybar-listener.py`.
-- Stop and restart `/home/kjw1028/.local/bin/autotiling --limit 6`.
+- Stop and restart `~/.local/bin/autotiling --limit 6`.
 - Stop and restart `overflow-watcher.py`.
 - Start the polkit authentication agent
   (`/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1`) if no
   `polkit-gnome` process is already running.
-- Run `/home/kjw1028/.local/bin/disable-trackpoint-middle-click` under a
+- Run `~/.local/bin/disable-trackpoint-middle-click` under a
   `/tmp/disable-trackpoint-middle-click.lock` flock.
-- Run `/home/kjw1028/.local/bin/touchpad apply`.
+- Run `~/.local/bin/touchpad apply`.
 - Run `display-setup.sh`, which arranges the outputs, refreshes the wallpaper,
   and launches Polybar on every active monitor.
 

@@ -1,20 +1,14 @@
 #!/usr/bin/env bash
-# Shared Polybar visibility, IPC, and transient-peek state helpers.
-# The caller must set DIR to this configuration directory before sourcing.
-# The paths defined here are deliberately consumed by the scripts that source it.
+# Shared Polybar visibility, IPC, and transient-peek helpers. Caller must set
+# DIR to this configuration directory before sourcing; the paths defined here
+# are consumed by the sourcing scripts.
 #
-# polybar_wait_state prints the last observed state, succeeding only if the bar
-# reached the requested one before the deadline. That budget is wall clock and
-# short on purpose: polybar applies a visibility command on receipt, so a state
-# that has not landed within a fraction of a second is unreachable, not slow --
-# i3 unmaps a fullscreened output's dock and polybar cannot override it
-# ("Ignoring restack of i3 window (not needed when `override-redirect =
-# false`)"). The caller holds POLYBAR_CONTROL_LOCK across the wait while every
-# other entry point gives up on that lock after two seconds, so a longer budget
-# only drops the user's next keypresses and peeks.
-#
-# polybar_show_persistent shows the bar and keeps it up for a binding mode,
-# promoting a transient peek.
+# polybar_wait_state's budget is wall clock and short on purpose: polybar
+# applies visibility on receipt, so a state that has not landed in a fraction of
+# a second is unreachable, not slow -- i3 unmaps a fullscreened output's dock
+# and polybar cannot override it ("Ignoring restack of i3 window"). The caller
+# holds POLYBAR_CONTROL_LOCK across the wait while everything else gives up on
+# that lock after two seconds, so a longer budget only eats keypresses.
 
 . "$DIR/_snap-common.sh"
 
@@ -67,15 +61,13 @@ polybar_raise() {
   done
 }
 
-# Drop any bar i3 still manages as a dock once the bar is meant to be hidden.
+# Drop any bar i3 still manages as a dock once the bar should be hidden.
 #
-# i3 unmaps a fullscreened output's dock itself, so polybar's hide finds the
-# window already unmapped, no UnmapNotify is emitted, and i3 maps the dock back
-# when fullscreen ends -- while polybar, believing it hidden, no-ops every later
-# hide until i3 is reloaded. ICCCM's synthetic UnmapNotify is the withdraw i3
-# never saw; sent while the bar is hidden, nothing flashes back and polybar
-# re-maps normally on the next show. Reparented means i3 holds it, so an
-# ordinary hide never reaches python at all.
+# i3 unmaps a fullscreened output's dock itself, so polybar's hide finds it
+# already unmapped, emits no UnmapNotify, and i3 remaps the dock after
+# fullscreen -- while polybar, believing it hidden, no-ops every later hide
+# until reload. ICCCM's synthetic UnmapNotify is the withdraw i3 never saw.
+# Reparented means i3 holds it, so an ordinary hide never reaches python.
 polybar_withdraw_orphan_docks() {
   local -a orphans=()
   local win info

@@ -1,30 +1,23 @@
 #!/usr/bin/env bash
-# Launch one synchronized Polybar instance on every active monitor. Visibility
-# commands are broadcast through Polybar IPC, so i3's explicit toggle and the
-# transient peek behave the same on every monitor at once.
+# One synchronized Polybar per active monitor; visibility is broadcast over IPC
+# so every monitor toggles at once.
 #
-# The launcher lock serializes i3 reloads and visibility-fallback launches: a
-# second launcher waits for the running one and reuses its Polybar processes
-# instead of racing through killall into duplicate bars. Long-lived children get
-# 9>&- so they cannot inherit that lock; one holding fd 9 open makes every later
-# reload wait five seconds, see Polybar running, and exit without rebuilding the
-# monitor set. Kills escalate to SIGKILL rather than waiting: a Polybar wedged on
-# a dead i3 IPC socket never answers SIGTERM, and an unbounded `--wait` would
-# hold the lock forever.
+# The launcher lock serializes reloads and fallback launches, so a second
+# launcher reuses the running one's bars instead of racing killall into
+# duplicates. Long-lived children get 9>&- or they inherit the lock, and every
+# later reload then waits five seconds, sees Polybar up, and skips the rebuild.
+# Kills escalate to SIGKILL: a Polybar wedged on a dead i3 IPC socket never
+# answers SIGTERM, and an unbounded `--wait` would hold the lock forever.
 #
-# X11 permits one tray owner, so the icons stay on the laptop panel (primary
-# output if there is no internal panel) -- an external output plugged in
-# mid-session must not carry the tray to a screen that can be unplugged. Dock
-# order is arrival order, so the launcher waits for nm-applet's icon before
-# starting blueman-tray, keeping Wi-Fi left of Bluetooth, the order bar mode's
-# h/l walks. Applets also own invisible 10x10 helper windows, so size is what
-# tells a real icon apart.
+# X11 permits one tray owner, so icons stay on the laptop panel (primary if
+# there is no internal one) -- an external can be unplugged mid-session. Dock
+# order is arrival order, hence the wait for nm-applet before blueman-tray,
+# keeping Wi-Fi left of Bluetooth for bar mode's h/l. Applets also own invisible
+# 10x10 helper windows, so size identifies a real icon.
 #
-# Instances start hidden, and the initial hide keeps broadcasting briefly after
-# the first IPC endpoint appears so a slower secondary process cannot miss it.
-# Tray icons are foreign client windows Polybar's cursor-click never reaches, so
-# the tray-cursor helper paints them itself; it re-finds the bars from its own
-# runtime state and only one is ever needed.
+# Bars start hidden; the initial hide keeps broadcasting briefly after the first
+# IPC endpoint so a slow secondary cannot miss it. Tray icons are foreign client
+# windows Polybar's cursor-click never reaches, so tray-cursor.py paints them.
 
 POLYBAR_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 POLYBAR_LAUNCH_LOCK="$POLYBAR_RUNTIME_DIR/polybar-launch.lock"

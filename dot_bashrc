@@ -202,10 +202,13 @@ alias ':q'='exit'
 alias hb='${EDITOR:-hx} ~/.bashrc'
 alias sb='source ~/.bashrc && echo "Bash config reloaded."'
 alias scpo='echo "shutting down..." && systemctl poweroff'
-alias scrb='echo "reboot ..." && systemctl reboot'
+alias wtail='watch -n 10 tail -n 10'
+alias mytop='watch -n 2 top -bn1 -u "$USER"'
 if _have sinfo; then
-  alias wtail='watch -n 10 tail -n 10'
   alias sidle='sinfo -t idle -o "%.20P %.6D %N"'
+  alias sq='squeue'
+  alias myq='watch -n 10 squeue -u "$USER"'
+  alias wsidle='watch -d -n 10 '\''sinfo -t idle -o "%.20P %.6D %N"'\'''
 fi
 
 # Auto-list on cd (bash chpwd equivalent; mirrors _auto_ls in

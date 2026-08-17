@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Snap a window to a region of its workspace (XFWM-style). Window becomes
-# floating in that rect and gets a `_snap_<region>` mark so snap-watcher.sh
-# can see which quadrants are occupied. The first snap also captures the
-# original geometry in a `_presnap_<x>_<y>_<w>_<h>_<floating>` mark. Tiled
-# windows also get temporary parent/sibling anchor marks so `unsnap` can put
-# them back near their original tree slot instead of relying on i3's default
-# unfloat insertion point.
+# Snap a window to a region of its workspace (XFWM-style): float it in that
+# rect and add a `_snap_<region>` mark so snap-watcher.sh can see which
+# quadrants are occupied. The first snap records geometry in a
+# `_presnap_<x>_<y>_<w>_<h>_<floating>` mark; tiled windows also get temporary
+# parent/sibling anchors so `unsnap` lands near the original tree slot rather
+# than i3's default unfloat point.
 #
 # Usage: tile-snap.sh <region> [con_id]
 #   region: left|right|up|down|ul|ur|dl|dr|full|unsnap
@@ -112,8 +111,7 @@ if [ -n "$TARGET" ] && ! [[ "$TARGET" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-# Resolve the target con_id up front; we need it for polling and pre-snap
-# geometry capture. If TARGET wasn't given, look up the focused id.
+# Resolve the target con_id up front, needed for polling and pre-snap capture.
 if [ -z "$TARGET" ]; then
   TARGET=$(i3-msg -t get_tree | jq -r '
     [.. | objects | select(.focused? == true and .window? != null)][0].id // empty')
@@ -123,10 +121,9 @@ if [ -z "$TARGET" ]; then
   fi
 fi
 
-# Serialize invocations for the same window: key autorepeat fires this in
-# bursts, and without a lock two unsnaps can read the same _presnap_ mark
-# before either unmarks it. Per-target and non-blocking, so different windows
-# still run in parallel; proceeds unlocked if the lock file cannot be made.
+# Serialize per window: autorepeat fires this in bursts, and without a lock two
+# unsnaps read the same _presnap_ mark before either unmarks it. Per-target and
+# non-blocking, so other windows run in parallel; proceeds unlocked on failure.
 exec {LOCK_FD}>"$SNAP_RUNTIME_DIR/tile-snap-$TARGET.lock" 2>/dev/null
 if [ -n "${LOCK_FD:-}" ] && ! flock -n "$LOCK_FD"; then
   snap_log "skip $REGION $TARGET: another tile-snap holds the lock"
@@ -190,18 +187,17 @@ fi
 read -r OX OY OW OH <<<"$(i3-msg -t get_outputs | jq -r --arg o "$WS_OUTPUT" '
   .[] | select(.active and .name == $o) | "\(.rect.x) \(.rect.y) \(.rect.width) \(.rect.height)"')"
 
-# On mixed-height monitors i3/X can expose root-sized pseudo outputs and stale
-# workspace rects during output changes. Keep snaps inside the real active
-# output, while preserving workspace insets when the workspace rect is sane.
+# Mixed-height monitors can expose root-sized pseudo outputs and stale
+# workspace rects during output changes. Stay inside the real active output,
+# keeping workspace insets when the workspace rect is sane.
 if [[ "${OH:-}" =~ ^[0-9]+$ ]]; then
   if (( X < OX || Y < OY || X + W > OX + OW || Y + H > OY + OH )); then
     X=$OX; Y=$OY; W=$OW; H=$OH
   fi
 fi
 
-# Polybar setups vary: some reserve space via struts, some just cover the
-# screen. Walk visible polybar windows and only add the inset i3 has not
-# already removed from the workspace rect.
+# Polybar may reserve space via struts or just cover the screen. Walk visible
+# polybar windows and add only the inset i3 has not already removed.
 TOP_INSET=0
 BOT_INSET=0
 for win in $(xdotool search --class '^[Pp]olybar$' 2>/dev/null); do
@@ -212,8 +208,8 @@ for win in $(xdotool search --class '^[Pp]olybar$' 2>/dev/null); do
   pb_y=$(awk '/Absolute upper-left Y:/ {print $4}' <<<"$info")
   pb_x=$(awk '/Absolute upper-left X:/ {print $4}' <<<"$info")
   [ -z "$pb_w" ] || [ -z "$pb_h" ] && continue
-  # Skip polybars on a different monitor. Check both axes because an external
-  # output may be vertically offset next to a panel with different dimensions.
+  # Skip polybars on another monitor. Both axes: an external output may be
+  # vertically offset next to a panel of different size.
   (( pb_x + pb_w <= X || pb_x >= X + W )) && continue
   (( pb_y + pb_h <= Y || pb_y >= Y + H )) && continue
   if [[ "${OH:-}" =~ ^[0-9]+$ ]] && (( pb_y < OY + OH / 2 )); then
@@ -259,19 +255,17 @@ case "$REGION" in
   *) echo "unknown region: $REGION" >&2; snap_log "unknown region: $REGION"; exit 1 ;;
 esac
 
-# Match the workspace's title-bar default so the floating window's geometry
-# is deterministic (otherwise a window opened tiled with `normal` border
-# keeps it after `floating enable` and the title bar eats H).
+# Match the workspace's title-bar default to keep geometry deterministic: a
+# window opened tiled with `normal` border keeps it when floated, eating H.
 if [ -f "$SNAP_TITLES_STATE" ] && [ "$(cat "$SNAP_TITLES_STATE")" = "on" ]; then
   BORDER="normal"
 else
   BORDER="pixel 1"
 fi
 
-# Capture pre-snap state on the *first* snap of this window so unsnap can
-# restore it later. For tiled windows, also capture the nearest split parent
-# plus previous/next sibling anchors. resnap re-runs tile-snap with the same
-# id, so we must only capture when no _presnap_ mark exists yet.
+# Capture pre-snap state on the *first* snap only -- resnap re-runs this with
+# the same id, so skip when a _presnap_ mark already exists. Tiled windows also
+# get nearest-split-parent and previous/next sibling anchors.
 read -r HAS_PRE CUR_X CUR_Y CUR_W CUR_H CUR_FLOAT SLOT_PARENT SLOT_LAYOUT SLOT_PREV SLOT_NEXT <<<"$(i3-msg -t get_tree | jq -r --argjson id "$TARGET" '
   def slot_entries($p):
     [range(0; ($p | length) - 1) as $i |
@@ -330,10 +324,8 @@ if [ "$HAS_PRE" = "false" ]; then
   fi
 fi
 
-# Strip any prior _snap_* marks before adding the new one. i3's `mark --add`
-# accumulates, so without this a window re-snapped from left->full would
-# carry both _snap_left and _snap_full, and resnap.sh would later race
-# multiple tile-snap calls for the same window in parallel.
+# Strip prior _snap_* marks first: `mark --add` accumulates, so left->full
+# would carry both, and resnap.sh would then race parallel tile-snap calls.
 OLD_SNAPS=$(i3-msg -t get_tree | jq -r --argjson id "$TARGET" '
   ([.. | objects | select(.id? == $id)][0].marks // []) |
   map(select(startswith("_snap_"))) | join(",")')
@@ -355,11 +347,9 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   sleep 0.01
 done
 
-# Stage 2: place it. Retry while the rect doesn't fit. Some apps, especially
-# terminals, round requested sizes to their size hints; if that makes the
-# window too tall for a visible bar inset, i3 clamps it back to y=0. Shrink the
-# requested size by the reported overflow so the actual window lands inside the
-# target rect instead of covering the bar.
+# Stage 2: place it, retrying while the rect does not fit. Terminals round
+# requested sizes to their size hints; too tall for a visible bar inset and i3
+# clamps back to y=0. Shrink by the reported overflow so it lands inside.
 attempts=0
 req_w=$tw
 req_h=$th

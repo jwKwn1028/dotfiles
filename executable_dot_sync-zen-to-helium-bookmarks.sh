@@ -17,20 +17,22 @@
 #   --force     Proceed even if Helium appears to be running (NOT recommended:
 #               Helium overwrites this file when it closes).
 #
-# Override auto-detected paths with environment variables:
+# Override defaults with environment variables:
 #   ZEN_PLACES=/path/to/places.sqlite
 #   HELIUM_BOOKMARKS=/path/to/Bookmarks
+#   KEEP_BACKUPS=5             How many timestamped backups to retain.
 #
 set -euo pipefail
 
 DRY_RUN=0
 FORCE=0
+KEEP_BACKUPS=${KEEP_BACKUPS:-5}
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --force)   FORCE=1 ;;
     -h|--help)
-      sed -n '2,30p' "$0"; exit 0 ;;
+      sed -n '2,24p' "$0"; exit 0 ;;
     *)
       echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
@@ -80,7 +82,10 @@ log "Helium dest: $HEL"
 
 # --- Refuse to run while Helium is open (it would clobber our write) --------
 # (A dry run writes nothing, so the check is only enforced for real syncs.)
-if [ "$DRY_RUN" -eq 0 ] && pgrep -fi 'helium' 2>/dev/null | grep -vqw "$$"; then
+# Match the process name, not the command line: this script's own path contains
+# "helium", so -f would match any parent wrapper. -x covers the AppImage's
+# truncated comm ("helium-0.15.3.1") too.
+if [ "$DRY_RUN" -eq 0 ] && pgrep -x 'helium(-.*)?' >/dev/null 2>&1; then
   if [ "$FORCE" -eq 1 ]; then
     err "Helium appears to be running -- continuing because --force was given."
     err "Whatever Helium writes when it closes may overwrite these changes."
@@ -94,11 +99,21 @@ if [ "$DRY_RUN" -eq 0 ]; then
   BACKUP="${HEL}.bak-$(date +%Y%m%d-%H%M%S)"
   cp -p "$HEL" "$BACKUP"
   log "Backup     : $BACKUP"
+
+  # Keep the newest KEEP_BACKUPS. Timestamped names sort oldest-first, and the
+  # hyphen in ".bak-" spares hand-made ".bak.pre-*" snapshots.
+  shopt -s nullglob
+  BACKUPS=("${HEL}".bak-*)
+  shopt -u nullglob
+  for ((i = ${#BACKUPS[@]} - KEEP_BACKUPS - 1; i >= 0; i--)); do
+    rm -f -- "${BACKUPS[i]}"
+    log "Pruned     : ${BACKUPS[i]}"
+  done
 fi
 
 # --- Build the new Helium bookmark tree from Zen ----------------------------
 python3 - "$ZEN" "$HEL" "$DRY_RUN" <<'PY'
-import sys, os, json, sqlite3, uuid, hashlib, tempfile
+import sys, os, json, sqlite3, uuid, hashlib, shutil, tempfile
 
 zen_path, hel_path, dry = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 
@@ -111,21 +126,32 @@ def to_chrome_time(ff_micros):
         return "0"
     return str(int(ff_micros) + EPOCH_DELTA)
 
-# Read Zen's bookmark DB read-only & lock-free, even if Zen is running.
-uri = f"file:{zen_path}?immutable=1"
-con = sqlite3.connect(uri, uri=True)
-con.row_factory = sqlite3.Row
+# Read from a private snapshot so a running Zen can't change the data mid-read.
+# places.sqlite is in WAL mode, so -wal must come along: recent bookmarks live
+# there until Zen checkpoints. ("?immutable=1" skips -wal and reports them as
+# absent, which would delete them from Helium on the rebuild.)
+snapdir = tempfile.mkdtemp(prefix="zen-places-")
+try:
+    snap = os.path.join(snapdir, "places.sqlite")
+    for ext in ("", "-wal", "-shm"):
+        if os.path.exists(zen_path + ext):
+            shutil.copy2(zen_path + ext, snap + ext)
+    # Writable copy, so SQLite can replay the WAL.
+    con = sqlite3.connect(snap)
+    con.row_factory = sqlite3.Row
 
-# id -> url
-places = {row["id"]: row["url"] for row in con.execute("SELECT id, url FROM moz_places")}
+    # id -> url
+    places = {row["id"]: row["url"] for row in con.execute("SELECT id, url FROM moz_places")}
 
-# parent -> ordered list of child rows
-children = {}
-for row in con.execute(
-        "SELECT id, parent, type, title, fk, dateAdded, lastModified "
-        "FROM moz_bookmarks ORDER BY parent, position"):
-    children.setdefault(row["parent"], []).append(row)
-con.close()
+    # parent -> ordered list of child rows
+    children = {}
+    for row in con.execute(
+            "SELECT id, parent, type, title, fk, dateAdded, lastModified "
+            "FROM moz_bookmarks ORDER BY parent, position"):
+        children.setdefault(row["parent"], []).append(row)
+    con.close()
+finally:
+    shutil.rmtree(snapdir, ignore_errors=True)
 
 _counter = [3]  # node ids 1-3 are reserved for the three root folders
 def next_id():

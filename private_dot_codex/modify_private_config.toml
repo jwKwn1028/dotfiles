@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+config_file="$(mktemp)"
+trap 'rm -f -- "$config_file"' EXIT
+cat >"$config_file"
+
+set_top_level() {
+    local key="$1" value="$2"
+
+    if sed -n '1,/^\[/p' "$config_file" | grep -Eq "^${key}[[:space:]]*="; then
+        sed -i -E "1,/^\[/s|^${key}[[:space:]]*=.*$|${key} = \"${value}\"|" "$config_file"
+    else
+        sed -i "1i${key} = \"${value}\"" "$config_file"
+    fi
+}
+
+set_top_level model_reasoning_effort xhigh
+set_top_level model gpt-5.6-sol
+cat "$config_file"

@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Apply the monitor layout for the current set of connected outputs.
-#
-# Xfce's settings daemon and hotplug detection get a moment to settle before the
-# layout is applied. Afterwards the monitor-specific Polybar instances are
-# recreated, which is also what makes the Super+Shift+P display shortcut pick up
-# a hotplugged output.
+# Apply the monitor layout for the connected outputs, then recreate the
+# per-monitor Polybar instances. The leading sleep lets xfsettingsd and hotplug
+# detection settle. Super+Shift+P reruns this to pick up a hotplugged output.
 
 DIR="$(dirname "$(readlink -f "$0")")"
 LAPTOP_OUTPUT="${I3_LAPTOP_OUTPUT:-eDP}"
@@ -61,4 +58,26 @@ sleep 0.2
 POLYBAR_LAUNCHER="${I3_POLYBAR_LAUNCHER:-$DIR/../polybar/launch.sh}"
 if [ -x "$POLYBAR_LAUNCHER" ]; then
     "$POLYBAR_LAUNCHER"
+fi
+
+# Confirm i3 is up, after launch.sh has blocked until the bars are back. Only
+# i3's exec_always sets I3_RELOAD_TOAST, and i3 4.23 reruns exec_always on
+# $mod+Shift+r but not $mod+Shift+c; Super+Shift+P leaves it unset. The stamp
+# sits in XDG_RUNTIME_DIR, which logind unmounts with the session, so its
+# absence marks a login's first parse.
+TOAST_STAMP="${XDG_RUNTIME_DIR:-/tmp}/i3-reload-toast"
+if [ "${I3_RELOAD_TOAST:-0}" = 1 ]; then
+    if [ -e "$TOAST_STAMP" ]; then
+        TOAST_TEXT="i3 reloaded"
+    else
+        TOAST_TEXT="Welcome"
+    fi
+    if command -v rofi >/dev/null 2>&1; then
+        # rofi 1.7.5 ignores a `timeout` block in -e mode, so time it out here.
+        rofi -e "$TOAST_TEXT" -theme reload-toast &
+        toast_pid=$!
+        sleep 1
+        kill "$toast_pid" 2>/dev/null
+    fi
+    touch "$TOAST_STAMP"
 fi

@@ -1,0 +1,34 @@
+/* Centered one-line toast for `rofi -e`. Imports spotlight.rasi for the palette
+   and font, then strips the drun chrome down to the message textbox.
+   rofi 1.7.5 ignores a `timeout` block in -e mode, so the caller kills it. */
+
+@import "spotlight.rasi"
+
+window {
+    width:            320px;
+    location:         center;
+    anchor:           center;
+    y-offset:         0;
+    background-color: @tn-bg;
+    border:           1px;
+    border-color:     @tn-border;
+    padding:          20px 24px;
+}
+
+mainbox {
+    children: [ message ];
+    spacing:  0;
+    padding:  0;
+}
+
+message {
+    background-color: transparent;
+    padding:          0;
+}
+
+textbox {
+    background-color: transparent;
+    text-color:       @tn-fg;
+    horizontal-align: 0.5;
+    vertical-align:   0.5;
+}

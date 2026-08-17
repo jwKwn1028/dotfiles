@@ -30,17 +30,7 @@
 
 if (( ! ${+ZSH_BANNER_SPECIAL_MESSAGES} )); then
   typeset -ga ZSH_BANNER_SPECIAL_MESSAGES=(
-    "Wir müssen wissen, dass wir es wissen werden"
-    "Longtemps, je me suis couché de bonne heure"
-    "It is not down on any map; true places never are"
-    "산허리는 온통 메밀밭이어서 피기 시작한 꽃이 소금을 뿌린 듯이 흐뭇한 달빛에 숨이 막힐 지경이다"
-    "Music is the Silence Between the Notes"
-    "Creía en infinitas series de tiempos, en una red creciente y vertiginosa de tiempos divergentes convergentes y paralelos"
-    "Live the Questions Now"
-    "행복은 하찮은 것에 있다"
-    "All those moments will be lost in time, like tears in rain"
-    "The Matrix is Everywhere"
-    "L'uomo verrà portato dalla sua creazione"
+    "Banner Messages here appear with probability 1/ZSH_BANNER_SPECIAL_CHANCE-1"
     )
 fi
 

@@ -1,6 +1,5 @@
-/* Every rofi mode shares one look. spotlight.rasi carries the theme, the
-   font, and the drun matching/sorting options, so `rofi -show window` looks
-   like `rofi -show drun` instead of falling back to a stock theme. */
+/* One look for every mode: spotlight.rasi carries theme, font, and matching, so
+   `rofi -show window` does not fall back to the stock theme. */
 configuration {
   modi: "drun,run,window";
   show-icons: true;

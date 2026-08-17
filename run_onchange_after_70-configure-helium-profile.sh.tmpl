@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+{{ $class := "desktop" -}}
+{{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
+# Merges the publishable subset of Helium's Chromium preferences into its
+# profile. Helium keeps settings, browsing data and identity in one JSON blob,
+# so the profile itself stays local (.chezmoiignore) and only the settings
+# below are carried in Git: UI chrome layout, fonts, languages, and the
+# search/newtab toggles. Deliberately excluded, and not to be added later:
+# anything under signin/sync/gcm, password_manager, autofill, extensions,
+# profile.content_settings, media.device_id_salt, enterprise_profile_guid,
+# session and window state, and every counter or timestamp.
+#
+# Every key here must stay out of Chromium's MAC-protected "tracked
+# preferences" set (protection.macs in the live file). Writing a tracked pref
+# from outside the browser invalidates its MAC and makes Helium reset it on
+# next launch, so homepage, session.restore_on_startup, show_home_button,
+# default_search_provider_data and extensions.settings are off limits.
+#
+# This is a run_onchange_ script with the prefs inlined, so editing them below
+# is what re-triggers the merge.
+set -euo pipefail
+
+{{ if or (ne .chezmoi.os "linux") (ne $class "desktop") -}}
+echo "Non-Linux desktop; skipping Helium preference configuration."
+exit 0
+{{- else -}}
+dry_run=0
+case "${1:-}" in
+    "") ;;
+    --dry-run) dry_run=1 ;;
+    *) echo "Usage: $0 [--dry-run]" >&2; exit 2 ;;
+esac
+
+readonly prefs={{ joinPath .chezmoi.homeDir ".config/net.imput.helium/Default/Preferences" | quote }}
+
+if [[ ! -f "$prefs" ]]; then
+    echo "Helium has not created a profile yet; skipping preference configuration."
+    exit 0
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "python3 not found; skipping Helium preference configuration."
+    exit 0
+fi
+
+# Helium rewrites Preferences from memory on exit, so a merge applied while it
+# runs is silently discarded. Same guard as Applications/update-helium.sh.
+if (( dry_run == 0 )) && pgrep -f 'helium-.*\.AppImage|\.mount_[Hh]elium' >/dev/null 2>&1; then
+    echo "Helium is running; skipping preference configuration (applies on next apply after quit)."
+    exit 0
+fi
+
+python3 - "$prefs" "$dry_run" <<'HELIUM_PREFS_EOF'
+import json, os, sys, tempfile
+
+path, dry_run = sys.argv[1], sys.argv[2] == "1"
+
+managed = {
+    # Helium's own window chrome: zen mode with a hidden top bar, vertical
+    # tabs on the left, and the toolbar buttons pared back to the menu.
+    "helium": {
+        "browser": {
+            "layout": 2,
+            "minimal_location_bar": True,
+            "rounded_frame": False,
+            "show_avatar_button": False,
+            "show_back_button": False,
+            "show_dynamic_new_tab_button": False,
+            "show_extensions_button": False,
+            "show_media_button": False,
+            "show_menu_button": True,
+            "show_reload_button": False,
+            "show_vertical_tabs_collapse_button": False,
+            "vertical_right_aligned": False,
+            "zen_mode": True,
+            "zen_mode_sidebar_pinned": False,
+            "zen_mode_top_chrome_pinned": False,
+        },
+        "settings": {"behavior": {"vertical_collapse_shortcut": True}},
+    },
+    "vertical_tabs": {"collapsed_state": False, "uncollapsed_width": 200},
+    "side_panel": {"is_right_aligned": False},
+    "browser": {"custom_chrome_frame": False, "show_forward_button": False},
+    "bookmark_bar": {
+        "show_on_all_tabs": False,
+        "show_tab_groups": False,
+        "visibility_state": 2,
+    },
+    # New tab page: no shortcut tiles, no background "inspiration" feed.
+    "ntp": {
+        "custom_background_inspiration": False,
+        "shortcust_visible": False,
+        "shortcuts_auto_removal_disabled": True,
+    },
+    "search": {"suggest_enabled": False},
+    "intl": {"selected_languages": "en-US,en"},
+    "spellcheck": {"dictionaries": ["en-US"]},
+    # Fonts installed by run_once_after_50-install-fonts.
+    "webkit": {
+        "webprefs": {
+            "fonts": {
+                "fixed": {
+                    "Hang": "JetBrainsMono Nerd Font",
+                    "Kore": "JetBrainsMono Nerd Font",
+                    "Zyyy": "JetBrainsMono Nerd Font",
+                },
+                "sansserif": {
+                    "Hang": "NanumGothic",
+                    "Kore": "NanumGothic",
+                    "Zyyy": "Noto Serif",
+                },
+                "serif": {
+                    "Hang": "NanumGothic",
+                    "Kore": "NanumGothic",
+                    "Zyyy": "Noto Serif",
+                },
+                "standard": {
+                    "Hang": "NanumGothic",
+                    "Kore": "NanumGothic",
+                    "Zyyy": "Noto Serif",
+                },
+            }
+        }
+    },
+}
+
+
+def merge(dst, src, prefix=""):
+    """Deep-merge src into dst, returning the dotted paths actually changed."""
+    changed = []
+    for key, value in src.items():
+        name = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            node = dst.get(key)
+            if not isinstance(node, dict):
+                node = {}
+                dst[key] = node
+            changed += merge(node, value, name)
+        elif dst.get(key) != value:
+            dst[key] = value
+            changed.append(name)
+    return changed
+
+
+def demo():
+    dst = {"a": {"b": 1}, "keep": "me"}
+    assert merge(dst, {"a": {"b": 1}}) == []
+    assert merge(dst, {"a": {"b": 2, "c": 3}, "d": 4}) == ["a.b", "a.c", "d"]
+    assert dst == {"a": {"b": 2, "c": 3}, "keep": "me", "d": 4}
+    dst = {"a": "scalar"}
+    assert merge(dst, {"a": {"b": 1}}) == ["a.b"]
+    assert dst == {"a": {"b": 1}}
+    print("merge self-check passed")
+
+
+if os.environ.get("HELIUM_PREFS_SELFTEST"):
+    demo()
+    sys.exit(0)
+
+try:
+    with open(path, encoding="utf-8") as handle:
+        prefs = json.load(handle)
+except (OSError, ValueError) as exc:
+    print(f"warning: could not read Helium preferences ({exc}); skipping")
+    sys.exit(0)
+
+changed = merge(prefs, managed)
+if not changed:
+    print("Helium preferences already match the managed set.")
+    sys.exit(0)
+
+if dry_run:
+    print(f"Would update {len(changed)} Helium preference(s): {', '.join(changed)}")
+    sys.exit(0)
+
+# Written atomically: a truncated Preferences file makes Helium discard the
+# whole profile and start over.
+directory = os.path.dirname(path)
+fd, temp = tempfile.mkstemp(dir=directory, prefix=".Preferences.")
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(prefs, handle, separators=(",", ":"))
+    os.replace(temp, path)
+except BaseException:
+    os.unlink(temp)
+    raise
+
+print(f"Updated {len(changed)} Helium preference(s): {', '.join(changed)}")
+HELIUM_PREFS_EOF
+{{ end -}}

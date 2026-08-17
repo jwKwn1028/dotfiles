@@ -1,5 +1,5 @@
-# Pure i3 session, migrated from XFCE. xfce4-panel is NOT started; xfsettingsd
-# runs for theming/cursor only, and polybar is the status bar.
+# Pure i3 session. No xfce4-panel; xfsettingsd for theming/cursor only, polybar
+# for the bar.
 
 set $mod Mod4
 font pango:DejaVu Sans 10
@@ -32,14 +32,19 @@ bindsym $mod+Shift+p          exec --no-startup-id ~/.config/i3/display-setup.sh
 bindsym Control+$mod+z        exec --no-startup-id zed
 # bindsym Control+$mod+l        exec --no-startup-id xflock4  # reserved for numeric workspace navigation
 bindsym Control+Mod1+p        exec --no-startup-id flatpak run com.super_productivity.SuperProductivity
+# Ghostty's tab bar has no in-app toggle, so i3 drives it. Mod1+Shift+t is free
+# in i3, XFCE, zsh, tmux and Ghostty's own defaults.
+bindsym Mod1+Shift+t          exec --no-startup-id ~/.config/ghostty/toggle-tabbar.sh
 # bindsym Control+$mod+h        exec --no-startup-id gtk-launch helium  # reserved for numeric workspace navigation
 bindsym Control+Shift+z       exec --no-startup-id /usr/bin/flatpak run app.zen_browser.zen
 bindsym --release Control+Mod1+Escape exec --no-startup-id /usr/bin/xkill
 bindsym Control+Shift+Escape  exec --no-startup-id xfce4-taskmanager
 
 # --- window management ---
-bindsym $mod+Shift+q    kill
-bindsym Mod1+F4         kill
+bindsym $mod+Shift+q          kill
+bindsym Mod1+F4               kill
+bindsym Control+$mod+Shift+q  kill client
+bindsym Control+Mod1+F4       kill client
 
 # focus
 bindsym $mod+h focus left
@@ -157,9 +162,8 @@ workspace $ws3  output primary
 workspace $ws4  output primary
 workspace $ws5  output primary
 workspace $ws6  output primary
-# By keyword, not by name: the named outputs were this machine's and are already
-# stale (its external is DisplayPort-1), so `nonprimary` was carrying these on
-# its own. It is also what makes them right on any machine.
+# By keyword, not output name: the old names are stale (external is
+# DisplayPort-1), so `nonprimary` was already carrying these, and it is portable.
 workspace $ws7  output nonprimary
 workspace $ws8  output nonprimary
 workspace $ws9  output nonprimary
@@ -251,10 +255,9 @@ bindsym Shift+$mod+s          exec --no-startup-id flameshot gui
 # --- bar: polybar ---
 bindsym $mod+Shift+b exec --no-startup-id ~/.config/i3/toggle-polybar-resnap.sh
 
-# Keyboard cursor over polybar's own modules; see bar-nav.sh. The mode name is a
-# single space so polybar renders no text -- the block on the selected module
-# already says where the cursor is -- and is written literally because i3 keeps
-# the quotes in a `set` variable's value.
+# Keyboard cursor over polybar's modules; see bar-nav.sh. Mode name is a literal
+# single space so polybar renders no text, and literal because i3 keeps the
+# quotes inside a `set` value.
 bindsym $mod+i exec --no-startup-id ~/.config/i3/bar-nav.sh open, mode " "
 mode " " {
     bindsym h     exec --no-startup-id ~/.config/i3/bar-nav.sh prev
@@ -265,8 +268,8 @@ mode " " {
     bindsym k     exec --no-startup-id ~/.config/i3/bar-nav.sh up
     bindsym Down  exec --no-startup-id ~/.config/i3/bar-nav.sh down
     bindsym Up    exec --no-startup-id ~/.config/i3/bar-nav.sh up
-    # No `mode "default"`: the script leaves the mode itself, and only for a
-    # stop that opens a window.
+    # No `mode "default"`: the script exits the mode itself, and only on a stop
+    # that opens a window.
     bindsym Return       exec --no-startup-id ~/.config/i3/bar-nav.sh click
     bindsym Shift+Return exec --no-startup-id ~/.config/i3/bar-nav.sh click-right
     bindsym Escape exec --no-startup-id ~/.config/i3/bar-nav.sh close, mode "default"
@@ -287,8 +290,8 @@ exec_always --no-startup-id sh -c 'pkill -f "bash .*/snap-watcher\.sh$"; setsid 
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/kakaotalk-float-watcher\.sh$"; setsid ~/.config/i3/kakaotalk-float-watcher.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/super-polybar-listener\.py$"; exec /usr/bin/python3 ~/.config/i3/super-polybar-listener.py'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/autotiling"; exec ~/.local/bin/autotiling --limit 6'
-# -d until the "tiling goes wild after idle" bug is caught: decisions land in
-# ~/.xsession-errors. The pkill pattern has no `$` so it still matches with args.
+# -d until the idle-tiling bug is caught; decisions land in ~/.xsession-errors.
+# pkill pattern omits `$` so it still matches with args.
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/overflow-watcher\.py"; exec /usr/bin/python3 ~/.config/i3/overflow-watcher.py -d'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/top-edge-peek\.py$"; exec /usr/bin/python3 ~/.config/i3/top-edge-peek.py'
 exec --no-startup-id xrdb -merge ~/.Xresources
@@ -304,5 +307,9 @@ exec --no-startup-id sh -c 'pgrep -x blueman-applet      >/dev/null || blueman-a
 exec --no-startup-id sh -c 'sleep 2; pgrep -x blueman-tray >/dev/null || blueman-tray &'
 exec --no-startup-id sh -c 'pgrep -x unclutter-xfixes    >/dev/null || unclutter-xfixes --timeout 3 &'
 exec --no-startup-id dropbox start -i
-exec_always --no-startup-id ~/.config/i3/display-setup.sh
+# I3_RELOAD_TOAST flashes a toast once Polybar is back: "Welcome" on a login's
+# first parse, "i3 reloaded" after. Only $mod+Shift+r reaches it -- i3 4.23 skips
+# exec_always on $mod+Shift+c. Super+Shift+P calls the script without the
+# variable, so a manual display refresh stays silent.
+exec_always --no-startup-id env I3_RELOAD_TOAST=1 ~/.config/i3/display-setup.sh
 exec --no-startup-id xss-lock -- xflock4

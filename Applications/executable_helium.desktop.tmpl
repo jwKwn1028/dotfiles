@@ -1,10 +1,23 @@
+{{- /* The AppImage filename carries the version, and update-helium.sh renames
+       it on every upgrade while rewriting only the live .desktop files, never
+       this source -- so a version hardcoded here silently drifts one upgrade
+       later and points the launcher at an AppImage that is no longer on disk.
+       Read it off whatever is actually installed instead. The literal below is
+       only the fallback for a machine that has not run update-helium.sh yet.
+       ponytail: takes the last glob match, which is lexical order and not
+       version order; update-helium.sh removes the old AppImage, so two only
+       coexist after an interrupted run. Sort properly if that stops holding. */ -}}
+{{- $found := glob (printf "%s/Applications/helium-*-x86_64.AppImage" .chezmoi.homeDir) -}}
+{{- $appimage := printf "%s/Applications/helium-0.15.3.1-x86_64.AppImage" .chezmoi.homeDir -}}
+{{- if $found }}{{ $appimage = index $found (sub (len $found) 1) }}{{ end -}}
+{{- $version := $appimage | base | trimPrefix "helium-" | trimSuffix "-x86_64.AppImage" -}}
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Helium
 GenericName=Web Browser
 Comment=Access the Internet
-Exec={{ .chezmoi.homeDir }}/Applications/helium-0.13.3.1-x86_64.AppImage %U
+Exec={{ $appimage }} %U
 Icon={{ .chezmoi.homeDir }}/Applications/helium.png
 Terminal=false
 StartupNotify=true
@@ -12,12 +25,12 @@ StartupWMClass=helium
 Categories=Network;WebBrowser;
 MimeType=application/pdf;application/rdf+xml;application/rss+xml;application/xhtml+xml;application/xhtml_xml;application/xml;image/gif;image/jpeg;image/png;image/webp;text/html;text/xml;x-scheme-handler/http;x-scheme-handler/https;
 Actions=new-window;new-private-window;
-X-AppImage-Version=0.13.3.1
+X-AppImage-Version={{ $version }}
 
 [Desktop Action new-window]
 Name=New Window
-Exec={{ .chezmoi.homeDir }}/Applications/helium-0.13.3.1-x86_64.AppImage
+Exec={{ $appimage }}
 
 [Desktop Action new-private-window]
 Name=New Incognito Window
-Exec={{ .chezmoi.homeDir }}/Applications/helium-0.13.3.1-x86_64.AppImage --incognito
+Exec={{ $appimage }} --incognito

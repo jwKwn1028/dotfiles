@@ -1,0 +1,66 @@
+/* 15px tab strip: titles only, no icons or close buttons, square, contiguous.
+ * #292d3e bar/inactive (terminal bg), #363d5c focused (Helix cursorline, from
+ * themes/tokyonight_storm.toml which overrides base tokyonight), #c0caf5 text
+ * (Helix fg).
+ *
+ * Gotchas, all measured: selectors must be flat — Ghostty nests extra nodes, so
+ * `tabbar tabbox > tab` matches nothing. libadwaita color names (@accent_bg_color)
+ * silently resolve to #171717, so colors are literals. !important applies but
+ * makes the bar taller, so none is used. The ~18px inset at each end is
+ * widget-level inside AdwTabBar and not reachable from CSS. */
+
+tabbar, tabbox, tabbar box, tabbar revealer, tabbar scrolledwindow, tabbar viewport {
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: #292d3e;
+}
+
+tab {
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  background: #292d3e;
+  /* No transition: animating would redraw the strip every frame. */
+  transition: none;
+}
+
+tab:selected {
+  background: #363d5c;
+}
+
+/* An inner node draws the rounding, so border-radius: 0 on `tab` is not enough. */
+tabbar * {
+  border-radius: 0;
+}
+
+/* Otherwise libadwaita's 1px #585e79 inter-tab divider is a third color. */
+tabbar separator {
+  background: #292d3e;
+  min-width: 0;
+}
+
+tabbar label {
+  font-size: 10px;
+  color: #c0caf5;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+/* GTK CSS has no display/visibility, so these are zeroed rather than hidden. */
+tabbar button, tabbar image {
+  opacity: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: -8px 0;
+  -gtk-icon-size: 1px;
+}
