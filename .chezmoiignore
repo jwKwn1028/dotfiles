@@ -29,8 +29,11 @@
 # ─── Browser profiles ──────────────────────────────────────────────────────
 # Browser profiles stay local: bookmarks, sync identifiers, site-engagement
 # records. The publishable settings are installed separately by the
-# run_onchange_ profile scripts -- the sanitized Zen user.js allowlist, and the
-# Helium preference subset merged into its Chromium prefs blob.
+# run_onchange_ profile scripts -- sanitized Firefox/Zen user.js allowlists,
+# and the Helium preference subset merged into its Chromium prefs blob.
+.mozilla/firefox/
+snap/firefox/common/.mozilla/firefox/
+.var/app/org.mozilla.firefox/.mozilla/firefox/
 .config/net.imput.helium/
 .var/app/app.zen_browser.zen/
 
@@ -65,6 +68,11 @@
 # directive to split them. A modify_ script manages only the selected model and
 # reasoning effort; the remaining state stays local.
 # ~/.codex/rules and ~/.codex/statusline.toml are static and stay managed.
+#
+# ~/.claude.json is the same story for Claude Code and has no entry in the
+# source state at all, so nothing to ignore: MCP servers, skills, and plugins
+# for both tools are installer-managed, not chezmoi-managed. See AGENTS.md,
+# "Agent tooling this repo does not manage".
 
 # ─── Desktop profiles ─────────────────────────────────────────────────────
 # Mint's i3 tree is the X11 desktop. A machine on any other profile (a server,
@@ -75,6 +83,7 @@
 /.config/polybar/
 /.config/picom/
 /.config/rofi/
+/.config/fcitx5/
 /.x-unstick.sh
 /.toggle-touchpad.sh
 /.local/bin/touchpad

@@ -26,12 +26,28 @@ before creating files with a new prefix.
 - Edit files **here**, not in `$HOME` — `chezmoi apply` overwrites the target.
   To pull in a change made live in `$HOME`, use `chezmoi re-add`.
 - Prefer `chezmoi diff` before `chezmoi apply`. Applying rewrites live config.
-- Secrets are never committed. `context7ApiKey` is prompted at `chezmoi init`
-  and lives in `~/.config/chezmoi/chezmoi.toml`, outside this repo. Do not
-  inline secrets into templates.
+- Secrets and machine-specific connection values are never committed.
+  `context7ApiKey`, `sshRemoteUser`, `sshGpuHost`, and `sshHpcHost` are prompted
+  at `chezmoi init` and live in `~/.config/chezmoi/chezmoi.toml`, outside this
+  repo. Do not inline them into templates.
 - `.gitignore` keeps agent scaffolding (`.claude`, `.codex`, `.AGENTS.md`) out
   of history on purpose. `AGENTS.md` and `CLAUDE.md` are the deliberate
   exceptions so a fresh clone gets these rules — keep both free of secrets.
+
+## Agent tooling this repo does not manage
+
+**Claude Code and Codex plugins, skills, MCP servers, agent definitions, and
+the hooks their installers wire up are out of scope.** Their absence here is
+deliberate — don't add them, and don't "restore" one you see in `$HOME` but not
+in the source state. Those registrations carry machine-local paths, trust
+hashes, and cache directories, and each installer keeps its own entry current,
+so a copy in Git goes stale and downgrades the live one on `apply`.
+
+Both tools mix that state into config with no include directive, so what this
+repo manages is narrow: `private_dot_claude/private_settings.json.tmpl` (plain
+settings only — chezmoi owns `~/.claude/settings.json` outright) and
+`private_dot_codex/modify_private_config.toml` (only `model` and
+`model_reasoning_effort`; the rest of `~/.codex/config.toml` passes through).
 
 ## Provisioning
 
@@ -80,7 +96,10 @@ contract and file-by-file inventory for a parallel Darwin profile.
 
 ## Verifying
 
-There is no test suite. `chezmoi apply` against live config is the risky step,
-so verify with `chezmoi diff` / `chezmoi status` / `chezmoi apply --dry-run`,
-and lint shell scripts with `shellcheck` when changing them.
+There is no repo-wide test runner. Run the relevant standalone checks under
+`dot_config/i3/tests/`, `dot_config/polybar/tests/`, and `dot_local/bin/tests/`;
+`dot_config/i3/MANUAL.md` documents the i3 checks. `chezmoi apply` against live
+config is the risky step, so verify with `chezmoi diff` / `chezmoi status` /
+`chezmoi apply --dry-run`. Check Bash/POSIX scripts with `shellcheck` and
+`bash -n`, and Zsh scripts with `zsh -n`.
 `chezmoi execute-template < file.tmpl` renders a template without applying it.

@@ -24,16 +24,17 @@ btop () {
 alias hz='${EDITOR:-hx} ~/.zsh/rc.d'   # config now lives in modules (was ~/.zshrc)
 alias sz='print "reloading zsh..." && exec zsh'   # full restart: re-reads .zshenv + rc.d without double-wrapping ZLE widgets
 alias ':q'='exit'
+alias ':qa'='xdotool key --clearmodifiers alt+F4'
 if _have fdfind; then
   alias fd='fdfind'
 fi
 alias scpo='print "shutting down..." && systemctl poweroff'
+alias wtail='watch -n 10 tail -n 10'
 
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../..'
-alias wtail='watch -n 10 tail -n 10'
 
 # --------------------------------------------------------
 # Ripgrep (rg)

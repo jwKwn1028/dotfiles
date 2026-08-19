@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+{{ $class := "desktop" -}}
+{{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
+{{ $nativeProfilesIni := joinPath .chezmoi.homeDir ".mozilla/firefox/profiles.ini" -}}
+{{ $snapProfilesIni := joinPath .chezmoi.homeDir "snap/firefox/common/.mozilla/firefox/profiles.ini" -}}
+{{ $flatpakProfilesIni := joinPath .chezmoi.homeDir ".var/app/org.mozilla.firefox/.mozilla/firefox/profiles.ini" -}}
+# Installs portable preferences into Firefox's installation-selected profile.
+# Browsing, account, extension, and generated profile state remain local.
+# Native profile state: {{ if lstat $nativeProfilesIni }}{{ include $nativeProfilesIni | sha256sum }}{{ else }}missing{{ end }}
+# Snap profile state: {{ if lstat $snapProfilesIni }}{{ include $snapProfilesIni | sha256sum }}{{ else }}missing{{ end }}
+# Flatpak profile state: {{ if lstat $flatpakProfilesIni }}{{ include $flatpakProfilesIni | sha256sum }}{{ else }}missing{{ end }}
+set -euo pipefail
+
+{{ if or (ne .chezmoi.os "linux") (ne $class "desktop") -}}
+echo "Non-Linux desktop; skipping Firefox profile configuration."
+exit 0
+{{- else -}}
+case "${1:-}" in
+    "" | --check) ;;
+    *) echo "Usage: $0 [--check]" >&2; exit 2 ;;
+esac
+
+readonly native_root={{ joinPath .chezmoi.homeDir ".mozilla/firefox" | quote }}
+readonly snap_root={{ joinPath .chezmoi.homeDir "snap/firefox/common/.mozilla/firefox" | quote }}
+readonly flatpak_root={{ joinPath .chezmoi.homeDir ".var/app/org.mozilla.firefox/.mozilla/firefox" | quote }}
+
+if [[ -n "${FIREFOX_ROOT:-}" ]]; then
+    profile_roots=("$FIREFOX_ROOT")
+else
+    profile_roots=("$native_root" "$snap_root" "$flatpak_root")
+fi
+
+firefox_root=""
+profiles_ini=""
+for candidate_root in "${profile_roots[@]}"; do
+    if [[ -f "${candidate_root}/profiles.ini" ]]; then
+        firefox_root="$candidate_root"
+        profiles_ini="${candidate_root}/profiles.ini"
+        break
+    fi
+done
+
+if [[ -z "$profiles_ini" ]]; then
+    echo "Firefox has not created a profile yet; skipping profile configuration."
+    exit 0
+fi
+
+# Candidate order is: installation-selected profile, profile marked default,
+# then every remaining profile. This avoids committing a machine-specific ID.
+profile_dir=""
+while IFS= read -r candidate; do
+    case "$candidate" in
+        "" | "." | ".." | /* | ../* | */../* | */..)
+            continue
+            ;;
+    esac
+
+    candidate_dir="${firefox_root}/${candidate}"
+    if [[ -d "$candidate_dir" ]]; then
+        profile_dir="$candidate_dir"
+        break
+    fi
+done < <(
+    awk '
+        /^\[/ {
+            section = $0
+            sub(/\r$/, "", section)
+
+            if (section ~ /^\[Install[^]]*\]$/) {
+                mode = "install"
+                next
+            }
+            if (section ~ /^\[Profile[0-9]+\]$/) {
+                mode = "profile"
+                profile_count++
+                next
+            }
+
+            mode = ""
+            next
+        }
+
+        mode == "install" && /^Default=/ {
+            value = $0
+            sub(/^Default=/, "", value)
+            sub(/\r$/, "", value)
+            install_paths[++install_count] = value
+            next
+        }
+
+        mode == "profile" && /^Path=/ {
+            value = $0
+            sub(/^Path=/, "", value)
+            sub(/\r$/, "", value)
+            profile_paths[profile_count] = value
+            next
+        }
+
+        mode == "profile" && /^Default=1\r?$/ {
+            profile_defaults[profile_count] = 1
+        }
+
+        END {
+            for (i = 1; i <= install_count; i++) {
+                print install_paths[i]
+            }
+            for (i = 1; i <= profile_count; i++) {
+                if (profile_defaults[i]) {
+                    print profile_paths[i]
+                }
+            }
+            for (i = 1; i <= profile_count; i++) {
+                if (!profile_defaults[i]) {
+                    print profile_paths[i]
+                }
+            }
+        }
+    ' "$profiles_ini"
+)
+
+if [[ -z "$profile_dir" ]]; then
+    echo "No usable Firefox profile found; skipping profile configuration."
+    exit 0
+fi
+
+readonly user_js="${profile_dir}/user.js"
+temp_user_js="$(mktemp "${profile_dir}/.user.js.XXXXXX")"
+trap 'rm -f -- "$temp_user_js"' EXIT
+cat >"$temp_user_js" <<'FIREFOX_USER_JS_EOF'
+{{ template "firefox-user.js" . -}}
+FIREFOX_USER_JS_EOF
+chmod 0600 "$temp_user_js"
+
+if [[ "${1:-}" == "--check" ]]; then
+    cmp -s "$temp_user_js" "$user_js" || {
+        echo "Firefox user.js is not up to date." >&2
+        exit 1
+    }
+    echo "Firefox profile preference check passed."
+    exit 0
+fi
+
+if [[ -f "$user_js" ]] && cmp -s "$temp_user_js" "$user_js"; then
+    echo "Firefox user.js is already up to date."
+    exit 0
+fi
+
+mv -f -- "$temp_user_js" "$user_js"
+trap - EXIT
+echo "Installed Firefox preferences; restart Firefox to load them."
+{{- end }}

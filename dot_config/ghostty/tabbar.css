@@ -1,13 +1,8 @@
-/* 15px tab strip: titles only, no icons or close buttons, square, contiguous.
- * #292d3e bar/inactive (terminal bg), #363d5c focused (Helix cursorline, from
- * themes/tokyonight_storm.toml which overrides base tokyonight), #c0caf5 text
- * (Helix fg).
- *
- * Gotchas, all measured: selectors must be flat — Ghostty nests extra nodes, so
- * `tabbar tabbox > tab` matches nothing. libadwaita color names (@accent_bg_color)
- * silently resolve to #171717, so colors are literals. !important applies but
- * makes the bar taller, so none is used. The ~18px inset at each end is
- * widget-level inside AdwTabBar and not reachable from CSS. */
+/* 15px tab strip: titles only, square, contiguous. #292d3e bar/inactive,
+ * #363d5c focused (Helix cursorline), #c0caf5 text (Helix fg).
+ * Selectors must be flat: Ghostty nests nodes, so `tabbar tabbox > tab` misses.
+ * Colors must be literals: libadwaita names resolve to #171717 here.
+ * The ~18px inset at each end is inside AdwTabBar, unreachable from CSS. */
 
 tabbar, tabbox, tabbar box, tabbar revealer, tabbar scrolledwindow, tabbar viewport {
   min-height: 0;
@@ -28,7 +23,6 @@ tab {
   box-shadow: none;
   outline: none;
   background: #292d3e;
-  /* No transition: animating would redraw the strip every frame. */
   transition: none;
 }
 
@@ -36,12 +30,37 @@ tab:selected {
   background: #363d5c;
 }
 
-/* An inner node draws the rounding, so border-radius: 0 on `tab` is not enough. */
+/* An inner node paints the rounding and shadow; `tab` alone does not reach it. */
 tabbar * {
   border-radius: 0;
+  box-shadow: none;
 }
 
-/* Otherwise libadwaita's 1px #585e79 inter-tab divider is a third color. */
+/* Flat AdwToolbarView adds a scroll undershoot below the tab bar. */
+toolbarview.undershoot-top scrolledwindow > undershoot.top {
+  background: none;
+  box-shadow: none;
+}
+
+/* Scroll-edge shading, appears once tabs overflow. */
+tabbar undershoot, tabbar overshoot {
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* Unstyled states fall back to libadwaita's decoration. Selected wins the tie. */
+tab:hover, tab:active, tab:focus, tab:backdrop {
+  background: #292d3e;
+  box-shadow: none;
+}
+
+tab:selected, tab:selected:hover, tab:selected:backdrop {
+  background: #363d5c;
+  box-shadow: none;
+}
+
+/* Else libadwaita's 1px #585e79 divider is a third color. */
 tabbar separator {
   background: #292d3e;
   min-width: 0;
@@ -55,7 +74,7 @@ tabbar label {
   margin: 0;
 }
 
-/* GTK CSS has no display/visibility, so these are zeroed rather than hidden. */
+/* No display/visibility in GTK CSS, so zero these instead of hiding. */
 tabbar button, tabbar image {
   opacity: 0;
   min-width: 0;

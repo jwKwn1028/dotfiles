@@ -17,4 +17,8 @@ set_top_level() {
 
 set_top_level model_reasoning_effort xhigh
 set_top_level model gpt-5.6-sol
+
+# Everything else in config.toml -- MCP servers, hooks, plugin registration,
+# per-project trust -- is installer- or Codex-owned and passes through
+# untouched. See AGENTS.md, "Agent tooling this repo does not manage".
 cat "$config_file"

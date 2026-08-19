@@ -25,6 +25,14 @@ chezmoi re-add          # pull local edits back into the source
 chezmoi update          # git pull + apply
 ```
 
+## Agent tooling
+
+Claude Code and Codex **plugins, skills, and MCP servers are not managed here**
+— their own installers own those registrations, which carry machine-local paths
+and trust state. This repo tracks only the static configuration around them
+(`~/.claude/settings.json`, `~/.codex/rules`, model selection). See
+[`AGENTS.md`](AGENTS.md).
+
 ## License
 
 Original configuration and scripts in this repository are available under the

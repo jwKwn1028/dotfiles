@@ -47,6 +47,7 @@ i3_x11 = [
     # without this the themed Thunar renders with missing icons.
     "papirus-icon-theme",
     "pavucontrol", "blueman", "brightnessctl", "playerctl", "thunderbird",
+    "fcitx5", "fcitx5-hangul", "fcitx5-frontend-all", "fcitx5-config-qt",
     # nm-applet supplies the graphical wifi menu embedded by Polybar's tray.
     "network-manager-gnome",
     # i3ipc bindings for dot_config/i3/overflow-watcher.py, started from the i3
@@ -107,8 +108,7 @@ registry = [
 # Optional `package` names one crate inside a repo that contains several with
 # binaries; cargo refuses to guess and aborts without it.
 git = [
-    # rtk: CLI output filter; wired into Claude Code by the `rtk hook claude`
-    # PreToolUse hook in private_dot_claude/private_settings.json.tmpl.
+    # rtk: CLI output filter, configured by dot_config/rtk/filters.toml.
     { url = "https://github.com/rtk-ai/rtk",                     bin = "rtk" },
     # markdown LSP
     { url = "https://github.com/Feel-ix-343/markdown-oxide.git", bin = "markdown-oxide" },
