@@ -2,6 +2,7 @@
 # tracked on purpose so a fresh clone gets the repo's working rules. AGENTS.md
 # holds the content; CLAUDE.md imports it. Keep both free of secrets.
 .AGENTS.md
+dot_config/private_restic/password
 .claude
 .codex
 claude.md
@@ -22,6 +23,11 @@ dot_config/i3/MANUAL.pdf
 # metadata, and other machine state. Keep the entire source trees local.
 dot_config/private_net.imput.helium/
 dot_var/app/app.zen_browser.zen/
+
+# Allowlist for ~/.ssh, so a wholesale `chezmoi add ~/.ssh` cannot stage
+# id_ed25519 or known_hosts.
+private_dot_ssh/*
+!private_dot_ssh/private_config.tmpl
 
 __pycache__/
 *.py[cod]

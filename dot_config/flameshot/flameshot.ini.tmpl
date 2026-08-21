@@ -1,0 +1,10 @@
+{{- /* savePath is prompted so a local working directory stays out of the repo;
+       blank falls back to ~/Pictures/Screenshots. Flameshot does not create a
+       missing savePath -- it silently saves to $HOME -- so
+       run_onchange_after_92-create-screenshot-dir.sh.tmpl makes it. */ -}}
+{{- $savePath := printf "%s/Pictures/Screenshots" .chezmoi.homeDir -}}
+{{- if hasKey . "flameshotSavePath" -}}
+{{-   if .flameshotSavePath }}{{ $savePath = .flameshotSavePath }}{{ end -}}
+{{- end -}}
+[General]
+savePath={{ $savePath }}

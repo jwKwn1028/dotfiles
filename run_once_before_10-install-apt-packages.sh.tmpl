@@ -35,6 +35,18 @@ sudo apt-get install -y \
 {{- end }}
     ;
 
+# --- laptop power management ---
+# Runtime gate: class/desktopProfile do not encode "has a battery".
+if compgen -G "/sys/class/power_supply/BAT*" >/dev/null; then
+    sudo apt-get install -y \
+{{- range .packages.apt.laptop }}
+        {{ . }} \
+{{- end }}
+        ;
+else
+    echo "No battery present; skipping the laptop power package set."
+fi
+
 {{ if and (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
 # --- desktop / i3 stack ---
 sudo apt-get install -y \

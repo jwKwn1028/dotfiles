@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Forward-search: tell the running PDF viewer to jump to the source line under
+# the cursor in helix. Wired from helix keybinds.
+#
+# Usage: hx-fwd-search <source_file> <line> [col]
+#
+# Caveats:
+#   * .tex   — full forward search (latexmk produces .synctex.gz).
+#   * .md    — pandoc emits an intermediate .tex, so synctex maps to that file,
+#              not the markdown. The PDF will still focus, but the jump may
+#              land on the wrong line. Best-effort.
+#   * .typ   — typst doesn't emit synctex. We just raise/focus the viewer.
+set -euo pipefail
+
+src="${1:?source file required}"
+line="${2:?line required}"
+col="${3:-1}"
+
+src="$(readlink -f "$src")"
+dir="$(dirname "$src")"
+stem="$(basename "$src")"
+stem="${stem%.*}"
+
+# Candidate PDFs: same dir first, then walk up looking for a project root.
+declare -a candidates
+candidates+=("$dir/$stem.pdf")
+
+cur="$dir"
+while [[ "$cur" != "/" && -n "$cur" ]]; do
+  for n in main.tex main.typ root.tex thesis.tex; do
+    if [[ -f "$cur/$n" ]]; then
+      candidates+=("$cur/${n%.*}.pdf")
+      break 2
+    fi
+  done
+  cur="$(dirname "$cur")"
+done
+
+pdf=""
+for c in "${candidates[@]}"; do
+  if [[ -f "$c" ]]; then pdf="$c"; break; fi
+done
+
+if [[ -z "$pdf" ]]; then
+  notify-send "hx-fwd-search" "no PDF found near $src" 2>/dev/null || \
+    echo "hx-fwd-search: no PDF found near $src" >&2
+  exit 1
+fi
+
+# Detect which viewer is currently displaying this PDF, so we forward to the
+# right one. Without this, we'd spawn a fresh sioyek/zathura on every F5,
+# leaving an unused window behind.
+viewer=""
+if pgrep -af "zathura .*$pdf" >/dev/null 2>&1; then
+  viewer=zathura
+elif pgrep -af "sioyek .*$pdf" >/dev/null 2>&1; then
+  viewer=sioyek
+elif command -v sioyek >/dev/null 2>&1; then
+  viewer=sioyek         # nothing open; default to preferred
+elif command -v zathura >/dev/null 2>&1; then
+  viewer=zathura
+fi
+
+case "$viewer" in
+  sioyek)
+    sioyek --reuse-window \
+           --inverse-search "hx %1:%2" \
+           --forward-search-file "$src" \
+           --forward-search-line "$line" \
+           --forward-search-column "$col" \
+           "$pdf" >/dev/null 2>&1 &
+    disown
+    ;;
+  zathura)
+    # If a zathura is already showing this PDF, --synctex-forward IPCs to it
+    # via dbus; otherwise it spawns a new instance.
+    zathura --synctex-forward "$line:$col:$src" "$pdf" >/dev/null 2>&1 &
+    disown
+    ;;
+  *)
+    echo "hx-fwd-search: no viewer available" >&2
+    exit 1
+    ;;
+esac

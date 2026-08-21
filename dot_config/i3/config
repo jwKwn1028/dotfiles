@@ -99,10 +99,8 @@ for_window [class="(?i).*mintupdate.*"] floating enable, move position center
 for_window [instance="(?i).*mintupdate.*"] floating enable, move position center
 for_window [title="(?i).*update manager.*"] floating enable, move position center
 for_window [title=".*업데이트 매니저.*"] floating enable, move position center
-for_window [class="(?i)^kakaotalk\\.exe$"] floating enable, resize set 420 760, move position center
-for_window [instance="(?i)^kakaotalk\\.exe$"] floating enable, resize set 420 760, move position center
-for_window [title="(?i).*kakaotalk.*"] floating enable, resize set 420 760, move position center
-for_window [title=".*카카오톡.*"] floating enable, resize set 420 760, move position center
+for_window [class="(?i)^kakaotalk\.exe$"] floating enable, resize set 420 760, move position center
+for_window [instance="(?i)^kakaotalk\.exe$"] floating enable, resize set 420 760, move position center
 
 # --- XFWM-style snap-to-tile (window becomes floating in target rect) ---
 bindsym $mod+a exec --no-startup-id ~/.config/i3/tile-snap.sh left
@@ -212,8 +210,8 @@ bindcode $mod+Shift+17 exec --no-startup-id ~/.config/i3/workspace-action.sh mov
 bindcode $mod+Shift+18 exec --no-startup-id ~/.config/i3/workspace-action.sh move 9
 bindcode $mod+Shift+19 exec --no-startup-id ~/.config/i3/workspace-action.sh move 10
 
-# Super+N, then 1-0 for one workspace or Shift+K for every window. A hidden
-# polybar is shown first instead of entering the mode.
+# Super+N, then 1-0 for one workspace or Shift+K for every window. Polybar is
+# shown while choosing; the all-window action hides it again after the kill.
 mode "kill workspace" {
     bindsym 1 [workspace=$ws1] kill, mode "default"
     bindsym 2 [workspace=$ws2] kill, mode "default"
@@ -225,7 +223,7 @@ mode "kill workspace" {
     bindsym 8 [workspace=$ws8] kill, mode "default"
     bindsym 9 [workspace=$ws9] kill, mode "default"
     bindsym 0 [workspace=$ws10] kill, mode "default"
-    bindsym Shift+k [all] kill, mode "default"
+    bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-all-windows-and-hide-polybar.sh
     bindsym Return mode "default"
     bindsym Escape mode "default"
 }

@@ -16,6 +16,7 @@ ppas = [
 # the shell configs already alias these, so no extra symlinks are needed.
 common = [
     "git", "git-lfs", "curl", "wget",
+    "restic", "openssl",
     "build-essential", "gcc", "make", "cmake", "pkg-config",
     "software-properties-common",
     "zsh", "tmux", "micro", "nano", "vim",
@@ -25,16 +26,20 @@ common = [
     "unzip", "zip", "7zip", "p7zip-full", "bzip2", "gzip",
     "nodejs", "npm", "pipx",
     "ranger",
-    # The TUI only; `task` itself is deliberately not here. Ubuntu ships 2.6.2,
-    # which uses the old flat-file store, while dot_taskrc targets 3.x
-    # (news.version=3.4.2, ~/.task/taskchampion.sqlite3). Installing the apt one
-    # gives a binary that cannot read this data. Until 24.04 carries 3.x, install
-    # it by hand from the upstream release; without it the TUI has no backend and
-    # 15-banner.zsh skips its morning task list (guarded on $+commands[task]).
+    # The TUI only -- `task` itself is deliberately absent: Ubuntu ships 2.6.2
+    # (flat-file store) but dot_taskrc targets 3.x (sqlite), so the apt binary
+    # cannot read this data. Install task by hand from upstream until 24.04
+    # carries 3.x.
     "taskwarrior-tui",
     # AGENTS.md requires linting the run_once_* scripts before changing them,
     # so treat it as a dependency of working in this repo, not an optional tool.
     "shellcheck",
+]
+
+# Installed only where a battery is present, gated at runtime by the installer
+# because neither class nor desktopProfile encodes "is a laptop".
+laptop = [
+    "tlp", "tlp-rdw",
 ]
 
 # Installed only for class == "desktop" and profile == "linuxmint-i3-x11".

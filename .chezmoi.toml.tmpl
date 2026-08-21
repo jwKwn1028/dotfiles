@@ -13,15 +13,24 @@
 {{- $desktopProfile := promptStringOnce . "desktopProfile" "Desktop profile [linuxmint-i3-x11|none]" $desktopProfileDefault -}}
 {{- $context7 := promptStringOnce . "context7ApiKey" "Context7 API key (blank to skip)" "" -}}
 {{- $sshRemoteUser := promptStringOnce . "sshRemoteUser" "Remote SSH username" "" -}}
+{{- /* *Host = the ssh_config alias (also 50-remote.zsh.tmpl's rsync target);
+       *HostName = the address it resolves to. Neither may be hardcoded. */ -}}
 {{- $sshGpuHost := promptStringOnce . "sshGpuHost" "GPU SSH host alias" "" -}}
+{{- $sshGpuHostName := promptStringOnce . "sshGpuHostName" "GPU hostname or IP (blank to skip)" "" -}}
 {{- $sshHpcHost := promptStringOnce . "sshHpcHost" "HPC SSH host alias" "" -}}
+{{- $sshHpcHostName := promptStringOnce . "sshHpcHostName" "HPC hostname or IP (blank to skip)" "" -}}
+{{- /* Prompted so a local working directory stays out of the repo. */ -}}
+{{- $flameshotSavePath := promptStringOnce . "flameshotSavePath" "Screenshot directory (blank for ~/Pictures)" "" -}}
 
 [data]
-    name           = {{ $name | quote }}
-    email          = {{ $email | quote }}
-    class          = {{ $class | quote }}
-    desktopProfile = {{ $desktopProfile | quote }}
-    context7ApiKey = {{ $context7 | quote }}
-    sshRemoteUser  = {{ $sshRemoteUser | quote }}
-    sshGpuHost     = {{ $sshGpuHost | quote }}
-    sshHpcHost     = {{ $sshHpcHost | quote }}
+    name              = {{ $name | quote }}
+    email             = {{ $email | quote }}
+    class             = {{ $class | quote }}
+    desktopProfile    = {{ $desktopProfile | quote }}
+    context7ApiKey    = {{ $context7 | quote }}
+    sshRemoteUser     = {{ $sshRemoteUser | quote }}
+    sshGpuHost        = {{ $sshGpuHost | quote }}
+    sshGpuHostName    = {{ $sshGpuHostName | quote }}
+    sshHpcHost        = {{ $sshHpcHost | quote }}
+    sshHpcHostName    = {{ $sshHpcHostName | quote }}
+    flameshotSavePath = {{ $flameshotSavePath | quote }}

@@ -63,6 +63,20 @@ snap/firefox/common/.mozilla/firefox/
 /.config/**/.codex
 **/.agents
 
+# The repository password is created locally by `restic-backup init`. It must
+# never become chezmoi source state, even if the restic directory is re-added.
+/.config/restic/password
+
+# This restic setup uses Linux mount inspection and systemd user timers.
+{{ if ne .chezmoi.os "linux" -}}
+/.config/restic/
+/.config/systemd/user/restic-backup.service
+/.config/systemd/user/restic-backup.timer
+/.config/systemd/user/restic-maintenance.service
+/.config/systemd/user/restic-maintenance.timer
+/.local/bin/restic-backup
+{{ end -}}
+
 # Codex mixes machine state (per-project trust levels, hook trust hashes,
 # plugin registration, nux counters) into its own config.toml with no include
 # directive to split them. A modify_ script manages only the selected model and

@@ -1,0 +1,23 @@
+{{- if eq .chezmoi.os "linux" -}}
+#!/bin/sh
+set -eu
+
+# Flameshot saves to $HOME instead if its savePath is missing.
+# run_onchange_: the rendered path below changes when flameshotSavePath does.
+
+if ! command -v flameshot >/dev/null 2>&1; then
+    echo "flameshot not installed; skipping screenshot directory."
+    exit 0
+fi
+
+{{ $savePath := printf "%s/Pictures/Screenshots" .chezmoi.homeDir -}}
+{{ if hasKey . "flameshotSavePath" -}}
+{{   if .flameshotSavePath }}{{ $savePath = .flameshotSavePath }}{{ end -}}
+{{ end -}}
+savepath={{ $savePath | quote }}
+
+if [ ! -d "$savepath" ]; then
+    mkdir -p "$savepath"
+    echo "==> created screenshot directory: $savepath"
+fi
+{{- end }}

@@ -1,0 +1,53 @@
+# Aliases, hostnames, and username are prompted at `chezmoi init` and live in
+# ~/.config/chezmoi/chezmoi.toml, never here. The aliases must match the ones
+# dot_zsh/rc.d/50-remote.zsh.tmpl uses as rsync/sftp targets.
+# A blank alias or hostname omits that stanza, leaving only Host * below.
+
+{{- /* hasKey: a chezmoi.toml predating these keys would abort the template. */ -}}
+{{- $user    := "" -}}
+{{- $gpu     := "" -}}
+{{- $gpuName := "" -}}
+{{- $hpc     := "" -}}
+{{- $hpcName := "" -}}
+{{- if hasKey . "sshRemoteUser"  }}{{ $user    = .sshRemoteUser  }}{{ end -}}
+{{- if hasKey . "sshGpuHost"     }}{{ $gpu     = .sshGpuHost     }}{{ end -}}
+{{- if hasKey . "sshGpuHostName" }}{{ $gpuName = .sshGpuHostName }}{{ end -}}
+{{- if hasKey . "sshHpcHost"     }}{{ $hpc     = .sshHpcHost     }}{{ end -}}
+{{- if hasKey . "sshHpcHostName" }}{{ $hpcName = .sshHpcHostName }}{{ end -}}
+{{- $aliases := list -}}
+{{- if and $hpc $hpcName }}{{ $aliases = append $aliases $hpc }}{{ end -}}
+{{- if and $gpu $gpuName }}{{ $aliases = append $aliases $gpu }}{{ end }}
+
+{{ if and $hpc $hpcName -}}
+Host {{ $hpc }}
+  HostName {{ $hpcName }}
+{{- if $user }}
+  User {{ $user }}
+{{- end }}
+
+{{ end -}}
+{{ if and $gpu $gpuName -}}
+Host {{ $gpu }}
+  HostName {{ $gpuName }}
+{{- if $user }}
+  User {{ $user }}
+{{- end }}
+
+{{ end -}}
+{{ if $aliases -}}
+# One authenticated master per 10m, so a burst of grem/prem calls costs a
+# single handshake instead of one per transfer.
+Host {{ join " " $aliases }}
+  IdentityFile ~/.ssh/id_ed25519
+  IdentitiesOnly yes
+  ControlMaster auto
+  ControlPath ~/.ssh/control-%C
+  ControlPersist 10m
+
+{{ end -}}
+Host *
+  AddKeysToAgent yes
+  IdentityFile ~/.ssh/id_ed25519
+  ServerAliveInterval 20
+  ServerAliveCountMax 3
+  HashKnownHosts yes

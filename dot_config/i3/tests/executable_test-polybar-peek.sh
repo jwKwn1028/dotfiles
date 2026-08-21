@@ -370,6 +370,17 @@ grep -Fqx 'get_tree' "$MOCK_STATE/i3-events" ||
 sleep 0.35
 assert_state visible
 
+grep -Fq \
+  'bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-all-windows-and-hide-polybar.sh' \
+  "$ROOT/config" || fail "Shift+K is not bound to the kill-and-hide helper"
+"$ROOT/kill-all-windows-and-hide-polybar.sh"
+assert_state hidden
+mapfile -t final_kill_events < <(tail -n 2 "$MOCK_STATE/i3-events")
+[ "${final_kill_events[0]:-}" = '[all] kill; mode "default"' ] ||
+  fail "Shift+K helper did not kill every window and leave kill-workspace mode"
+[ "${final_kill_events[1]:-}" = 'get_tree' ] ||
+  fail "Shift+K helper did not hide Polybar after the global kill"
+
 # Hiding a bar i3 already unmapped for fullscreen: polybar clears its flag
 # without unmapping, so the withdraw has to take the dock away now.
 reset_case visible

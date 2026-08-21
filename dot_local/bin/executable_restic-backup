@@ -1,0 +1,283 @@
+#!/usr/bin/env bash
+# Back up this Linux installation's HOME or curated system state to a locally
+# mounted restic repository. They use separate repositories so the privileged
+# system job cannot leave root-owned pack files in the user's normal repository.
+set -Eeuo pipefail
+umask 077
+
+readonly PROGRAM=${0##*/}
+
+die() {
+    printf '%s: %s\n' "$PROGRAM" "$*" >&2
+    exit 1
+}
+
+note() {
+    printf '==> %s\n' "$*"
+}
+
+usage() {
+    cat <<'EOF'
+Usage: restic-backup COMMAND
+
+Commands:
+  init              Create the password file and HOME repository (run as user)
+  init-system       Create the separate system repository (run with sudo)
+  home              Back up HOME and apply snapshot retention (run as user)
+  system            Back up configured system paths and prune (run with sudo)
+  maintenance       Prune and verify 5% of HOME repository data (run as user)
+  maintenance-system
+                    Prune and verify all system repository data (run with sudo)
+  snapshots         List HOME snapshots (run as user)
+  snapshots-system  List system snapshots (run with sudo)
+
+The former *-etc commands remain aliases for their system equivalents.
+EOF
+}
+
+command -v restic >/dev/null 2>&1 || die "restic is not installed"
+command -v mountpoint >/dev/null 2>&1 || die "mountpoint is not installed"
+command -v realpath >/dev/null 2>&1 || die "realpath is not installed"
+command -v stat >/dev/null 2>&1 || die "stat is not installed"
+
+# sudo keeps the path to this script but may reset HOME. Resolve the invoking
+# user's home so root-only system commands use the same config and password.
+config_home=$HOME
+if (( EUID == 0 )) && [[ -n ${SUDO_USER:-} && $SUDO_USER != root ]]; then
+    config_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    [[ -n $config_home ]] || die "could not resolve the home directory for $SUDO_USER"
+fi
+
+readonly CONFIG_FILE="$config_home/.config/restic/config.sh"
+readonly EXCLUDE_FILE="$config_home/.config/restic/excludes"
+[[ -r $CONFIG_FILE ]] || die "missing $CONFIG_FILE; run 'chezmoi apply' first"
+# shellcheck disable=SC1090
+source "$CONFIG_FILE"
+
+: "${RESTIC_BACKUP_MOUNT:?RESTIC_BACKUP_MOUNT is not set in $CONFIG_FILE}"
+: "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is not set in $CONFIG_FILE}"
+: "${RESTIC_SYSTEM_REPOSITORY:?RESTIC_SYSTEM_REPOSITORY is not set in $CONFIG_FILE}"
+: "${RESTIC_PASSWORD_FILE:?RESTIC_PASSWORD_FILE is not set in $CONFIG_FILE}"
+[[ $(declare -p RESTIC_SYSTEM_PATHS 2>/dev/null) == "declare -a"* ]] ||
+    die "RESTIC_SYSTEM_PATHS must be an indexed array in $CONFIG_FILE"
+
+readonly SNAPSHOT_HOST=${RESTIC_HOST:-$(hostname -s)}
+MOUNT_PATH=$(realpath -m -- "$RESTIC_BACKUP_MOUNT")
+HOME_REPOSITORY=$(realpath -m -- "$RESTIC_REPOSITORY")
+SYSTEM_REPOSITORY=$(realpath -m -- "$RESTIC_SYSTEM_REPOSITORY")
+ROOT_DEVICE=$(stat -c %d /)
+readonly MOUNT_PATH HOME_REPOSITORY SYSTEM_REPOSITORY ROOT_DEVICE
+
+validate_layout() {
+    local repository=$1
+
+    [[ $MOUNT_PATH != / ]] || die "refusing to use / as the backup mount"
+    [[ $repository == "$MOUNT_PATH"/* ]] ||
+        die "repository must be below the configured mount: $MOUNT_PATH"
+    [[ -d $MOUNT_PATH ]] || die "backup mount directory does not exist: $MOUNT_PATH"
+    mountpoint -q -- "$MOUNT_PATH" ||
+        die "$MOUNT_PATH is not mounted; refusing to write onto the Linux system disk"
+    [[ -r $RESTIC_PASSWORD_FILE ]] ||
+        die "missing repository password: $RESTIC_PASSWORD_FILE (run '$PROGRAM init')"
+}
+
+select_repository() {
+    local kind=$1
+
+    case $kind in
+        home)
+            export RESTIC_REPOSITORY=$HOME_REPOSITORY
+            RESTIC_CACHE_PATH="$config_home/.cache/restic"
+            ;;
+        system)
+            export RESTIC_REPOSITORY=$SYSTEM_REPOSITORY
+            RESTIC_CACHE_PATH="/var/cache/restic-$SNAPSHOT_HOST-system"
+            ;;
+        *) die "unknown repository kind: $kind" ;;
+    esac
+    export RESTIC_PASSWORD_FILE
+    mkdir -p -- "$RESTIC_CACHE_PATH"
+}
+
+run_restic() {
+    restic --retry-lock 30m --cache-dir "$RESTIC_CACHE_PATH" "$@"
+}
+
+require_user() {
+    (( EUID != 0 )) || die "run this command as the normal user, without sudo"
+}
+
+require_root() {
+    (( EUID == 0 )) || die "this command reads system state; run: sudo $0 ${1:-system}"
+}
+
+require_initialized() {
+    [[ -f $RESTIC_REPOSITORY/config ]] ||
+        die "repository is not initialized: run '$PROGRAM init${1:-}' first"
+    run_restic cat config >/dev/null
+}
+
+create_password() {
+    if [[ -e $RESTIC_PASSWORD_FILE ]]; then
+        [[ -f $RESTIC_PASSWORD_FILE ]] || die "password path is not a regular file"
+        chmod 600 -- "$RESTIC_PASSWORD_FILE"
+        return
+    fi
+
+    command -v openssl >/dev/null 2>&1 || die "openssl is required to generate a password"
+    mkdir -p -- "${RESTIC_PASSWORD_FILE%/*}"
+    chmod 700 -- "${RESTIC_PASSWORD_FILE%/*}"
+    openssl rand -base64 48 >"$RESTIC_PASSWORD_FILE"
+    chmod 600 -- "$RESTIC_PASSWORD_FILE"
+    note "generated $RESTIC_PASSWORD_FILE"
+    printf '%s\n' "Store a copy in a password manager; the repository is unrecoverable without it."
+}
+
+initialize_repository() {
+    local kind=$1
+    local repository
+
+    case $kind in
+        home) repository=$HOME_REPOSITORY ;;
+        system) repository=$SYSTEM_REPOSITORY ;;
+        *) die "unknown repository kind: $kind" ;;
+    esac
+    validate_layout "$repository"
+    select_repository "$kind"
+
+    if [[ -f $RESTIC_REPOSITORY/config ]]; then
+        run_restic cat config >/dev/null
+        note "$kind repository already initialized: $RESTIC_REPOSITORY"
+        return
+    fi
+
+    mkdir -p -- "$RESTIC_REPOSITORY"
+    run_restic init
+    note "initialized $kind repository: $RESTIC_REPOSITORY"
+}
+
+apply_retention() {
+    local tag=$1
+
+    run_restic forget \
+        --host "$SNAPSHOT_HOST" \
+        --tag "$tag" \
+        --keep-within 2d \
+        --keep-daily 7 \
+        --keep-weekly 5 \
+        --keep-monthly 12 \
+        --keep-yearly 3
+}
+
+backup_home() {
+    require_user
+    validate_layout "$HOME_REPOSITORY"
+    select_repository home
+    require_initialized ""
+    [[ -r $EXCLUDE_FILE ]] || die "missing exclusion file: $EXCLUDE_FILE"
+
+    note "backing up $config_home (Linux filesystem only)"
+    run_restic backup "$config_home" \
+        --host "$SNAPSHOT_HOST" \
+        --tag home \
+        --one-file-system \
+        --exclude-caches \
+        --exclude-if-present .nobackup \
+        --exclude-file "$EXCLUDE_FILE" \
+        --exclude "$MOUNT_PATH" \
+        --exclude "$RESTIC_PASSWORD_FILE"
+    apply_retention home
+}
+
+backup_system() {
+    local configured_path resolved_path source_device
+    local -a source_paths=()
+
+    require_root system
+    validate_layout "$SYSTEM_REPOSITORY"
+    select_repository system
+    require_initialized "-system"
+
+    for configured_path in "${RESTIC_SYSTEM_PATHS[@]}"; do
+        [[ $configured_path == /* ]] ||
+            die "system backup path must be absolute: $configured_path"
+        resolved_path=$(realpath -m -- "$configured_path")
+        [[ $resolved_path != "$MOUNT_PATH" && $resolved_path != "$MOUNT_PATH"/* ]] ||
+            die "system backup path cannot be on the backup drive: $resolved_path"
+        if [[ ! -e $resolved_path && ! -L $resolved_path ]]; then
+            note "skipping missing system path: $resolved_path"
+            continue
+        fi
+        source_device=$(stat -Lc %d -- "$resolved_path")
+        [[ $source_device == "$ROOT_DEVICE" ]] ||
+            die "system backup path is on another filesystem: $resolved_path"
+        source_paths+=("$resolved_path")
+    done
+    ((${#source_paths[@]} > 0)) || die "none of the configured system paths exist"
+
+    note "backing up configured system state (Linux Mint filesystem only)"
+    printf '  %s\n' "${source_paths[@]}"
+    run_restic backup "${source_paths[@]}" \
+        --host "$SNAPSHOT_HOST" \
+        --tag system \
+        --one-file-system
+    apply_retention system
+    run_restic prune
+}
+
+maintain_home() {
+    require_user
+    validate_layout "$HOME_REPOSITORY"
+    select_repository home
+    require_initialized ""
+    apply_retention home
+    run_restic prune
+    run_restic check --read-data-subset=5%
+}
+
+maintain_system() {
+    require_root maintenance-system
+    validate_layout "$SYSTEM_REPOSITORY"
+    select_repository system
+    require_initialized "-system"
+    apply_retention system
+    run_restic prune
+    run_restic check --read-data
+}
+
+list_snapshots() {
+    local kind=$1
+    local init_suffix=
+
+    if [[ $kind == home ]]; then
+        require_user
+        validate_layout "$HOME_REPOSITORY"
+    else
+        require_root snapshots-system
+        validate_layout "$SYSTEM_REPOSITORY"
+        init_suffix=-system
+    fi
+    select_repository "$kind"
+    require_initialized "$init_suffix"
+    run_restic snapshots --host "$SNAPSHOT_HOST"
+}
+
+case ${1:-} in
+    init)
+        require_user
+        create_password
+        initialize_repository home
+        ;;
+    init-system|init-etc)
+        require_root init-system
+        initialize_repository system
+        ;;
+    home) backup_home ;;
+    system|etc) backup_system ;;
+    maintenance) maintain_home ;;
+    maintenance-system|maintenance-etc) maintain_system ;;
+    snapshots) list_snapshots home ;;
+    snapshots-system|snapshots-etc) list_snapshots system ;;
+    -h|--help|help) usage ;;
+    *) usage >&2; exit 2 ;;
+esac

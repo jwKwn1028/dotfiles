@@ -169,7 +169,7 @@ Inside kill-workspace mode:
 | Binding | Action |
 | --- | --- |
 | `1` ... `0` | Kill all windows on workspace `1` ... `10`. |
-| `Shift+K` | Kill all windows everywhere. |
+| `Shift+K` | Kill all windows everywhere, leave the mode, then hide Polybar. |
 | `Return` | Return to default mode. |
 | `Escape` | Return to default mode. |
 
@@ -815,23 +815,27 @@ KakaoTalk/Wine windows:
 
 - Class `kakaotalk.exe`.
 - Instance `kakaotalk.exe`.
-- Titles matching `kakaotalk`, case-insensitive.
-- Korean KakaoTalk title variants.
+- Matching is limited to the exact Wine class or instance so browser and
+  terminal titles mentioning KakaoTalk are not affected.
 - These windows are floated, resized to `420x760`, and centered.
 
 ## KakaoTalk Float Watcher
 
 `kakaotalk-float-watcher.sh` keeps KakaoTalk windows floating after Wine remaps
-or maximizes them during login.
+or returns them to tiling during login.
 
 Behavior:
 
 - Runs under a runtime lock.
 - Scans current windows at startup.
-- Subscribes to i3 window events and reacts to KakaoTalk-related changes.
+- Subscribes to i3 window events and reacts to new, floating, and fullscreen
+  changes involving KakaoTalk.
 - Ignores minimized/hidden KakaoTalk windows.
-- For visible KakaoTalk windows, disables fullscreen, enables floating, resizes
-  to `420x760`, and centers the window.
+- Leaves fullscreen KakaoTalk windows alone, so `Super+X` toggles fullscreen
+  normally without fighting the watcher.
+- If a visible, non-fullscreen KakaoTalk window becomes tiled, enables floating,
+  resizes it to `420x760`, and centers it.
+- Logs genuine floating-state repairs to the shared i3 snap log.
 - Reconnects if the i3 event stream ends.
 
 ## i3-Resurrect Save and Restore
@@ -1124,7 +1128,8 @@ Inside this directory:
 - `tile-snap.sh`: manual snap and unsnap implementation.
 - `snap-watcher.sh`: automatic snap fill/rebalance watcher.
 - `resnap.sh`: reapplies current snap regions.
-- `toggle-polybar-resnap.sh`: toggles Polybar and resnaps.
+- `toggle-polybar-resnap.sh`: toggles Polybar and resnaps; an optional
+  `show`/`hide` argument requests an explicit final state.
 - `polybar-peek.sh`: owner-aware, debounced transient Polybar display.
 - `super-polybar-listener.py`: passive standalone-Super tap/hold listener.
 - `top-edge-peek.py`: peeks Polybar while the pointer is at a screen's top edge.
@@ -1132,6 +1137,8 @@ Inside this directory:
 - `workspace-action.sh`: numbered switch/move and relative workspace wrapper
   that requests a peek.
 - `show-polybar-or-kill-workspace.sh`: shows Polybar before kill mode.
+- `kill-all-windows-and-hide-polybar.sh`: implements kill mode's `Shift+K`
+  sequence, then hides Polybar.
 - `bar-nav.sh`: keyboard cursor over Polybar's own modules.
 - `bar-nav-marker.py`: paints that cursor's block over a tray icon, which
   Polybar cannot style.

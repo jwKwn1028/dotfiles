@@ -1,0 +1,50 @@
+{{- if eq .chezmoi.os "linux" -}}
+#!/bin/sh
+set -eu
+
+# Drop-in rather than an edit to /etc/tlp.conf: that file is a dpkg conffile,
+# so editing it prompts on every `apt upgrade` of tlp.
+
+if ! command -v tlp >/dev/null 2>&1; then
+    echo "tlp not installed; skipping TLP configuration."
+    exit 0
+fi
+
+# Thresholds are a silent no-op on a driver that does not expose them.
+if [ ! -f /sys/class/power_supply/BAT0/charge_control_end_threshold ]; then
+    echo "BAT0 does not expose charge thresholds; skipping TLP configuration."
+    exit 0
+fi
+
+changed=0
+temporary=
+trap 'rm -f "${temporary:-}"' EXIT HUP INT TERM
+
+install_config() {
+    target=$1
+    temporary=$(mktemp)
+    cat >"$temporary"
+
+    metadata=$(stat -c '%u:%g:%a' "$target" 2>/dev/null || true)
+    if ! cmp -s "$temporary" "$target" || [ "$metadata" != "0:0:644" ]; then
+        echo "==> Installing $target (sudo may prompt for your password)"
+        sudo install -o root -g root -m 0644 "$temporary" "$target"
+        changed=1
+    fi
+
+    rm -f "$temporary"
+    temporary=
+}
+
+install_config /etc/tlp.d/10-battery-charge-thresholds.conf <<'EOF'
+# Capping the pack at 80% trades ~20% runtime for slower capacity loss.
+# `sudo tlp fullcharge` lifts it until the next reboot.
+START_CHARGE_THRESH_BAT0=75
+STOP_CHARGE_THRESH_BAT0=80
+EOF
+
+if [ "$changed" -eq 1 ]; then
+    echo "==> Applying TLP settings"
+    sudo tlp start >/dev/null
+fi
+{{- end }}

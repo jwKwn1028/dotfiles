@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Guidance for agents working in this repository. Canonical for every agent tool;
-`CLAUDE.md` imports this file rather than restating it. Put guidance here.
+`CLAUDE.md` imports this file rather than restating it.
 
 ## What this repo is
 
@@ -26,73 +26,74 @@ before creating files with a new prefix.
 - Edit files **here**, not in `$HOME` — `chezmoi apply` overwrites the target.
   To pull in a change made live in `$HOME`, use `chezmoi re-add`.
 - Prefer `chezmoi diff` before `chezmoi apply`. Applying rewrites live config.
-- Secrets and machine-specific connection values are never committed.
-  `context7ApiKey`, `sshRemoteUser`, `sshGpuHost`, and `sshHpcHost` are prompted
-  at `chezmoi init` and live in `~/.config/chezmoi/chezmoi.toml`, outside this
-  repo. Do not inline them into templates.
-- `.gitignore` keeps agent scaffolding (`.claude`, `.codex`, `.AGENTS.md`) out
-  of history on purpose. `AGENTS.md` and `CLAUDE.md` are the deliberate
-  exceptions so a fresh clone gets these rules — keep both free of secrets.
+- Drift in `chezmoi status` is normal, not a defect list: several targets are
+  rewritten live by the tools that own them. Reconcile only what the task asks
+  for, and never let a broad `apply` sweep up unrelated drift.
+- **Never commit machine-identifying values** — this repo is public. Secrets,
+  usernames, hostnames, IPs, SSH host aliases, institution or lab names, and
+  literal `/home/...` paths. An alias identifies a machine as surely as its
+  address does, and a path can name an employer.
+  - Per-machine values go through `promptStringOnce` in `.chezmoi.toml.tmpl`
+    and live in `~/.config/chezmoi/chezmoi.toml`, outside this repo: currently
+    `context7ApiKey`, `sshRemoteUser`, `ssh{Gpu,Hpc}Host{,Name}`,
+    `flameshotSavePath`.
+  - Use `{{ .chezmoi.homeDir }}`, never a literal home path (see `750fd0a`).
+  - `chezmoi add` copies a live file verbatim — read the result before
+    committing. That is how a flameshot savePath naming a lab directory got in.
+  - Never add `~/.ssh` wholesale; `.gitignore` allowlists only
+    `private_dot_ssh/private_config.tmpl`.
+- `.gitignore` excludes agent scaffolding (`.claude`, `.codex`) on purpose;
+  `AGENTS.md` and `CLAUDE.md` are the deliberate exceptions so a fresh clone
+  gets these rules. Keep both free of secrets.
 
 ## Agent tooling this repo does not manage
 
-**Claude Code and Codex plugins, skills, MCP servers, agent definitions, and
-the hooks their installers wire up are out of scope.** Their absence here is
-deliberate — don't add them, and don't "restore" one you see in `$HOME` but not
-in the source state. Those registrations carry machine-local paths, trust
-hashes, and cache directories, and each installer keeps its own entry current,
-so a copy in Git goes stale and downgrades the live one on `apply`.
-
-Both tools mix that state into config with no include directive, so what this
-repo manages is narrow: `private_dot_claude/private_settings.json.tmpl` (plain
-settings only — chezmoi owns `~/.claude/settings.json` outright) and
-`private_dot_codex/modify_private_config.toml` (only `model` and
-`model_reasoning_effort`; the rest of `~/.codex/config.toml` passes through).
+Claude Code and Codex plugins, skills, MCP servers, agent definitions, and
+installer-wired hooks are **out of scope**. Don't add them, don't restore one
+you see in `$HOME` but not here, and don't investigate drift in them — each
+installer keeps its own registration current, so a copy in Git goes stale and
+downgrades the live one. The only exceptions are
+`private_dot_claude/private_settings.json.tmpl` and
+`private_dot_codex/modify_private_config.toml` (`model` and
+`model_reasoning_effort` only).
 
 ## Provisioning
 
 Software lists live in `.chezmoidata/packages.toml`, consumed by the
 `run_once_*` scripts and gated on `class` (`desktop` | `server`) from
 `.chezmoi.toml.tmpl` plus `desktopProfile` (`linuxmint-i3-x11` | `none`). Add
-software by editing that manifest, not by editing the install scripts — they
-re-run on the next `apply` when the data changes.
+software by editing that manifest, not the install scripts — they re-run on the
+next `apply` when the data changes.
 
 `packages.apt` names are for Mint 22.3 / Ubuntu 24.04; verify with
 `apt-cache policy <pkg>`.
 
 ## The Mint X11 → Sway transition
 
-The Mint desktop is X11/i3, and much of it is deeply X11-coupled (`xrandr`,
-`xdotool`, `xinput`, Polybar, `i3-resurrect`). If a task proposes adding Sway
-as a second session on Mint, read
-[`X11_TO_WAYLAND_TRANSITION.md`](X11_TO_WAYLAND_TRANSITION.md) first.
+The Mint desktop is deeply X11-coupled (`xrandr`, `xdotool`, `xinput`, Polybar,
+`i3-resurrect`). Before proposing Sway as a second session, read
+[`X11_TO_WAYLAND_TRANSITION.md`](X11_TO_WAYLAND_TRANSITION.md). Standing rules:
 
-Standing rules from that document:
-
-- Add a **parallel** Wayland profile (`dot_config/sway/`, `dot_config/waybar/`).
-  Do not edit the i3/X11 files in place; they are the known-good fallback until
-  the user explicitly retires them.
-- A migration is packages *and* config. Config-only changes appear to work on
-  this machine and fail on a fresh one.
-- Do not mechanically swap command names. Wayland blocks global window
-  inspection, synthetic input, and clipboard scraping by design, so some
-  scripts need redesigning rather than porting.
+- Add a **parallel** profile (`dot_config/sway/`, `dot_config/waybar/`); the
+  i3/X11 files are the known-good fallback until explicitly retired.
+- A migration is packages *and* config — config-only changes work here and fail
+  on a fresh machine.
+- Don't mechanically swap command names. Wayland blocks window inspection,
+  synthetic input, and clipboard scraping, so some scripts need redesigning.
 
 ## The Linux → macOS port
 
-If a task adds, changes, or evaluates macOS support, read
-[`MACOS_PORTING_GUIDE.md`](MACOS_PORTING_GUIDE.md) first. It is the migration
-contract and file-by-file inventory for a parallel Darwin profile.
+Read [`MACOS_PORTING_GUIDE.md`](MACOS_PORTING_GUIDE.md) before adding or
+evaluating macOS support — it is the migration contract and file inventory.
 
-- Keep the Linux Mint/i3 source state working; gate Linux-only files and add
-  Darwin counterparts instead of replacing the fallback.
-- Use `.chezmoi.os == "darwin"` and shared `.chezmoitemplates` rather than
-  hostnames or hard-coded Homebrew/home paths.
-- Package installation and application configuration must land together.
-- Browser profiles, SSH endpoints, agent project-trust lists, credentials, and
-  macOS privacy-permission databases remain local and must not enter Git.
-- Never run the current repository with `chezmoi init --apply` on macOS before
-  the guide's provisioning safety gates and dry-run checks are complete.
+- Gate Linux-only files and add Darwin counterparts; keep the Mint/i3 source
+  state working.
+- Branch on `.chezmoi.os` and share via `.chezmoitemplates`, not hostnames or
+  hard-coded Homebrew paths.
+- Packages and config must land together.
+- Browser profiles, SSH endpoints, agent trust lists, credentials, and macOS
+  privacy databases stay local.
+- Never `chezmoi init --apply` on macOS before the guide's safety gates pass.
 
 ## Verifying
 
@@ -101,5 +102,5 @@ There is no repo-wide test runner. Run the relevant standalone checks under
 `dot_config/i3/MANUAL.md` documents the i3 checks. `chezmoi apply` against live
 config is the risky step, so verify with `chezmoi diff` / `chezmoi status` /
 `chezmoi apply --dry-run`. Check Bash/POSIX scripts with `shellcheck` and
-`bash -n`, and Zsh scripts with `zsh -n`.
+`bash -n`, Zsh with `zsh -n`.
 `chezmoi execute-template < file.tmpl` renders a template without applying it.

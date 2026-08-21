@@ -1,0 +1,33 @@
+# Volatile caches and trash. CACHEDIR.TAG directories are also excluded by the
+# backup command, but the explicit ~/.cache rule covers applications that do
+# not create the marker.
+{{ .chezmoi.homeDir }}/.cache
+{{ .chezmoi.homeDir }}/.local/share/Trash
+
+# Re-downloadable language/package-manager state.
+{{ .chezmoi.homeDir }}/.cargo/registry
+{{ .chezmoi.homeDir }}/.cargo/git
+{{ .chezmoi.homeDir }}/.gradle/caches
+{{ .chezmoi.homeDir }}/.m2/repository
+{{ .chezmoi.homeDir }}/.npm/_cacache
+{{ .chezmoi.homeDir }}/.rustup
+{{ .chezmoi.homeDir }}/miniconda3/pkgs
+
+# Rebuildable project artifacts, wherever they occur below HOME. Git working
+# trees and their .git directories are intentionally retained.
+{{ .chezmoi.homeDir }}/**/.direnv
+{{ .chezmoi.homeDir }}/**/.mypy_cache
+{{ .chezmoi.homeDir }}/**/.pytest_cache
+{{ .chezmoi.homeDir }}/**/.ruff_cache
+{{ .chezmoi.homeDir }}/**/.tox
+{{ .chezmoi.homeDir }}/**/.venv
+{{ .chezmoi.homeDir }}/**/__pycache__
+{{ .chezmoi.homeDir }}/**/node_modules
+
+# Large, downloadable game payloads. Steam userdata (including many game save
+# files), personal files, browser profiles, and project sources remain included.
+{{ .chezmoi.homeDir }}/.local/share/Steam/appcache
+{{ .chezmoi.homeDir }}/.local/share/Steam/depotcache
+{{ .chezmoi.homeDir }}/.local/share/Steam/steamapps/common
+{{ .chezmoi.homeDir }}/.local/share/Steam/steamapps/downloading
+{{ .chezmoi.homeDir }}/.local/share/Steam/steamapps/shadercache

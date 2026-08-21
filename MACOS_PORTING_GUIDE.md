@@ -1,14 +1,16 @@
 # Porting This Chezmoi Setup to macOS
 
-Last reviewed: 2026-07-18
+Last audited against the repository and upstream documentation: 2026-08-20
 
 This document is the implementation contract for a coding agent asked to move
 this dotfile setup from Linux Mint/Ubuntu to macOS. It describes the desired
 result, the current hazards, the source-state layout, native replacements, and
 the checks that must pass before a Mac is allowed to apply the repository.
 
-The repository is **not macOS-ready today**. Do not run `chezmoi init --apply`
-on a Mac until the provisioning safety gates in Phase 1 are implemented.
+The repository now contains a useful Darwin Zsh compatibility layer, but it is
+still **not safe for a fresh macOS apply**. Do not run `chezmoi init --apply` on
+a Mac until the remaining provisioning and target-isolation gates in Phase 1
+are implemented and the synthetic Darwin audit is clean.
 
 ## Desired outcome
 
@@ -53,32 +55,55 @@ workflow equivalents below—without changing the Linux render.
    apply a narrow file group before the full profile.
 10. Preserve existing user changes and the Linux target throughout the work.
 
-## Current state and immediate hazards
+## Current implementation snapshot
 
-The source currently targets Linux Mint 22.3 / Ubuntu 24.04 with X11/i3.
-`.chezmoi.toml.tmpl` prompts for `class` (`desktop` or `server`), while chezmoi
-already supplies the independent OS and architecture fields.
+This snapshot was verified on 2026-08-20 by rendering the current source with
+`.chezmoi.os=darwin`, `.chezmoi.arch=arm64`, `class=desktop`, and
+`desktopProfile=none`. It is a source audit, not evidence from a real Mac.
 
-Before the first macOS apply, fix all of these hazards:
+Already implemented:
 
-- `run_once_before_10-install-apt-packages.sh.tmpl` is apt/PPA-only.
-- `run_once_after_20-install-flatpaks.sh.tmpl` is Flatpak-only.
-- `run_once_after_30-install-cli-tools.sh.tmpl` downloads the
-  `Miniconda3-latest-Linux-x86_64.sh` artifact.
-- `run_once_after_40-set-default-shell.sh` assumes Linux `getent`, `/etc/shells`,
-  and `sudo tee`; it is not currently a template.
-- `run_once_after_50-install-fonts.sh.tmpl` invokes apt and `fc-cache` against a
-  Linux font directory.
-- The i3, Polybar, Picom, Rofi, X11 helper, AppImage, and Linux desktop files
-  would otherwise appear in a Mac target.
-- `dot_bashrc` and `executable_dot_cleanup-agents.sh` require a modern Bash for
-  features such as arrays; do not assume the system `/bin/bash` is sufficient.
+- `.chezmoi.toml.tmpl` keeps `class` separate from OS and defaults an
+  unsupported desktop to `desktopProfile=none`.
+- `.chezmoiignore` suppresses the i3, XFCE, Polybar, Picom, Rofi, Fcitx5, X11
+  input helpers, Thunar integration, and GTK theme when the profile is not
+  `linuxmint-i3-x11`.
+- The apt installer and X11 input installer render empty on Darwin.
+- The Zen, Firefox, Thunderbird, and Helium profile scripts have explicit
+  non-Linux early exits.
+- `dot_zsh/macos/` supplies narrow `date`, `wc`, `systemctl`, clipboard, rsync,
+  and fzf compatibility. `dot_zshenv` already sources its prelude, and
+  `macos/doctor.zsh` validates it on a real Mac.
+- The shared `clipcopy` and tmux clipboard paths already support `pbcopy`.
+
+Blocking hazards still present:
+
+- `run_once_after_20-install-flatpaks.sh.tmpl` renders its Linux body on Darwin.
+- `run_once_after_30-install-cli-tools.sh.tmpl` renders on Darwin and downloads
+  `Miniconda3-latest-Linux-x86_64.sh`.
+- `run_once_after_40-set-default-shell.sh` is not a template and assumes
+  `getent`, Linux `/etc/shells` handling, and `sudo tee`.
+- `run_once_after_50-install-fonts.sh.tmpl` renders on Darwin and installs under
+  `~/.local/share/fonts` using fontconfig.
+- The synthetic Darwin target still includes the Linux Helium desktop/AppImage
+  payload, `.config/pipewire/`, `.config/systemd/`, `.config/zathura/`, Linux
+  browser chrome payloads, and the Linux VS Code target under `.config/Code/`.
+- `.chezmoidata/packages.toml` has no Darwin package section or Homebrew
+  provisioning, and `README.md` still documents Linux only.
+- The current macOS shell installer calls Homebrew directly and can append to
+  `~/.zshenv`, although that file is now managed and already contains the hook.
+  Its dependencies and setup must be folded into the Darwin profile rather than
+  treated as a complete machine bootstrap.
+- `dot_gitconfig.tmpl` unconditionally selects the Linux `libsecret` helper,
+  and shared shell paths still name Linux/application-specific locations.
+- `dot_bashrc` and `executable_dot_cleanup-agents.sh` require modern Bash; do
+  not assume Apple's system Bash is sufficient.
 - GNU and BSD variants of `sed`, `stat`, `date`, `find`, `readlink`, and `xargs`
-  differ. Every script using non-POSIX flags needs a Darwin test or an explicit
-  GNU dependency.
+  differ. Every shared script using non-POSIX flags needs a Darwin test or an
+  explicit dependency.
 
-The first macOS change must make the current Linux scripts render to no script
-on Darwin. The official chezmoi pattern is:
+The next macOS safety change must make every remaining Linux-only script render
+to no script on Darwin. The official chezmoi pattern is:
 
 ```gotemplate
 {{ if eq .chezmoi.os "linux" -}}
@@ -112,24 +137,35 @@ Library/
 run_onchange_before_15-install-homebrew-packages.sh.tmpl
 ```
 
-Chezmoi interprets `.chezmoiignore` as a template. Gate whole target trees with
-negative tests because files are managed by default:
+Chezmoi interprets `.chezmoiignore` as a template and matches target paths, not
+source-state names. Gate whole target trees with negative tests because files
+are managed by default. Keep the current `$desktopProfile` prelude and extend
+it with a `macos-aerospace` value when the Darwin desktop actually lands:
 
 ```gotemplate
+{{ if ne $desktopProfile "linuxmint-i3-x11" }}
+/.config/i3/
+/.config/polybar/
+/.config/picom/
+/.config/rofi/
+{{ end }}
+
 {{ if ne .chezmoi.os "linux" }}
-.config/i3/
-.config/polybar/
-.config/picom/
-.config/rofi/
-Applications/helium.desktop
-Applications/helium.png
-.local/share/applications/helium.desktop
+/.config/pipewire/
+/.config/systemd/
+/Applications/helium.desktop
+/Applications/helium.png
+/Applications/update-helium.sh
+/.local/share/applications/helium.desktop
+{{ end }}
+
+{{ if ne $desktopProfile "macos-aerospace" }}
+/.config/aerospace/
+/.config/sketchybar/
 {{ end }}
 
 {{ if ne .chezmoi.os "darwin" }}
-.config/aerospace/
-.config/sketchybar/
-Library/Application Support/Code/User/
+/Library/Application Support/Code/User/
 {{ end }}
 ```
 
@@ -172,27 +208,45 @@ Expected chezmoi OS is `darwin`; common architecture values are `arm64` and
 `xcode-select --install` if they are missing. Do not script acceptance of an
 Apple license or password prompt.
 
+As of this audit, Homebrew's supported macOS baseline is Sonoma 14 or newer on
+officially supported hardware. Treat that as a moving prerequisite: re-check
+Homebrew's installation page for the target OS instead of copying this version
+number indefinitely.
+
 Keep `class` (`desktop` or `server`) as a separate workload choice; do not add
 `darwin` as a third machine class. OS branches come from `.chezmoi.os`, while
 `class` continues to decide whether GUI applications belong on that machine.
+When the native desktop layer is ready, add `macos-aerospace` as a
+`desktopProfile` choice; leave the Darwin default as `none` until its packages,
+ignore rules, config, and verification land together.
 
 ## Phase 1 — make provisioning safe
 
 ### 1. Gate all Linux provisioning
 
-Wrap every current apt, Flatpak, Linux Miniconda, Linux font, and login-shell
-script in an OS template as described above. Verify on Linux that their
-rendered bodies remain byte-for-byte equivalent except for intentional fixes.
+The apt and X11 input scripts already render empty on Darwin. Apply the same
+outer OS guard to Flatpak, the current CLI/Miniconda installer, fonts, and the
+renamed default-shell template. Prefer an empty render to a runtime
+`command -v` escape: chezmoi does not execute a script whose template result is
+empty. Verify on Linux that rendered bodies remain byte-for-byte equivalent
+except for intentional fixes.
+
+The browser/profile scripts currently render small skip-only scripts on
+Darwin. They are safe by inspection, but eventually make Linux-only ones empty
+as well so `chezmoi status` and `chezmoi diff` describe only real Darwin work.
 
 ### 2. Bootstrap Homebrew explicitly
 
 Homebrew requires Apple's Command Line Tools. Its supported default prefixes
-are `/opt/homebrew` on Apple Silicon and `/usr/local` on Intel, but later code
-must use `brew --prefix` rather than baking either path into templates.
+remain `/opt/homebrew` on Apple Silicon and `/usr/local` on Intel, but later
+code must use `brew --prefix` once Homebrew is available rather than inferring
+the active installation from one hard-coded path.
 
 Homebrew installation is a user-approved bootstrap step. Do not silently pipe
-a remote installer into a shell from `chezmoi apply`. Once Homebrew exists, add
-its environment in `dot_zprofile.tmpl`, for example:
+a remote installer into a shell from `chezmoi apply`. Homebrew's installer is
+interactive and shows its changes before proceeding; record it as a manual
+prerequisite. Once Homebrew exists, add its environment in
+`dot_zprofile.tmpl`, for example:
 
 ```sh
 for brew_bin in /opt/homebrew/bin/brew /usr/local/bin/brew; do
@@ -217,10 +271,10 @@ taps = [
     "FelixKratz/formulae",
 ]
 brews = [
-    "bat", "btop", "cmake", "fd", "fzf", "git", "git-lfs",
+    "bash", "bat", "btop", "cmake", "coreutils", "fd", "fzf", "git", "git-lfs",
     "helix", "jq", "micro", "node", "pipx", "pkg-config",
-    "ranger", "ripgrep", "sevenzip", "sketchybar", "task",
-    "tmux", "tree", "wget", "zoxide",
+    "ranger", "ripgrep", "rsync", "sevenzip", "shellcheck", "sketchybar",
+    "task", "tmux", "tree", "wget", "zoxide",
 ]
 casks = [
     "ghostty", "visual-studio-code", "zed",
@@ -228,12 +282,29 @@ casks = [
 ]
 ```
 
-Render the list into a `Brewfile` stream from a
+Both desktop tools come from third-party taps. Inspect them before first use.
+If the installed Homebrew version requires tap trust, prefer its narrow
+formula/cask trust declarations over trusting an entire tap, and keep that
+decision visible in the generated Brewfile.
+
+Render the list into a temporary `Brewfile` from a
 `run_onchange_*homebrew-packages.sh.tmpl` script and invoke
-`brew bundle --file=/dev/stdin`. `run_onchange_` makes package-state changes
-follow manifest changes without reinstalling on every apply.
+`brew bundle --file="$brewfile"`. Homebrew documents `--file` with an actual
+path; a temporary file is also reusable for `brew bundle check`. `run_onchange_`
+makes package-state changes follow manifest changes without reinstalling on
+every apply. Make the script fail with a clear manual-bootstrap message if
+`brew` is absent.
+
+The Darwin package list must include at least `coreutils`, `rsync`, and `fzf`
+because the existing `dot_zsh/macos/` compatibility layer tests for them.
+Install modern `bash` if `.bashrc`, the Claude status line, or
+`cleanup-agents.sh` will be managed on Darwin. Once the manifest owns these
+packages, change `macos/install.zsh` so it no longer appends to the
+chezmoi-managed `.zshenv`; retain `macos/doctor.zsh` as the runtime check.
 
 Keep the Rust/cargo list shared only after each crate is confirmed on Darwin.
+Homebrew Bundle can also represent Cargo packages, but choose one owner: do not
+install the same crates through both the current script and a Brewfile.
 The Miniconda artifact must be selected from both OS and architecture:
 
 | `.chezmoi.os` | `.chezmoi.arch` | Installer family |
@@ -255,17 +326,18 @@ These are normally portable, but must still be rendered and tested on macOS:
 | --- | --- |
 | `dot_gitconfig.tmpl` | Share; keep the prompt/noreply identity and credential helper conditional. Linux `libsecret` is not available on macOS. |
 | `dot_profile` | Convert to a template or make every optional startup file conditional. The current unconditional `.local/bin/env` and Cargo sources can fail on a fresh Mac. |
-| `dot_zshrc`, `dot_zprofile`, `dot_zshenv` | Share through templates; guard apt paths, Linux clipboard utilities, and Linux-only initialization. In `dot_zprofile`, discover Homebrew/Go rather than retaining `/usr/local/go`, and treat the FullProf and Quantum ESPRESSO application paths as explicit optional software. |
+| `dot_zshrc`, `dot_zprofile`, `dot_zshenv` | The modular Zsh loader and Darwin prelude now exist. Convert path-bearing files to templates; discover Homebrew/Go rather than retaining `/usr/local/go`, and treat FullProf, VESTA, and Quantum ESPRESSO paths as explicit optional software. Keep the existing guarded `macos/compat.zsh` source in `dot_zshenv`. |
+| `dot_zsh/macos/` | Keep the narrow shims and `doctor.zsh`. Move `coreutils`, `rsync`, and `fzf` ownership into the Darwin package manifest; stop the installer from modifying managed `.zshenv`. Test both Apple Silicon and Intel path resolution. |
 | `dot_bashrc` | Share only when a Homebrew Bash version is declared, or keep a reduced POSIX-compatible Darwin branch. Do not assume Apple's system Bash supports the current feature set. |
 | `dot_tmux.conf` | Share; retain `pbcopy` support and audit environment variables that only exist under X11. |
 | `dot_config/starship.toml` | Share. |
 | `dot_config/helix/` | Share; verify every configured language server is installed. |
-| `dot_config/ghostty/` | Share the XDG path. Ghostty supports `~/.config/ghostty` on macOS, avoiding a duplicate file under `Library/Application Support`. |
+| `dot_config/ghostty/` | Share the XDG directory, which Ghostty supports on macOS, but template the contents. The current file includes GTK-only keys and i3-specific tab-bar behavior. Ghostty 1.2.3+ prefers `config.ghostty`; the existing `config` name remains a legacy fallback. Rename only after the Linux Ghostty version is verified. |
 | `dot_config/zed/` | Share; Zed documents `~/.config/zed/settings.json` and `keymap.json` on both platforms. Keep SSH connections local. |
 | `dot_config/bat/`, `btop/`, `fastfetch/`, `micro/`, `ranger/`, `rtk/`, `yazi/` | Share after installing each command and checking tool-specific platform options. |
 | `dot_condarc.tmpl`, `private_dot_npmrc.tmpl` | Share the rendered policy, but select platform/architecture-specific runtime installations separately. |
 | `dot_nanorc`, `dot_vimrc`, `dot_visidatarc`, `dot_taskrc` | Share after syntax and command-availability checks; do not infer that a similarly named Homebrew formula provides the same program. |
-| `private_dot_claude/`, `private_dot_codex/` | Mostly share; validate status-line interpreters and command paths. The Codex Google Workspace MCP entry depends on an untracked `~/mcp/google-workspace` checkout, so install/document it separately or omit that server on Darwin. Keep credentials, auth caches, and project trust local. |
+| `private_dot_claude/`, `private_dot_codex/` | Share only the narrow settings currently owned here and validate status-line interpreters. MCP servers, plugins, skills, hooks, auth caches, and project trust are installer/tool-owned machine state and must remain outside this repo on Darwin too. |
 | `dot_local/bin/executable_weather` | Share after confirming `curl` and `jq`. |
 | `dot_local/bin/executable_clipcopy` | Share; its `pbcopy` branch is the native macOS path. |
 
@@ -283,6 +355,9 @@ Do not copy these to a Mac merely because the paths are harmless:
 
 - `dot_config/i3/` and every i3-resurrect helper.
 - `dot_config/polybar/`, `dot_config/picom/`, and `dot_config/rofi/`.
+- `dot_config/xfce4/`, `dot_config/fcitx5/`, the GTK theme, and Thunar
+  integration already tied to `linuxmint-i3-x11`.
+- `dot_config/pipewire/` and `dot_config/systemd/`.
 - `dot_config/zathura/` unless a supported macOS installation is deliberately
   selected and tested.
 - `executable_dot_toggle-touchpad.sh` and
@@ -290,6 +365,8 @@ Do not copy these to a Mac merely because the paths are harmless:
 - `executable_dot_x-unstick.sh`.
 - `Applications/` Helium AppImage files and the duplicate Linux desktop entry.
 - `Applications/executable_update-helium.sh`.
+- Linux browser chrome payloads until a native macOS browser installation and
+  profile-location strategy are deliberately selected.
 - Linux-only display, wallpaper, X clipboard, power-dialog, and daemon scripts.
 
 ### Rewrite before sharing
@@ -298,7 +375,8 @@ Do not copy these to a Mac merely because the paths are harmless:
 | --- | --- |
 | `executable_dot_cleanup-agents.sh` | Install modern Bash explicitly or port associative-array logic to zsh/Python. Audit BSD `stat`/`find` behavior. |
 | `executable_dot_sync-zen-to-helium-bookmarks.sh` | Add `~/Library/Application Support/...` profile discovery, handle spaces safely, and retain read-only SQLite access. Never commit the resulting bookmarks. |
-| shell startup files | Replace Linux paths and GNU-only commands with OS branches; do not globally prepend both Homebrew prefixes. |
+| `dot_zsh/macos/executable_install.zsh` | Stop appending a hook that `dot_zshenv` already manages. Let declarative provisioning install its three formulae and keep this script only for idempotent setup that cannot be expressed in source state. |
+| shell startup files | Replace Linux paths and GNU-only commands with OS branches; do not globally prepend both Homebrew prefixes. Preserve the existing narrow compatibility shims instead of shadowing every BSD utility. |
 | app launch helpers | Use `open -a <App>` or verified CLI entry points rather than `.desktop` files and AppImages. |
 
 ## Phase 3 — replace the X11/i3 desktop natively
@@ -308,9 +386,9 @@ spaces, notifications, and privacy-sensitive automation.
 
 | Linux behavior | Recommended Darwin design | Notes |
 | --- | --- | --- |
-| i3 tiling and workspaces | AeroSpace in `~/.config/aerospace/aerospace.toml` | Start from its official i3-like sample. Rebuild bindings intentionally; macOS reserves many Command shortcuts. |
-| i3 window rules | AeroSpace `on-window-detected` callbacks | Match stable application bundle IDs/names, not transient titles. |
-| i3-resurrect | AeroSpace persistent workspaces plus explicit app-launch commands | There is no reliable generic restore of arbitrary native windows, tabs, and application state. Define an accepted subset. |
+| i3 tiling and workspaces | AeroSpace in `~/.config/aerospace/aerospace.toml` | The XDG path is supported; do not also manage `~/.aerospace.toml`. Start from the current official i3-like sample, set the current `config-version`, and rebuild bindings intentionally because macOS reserves many Command shortcuts. |
+| i3 window rules | AeroSpace `on-window-detected` callbacks | Match stable application bundle IDs, not transient titles. Use the current `if = 'test %{app-bundle-id} = ...'` form; the older `if.app-id` form is soft-deprecated. |
+| i3-resurrect | AeroSpace persistent workspaces plus explicit app-launch commands | `persistent-workspaces` requires AeroSpace config version 2 at this review. There is no reliable generic restore of arbitrary native windows, tabs, and application state; define an accepted subset. |
 | Polybar | SketchyBar in `~/.config/sketchybar/` | Scripts must be executable and use absolute or `$CONFIG_DIR`-based paths. |
 | Rofi launcher | Spotlight initially; optionally Raycast/Alfred after explicit selection | Do not add a paid or account-backed launcher by assumption. |
 | Picom | None | macOS supplies the compositor. Remove this layer. |
@@ -323,12 +401,27 @@ spaces, notifications, and privacy-sensitive automation.
 | Thunar | Finder | Port only custom actions that have a clear native equivalent. |
 | Flameshot | Native screenshot tools first | Screen Recording permission is user-controlled. |
 
+Decide the multi-display Spaces setting before implementing the bar. Current
+SketchyBar setup documentation requires **Displays have separate Spaces** to be
+enabled, while AeroSpace documents different multi-monitor tradeoffs and may
+recommend disabling it for some workflows. If SketchyBar is part of the
+accepted profile, keep the setting enabled first and validate AeroSpace's
+monitor/workspace routing under that constraint. Do not automate the setting or
+assume the two tools' preferred defaults are identical.
+
+At this review, AeroSpace's upstream documentation also states that its app is
+not notarized and that the Homebrew cask handles the quarantine attribute.
+Treat AeroSpace as an explicit user-approved trust decision; never generalize
+that behavior into a helper that strips quarantine from arbitrary downloads.
+
 Recommended order for the desktop layer:
 
 1. Install AeroSpace only and reproduce focus, move, layout, workspace, and
    monitor-routing essentials.
-2. Use it for at least one normal work session before adding callbacks.
-3. Add SketchyBar with a minimal workspace indicator.
+2. Use `config-version = 2`, validate with `aerospace reload-config`, and use it
+   for at least one normal work session before adding callbacks.
+3. Add SketchyBar with a minimal workspace indicator only after deciding the
+   **Displays have separate Spaces** behavior.
 4. Port status modules one at a time, using queryable native data sources.
 5. Add launchers, notification helpers, and display automation only after the
    base workflow is stable.
@@ -359,6 +452,11 @@ Common differences that require tests include:
 Do not “solve” portability by installing every GNU replacement and shadowing
 system tools globally. Use explicit executable names (`gsed`, `gstat`) or a
 script-local Homebrew path when GNU behavior is genuinely required.
+
+The current `dot_zsh/macos/bin/` directory follows this rule for the few
+incompatibilities already demonstrated by the shared rc modules. Extend those
+shims only from a failing Darwin test; their existence is not proof that the
+rest of the shell or provisioning scripts are portable.
 
 ## Phase 5 — privacy and macOS permissions
 
@@ -399,6 +497,25 @@ an intentional portability fix reviewed on Linux.
 
 ### Darwin render gate
 
+Before access to a Mac, run a synthetic render audit from Linux. Override only
+the platform facts and non-secret profile choices; retain the real source
+directory so `include` and `lstat` calls still work:
+
+```sh
+darwin_data='{"chezmoi":{"os":"darwin","arch":"arm64","homeDir":"/Users/audit"},"class":"desktop","desktopProfile":"none"}'
+chezmoi --override-data "$darwin_data" managed
+
+for source_file in run_*; do
+    printf '%s: ' "$source_file"
+    chezmoi --override-data "$darwin_data" execute-template --file "$source_file" |
+        sed -n '1p'
+done
+```
+
+Run this for both `arm64` and `amd64`. It catches template/ignore leaks but
+cannot validate BSD utilities, Homebrew, GUI paths, permissions, or actual app
+behavior.
+
 On the Mac, before any apply:
 
 ```sh
@@ -430,6 +547,8 @@ that is not using the newly edited shell configuration.
 
 - `shellcheck` for POSIX/Bash scripts and `bash -n` with the declared Bash.
 - `zsh -n` for Zsh files.
+- `~/.zsh/macos/doctor.zsh` on each supported Mac architecture after Homebrew
+  provisioning.
 - `plutil -lint` for any generated plist.
 - JSON/JSONC/TOML validators for rendered configs.
 - `brew bundle check` against the rendered Brewfile.
@@ -453,6 +572,7 @@ A coding agent may call the macOS port complete only when all boxes are true:
 - [ ] Clipboard, launcher, notifications, screenshots, and display behavior
       have tested native equivalents or explicit documented omissions.
 - [ ] Scripts pass the declared interpreter and BSD/GNU compatibility tests.
+- [ ] `~/.zsh/macos/doctor.zsh` passes after declarative package provisioning.
 - [ ] Required macOS privacy permissions are documented and manually granted.
 - [ ] Browser profiles, SSH details, project trust, secrets, device IDs, and
       TCC data are absent from Git and from the rendered public profile.
