@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """Give Polybar's tray icons the click cursor Polybar's own modules get.
 
 A tray icon is a foreign client window reparented into the bar, so the pointer

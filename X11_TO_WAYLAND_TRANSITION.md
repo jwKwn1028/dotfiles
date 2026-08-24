@@ -282,9 +282,9 @@ Current behavior to preserve:
 - brief peeks after workspace switches, cross-workspace focus, and overflow
   moves
 - quick standalone-Super and held-Super peeks, plus a top-edge pointer peek
-- keyboard bar mode (`Super+I`) with module selection, actions, and synthetic
+- keyboard bar mode (`Super+B`) with module selection, actions, and synthetic
   clicks on the Wi-Fi/Bluetooth tray icons
-- kill-workspace mode (`Super+N`), including the all-workspaces action that
+- kill-workspace mode (`Super+X`), including the all-workspaces action that
   hides the bar afterward
 - modules for workspaces, date, CPU, memory, audio, battery, network, tray, and
   power menu
@@ -307,9 +307,11 @@ The migration surface is now much larger than `polybar/` itself:
   input model. Decide whether an explicit bar toggle is sufficient before
   building compositor- or layer-shell-specific replacements.
 - `workspace-action.sh`, `focus-prev.sh`, `overflow-watcher.py`,
-  `show-polybar-or-kill-workspace.sh`, and
-  `kill-all-windows-and-hide-polybar.sh` are compositor workflows with a
+  `kill-workspace-mode.sh`, `window-mode.sh`, and
+  `kill-all-windows.sh` are compositor workflows with a
   Polybar feedback hook. Port the workflow and replace or remove the hook.
+  `window-mode.sh` only shows the bar and restores its prior visibility, so on
+  Waybar it reduces to nothing if the bar is always visible.
 - `polybar/scripts/executable_confirm-poweroff.sh` uses Zenity, Rofi, or
   `xmessage` and treats a 30-second timeout as confirmation to power off. Test
   a Wayland-capable confirmation UI deliberately; do not silently turn the
@@ -443,8 +445,6 @@ omitting every line containing `xfce`:
   keep it after testing Wayland support or divide the policy among logind,
   Sway bindings, `swayidle`, and `brightnessctl`. Do not accidentally create
   two lid/suspend handlers.
-- `reserve-i3-shortcuts.sh` removes an XFCE X11 passive grab and restarts
-  `xfsettingsd`; it has no role in Sway and should not be autostarted there.
 - The profile manages XFCE pointer, notification, power, and XSettings XML.
   Keep that tree gated to the X11 fallback unless an individual setting is
   deliberately shared.
@@ -486,7 +486,6 @@ Replace:
 - `picom -b`
 - `unclutter-xfixes`
 - `xss-lock -- xflock4`
-- `reserve-i3-shortcuts.sh`
 - `super-polybar-listener.py` and `top-edge-peek.py`
 
 Likely Wayland equivalents:

@@ -355,7 +355,7 @@ Do not copy these to a Mac merely because the paths are harmless:
 
 - `dot_config/i3/` and every i3-resurrect helper.
 - `dot_config/polybar/`, `dot_config/picom/`, and `dot_config/rofi/`.
-- `dot_config/xfce4/`, `dot_config/fcitx5/`, the GTK theme, and Thunar
+- `dot_config/xfce4/`, `dot_config/private_fcitx5/`, the GTK theme, and Thunar
   integration already tied to `linuxmint-i3-x11`.
 - `dot_config/pipewire/` and `dot_config/systemd/`.
 - `dot_config/zathura/` unless a supported macOS installation is deliberately

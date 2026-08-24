@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """Peek Polybar while the pointer rests against the top edge of a screen.
 
 The standalone-Super hold gesture driven by the pointer instead of a key, so it
@@ -95,15 +95,10 @@ def monitor_top(monitors, x, y):
     return None
 
 
-def fullscreen_rects():
-    """Rects i3 currently has a fullscreen window in.
-
-    Workspace containers report a `fullscreen_mode` of their own accord even
-    with nothing fullscreen under them, so only a node holding an X11 window
-    counts.
-    """
+def i3_tree():
+    """i3's layout tree, or None when the IPC call fails."""
     try:
-        tree = json.loads(
+        return json.loads(
             subprocess.run(
                 ["i3-msg", "-t", "get_tree"],
                 check=True,
@@ -113,6 +108,47 @@ def fullscreen_rects():
             ).stdout
         )
     except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def shown_children(node):
+    """Child nodes worth walking, minus the workspaces i3 is not showing.
+
+    A workspace i3 has switched away from keeps both its rect and its
+    fullscreen window in the tree, so an unfiltered walk goes on reporting a
+    monitor as covered by a window left fullscreen on a workspace nobody is
+    looking at -- suppressing that head's peek for the rest of the session,
+    since restarting i3 restores the same layout rather than clearing it.
+    Workspace nodes carry no `visible` flag of their own; the container holding
+    them names the one on screen as its first `focus` entry.
+    """
+    children = list(node.get("nodes") or [])
+    children.extend(node.get("floating_nodes") or [])
+
+    focus = node.get("focus") or []
+    shown = focus[0] if focus else None
+    return [
+        child
+        for child in children
+        if not isinstance(child, dict)
+        or child.get("type") != "workspace"
+        or child.get("id") == shown
+    ]
+
+
+def fullscreen_rects(tree=None):
+    """Rects i3 is currently *showing* a fullscreen window in.
+
+    Workspace containers report a `fullscreen_mode` of their own accord even
+    with nothing fullscreen under them, so only a node holding an X11 window
+    counts. Hidden workspaces are pruned by shown_children: a fullscreen window
+    covers a monitor only while its workspace is the one displayed there.
+
+    Takes an already-fetched tree so the walk can be tested without i3.
+    """
+    if tree is None:
+        tree = i3_tree()
+    if not isinstance(tree, dict):
         return []
 
     rects = []
@@ -131,13 +167,12 @@ def fullscreen_rects():
                     rect.get("height", 0),
                 )
             )
-        pending.extend(node.get("nodes") or [])
-        pending.extend(node.get("floating_nodes") or [])
+        pending.extend(shown_children(node))
     return rects
 
 
 def monitor_is_fullscreen(monitors, x, y) -> bool:
-    """True when a fullscreen window covers the monitor under the pointer.
+    """True when a fullscreen window i3 is showing covers the pointer's monitor.
 
     i3 unmaps that monitor's dock for as long as the fullscreen lasts and will
     not map it back, so peeking there cannot reveal anything: the bar would come

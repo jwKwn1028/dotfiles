@@ -24,6 +24,8 @@ mkdir -p "$MOCK_BIN" "$MOCK_STATE/runtime" "$MOCK_STATE/log"
 export PATH="$MOCK_BIN:/usr/bin:/bin"
 export XDG_RUNTIME_DIR="$MOCK_STATE/runtime"
 export POLYBAR_LOG_DIR="$MOCK_STATE/log"
+export POLYBAR_LOG_MAX_BYTES=80
+export POLYBAR_LOG_KEEP_LINES=3
 export POLYBAR_TEST_STATE_DIR="$MOCK_STATE"
 
 cat >"$MOCK_BIN/flock" <<'EOF'
@@ -120,6 +122,9 @@ EOF
 : >"$MOCK_STATE/ipc-events"
 : >"$MOCK_STATE/applet-events"
 : >"$MOCK_STATE/cursor-events"
+for line in $(seq 1 20); do
+    printf 'old-%02d-xxxxxxxx\n' "$line"
+done >"$POLYBAR_LOG_DIR/polybar-eDP.log"
 bash "$LAUNCHER"
 
 grep -Fqx 'eDP|closed|-f polybar --reload tray' "$MOCK_STATE/launch-events" ||
@@ -147,6 +152,16 @@ grep -Fqx -- 'closed|-f blueman-tray' "$MOCK_STATE/applet-events" ||
 grep -q '^closed|.*tray-cursor\.py' "$MOCK_STATE/cursor-events" ||
     { printf 'FAIL: the tray cursor helper was not started with the lock fd closed\n' >&2
       cat "$MOCK_STATE/cursor-events" >&2; exit 1; }
+if grep -Fq 'old-01-' "$POLYBAR_LOG_DIR/polybar-eDP.log"; then
+    printf 'FAIL: an oversized Polybar log kept its oldest lines\n' >&2
+    exit 1
+fi
+[ "$(grep -c '^old-' "$POLYBAR_LOG_DIR/polybar-eDP.log")" -le 3 ] ||
+    { printf 'FAIL: Polybar log rotation kept more than the configured tail\n' >&2
+      exit 1; }
+grep -Fq 'old-20-' "$POLYBAR_LOG_DIR/polybar-eDP.log" ||
+    { printf 'FAIL: Polybar log rotation discarded the newest old line\n' >&2
+      exit 1; }
 
 cat >"$MOCK_STATE/xrandr-output" <<'EOF'
 Screen 0: minimum 8 x 8, current 1920 x 1080, maximum 32767 x 32767
@@ -157,6 +172,28 @@ EOF
 bash "$LAUNCHER"
 grep -Fqx 'eDP|closed|-f polybar --reload tray' "$MOCK_STATE/launch-events" ||
     { printf 'FAIL: primary bar did not receive the tray fallback\n' >&2; exit 1; }
+
+DEFAULT_STATE_HOME="$MOCK_STATE/default-state-home"
+: >"$MOCK_STATE/launch-events"
+: >"$MOCK_STATE/ipc-events"
+env -u POLYBAR_LOG_DIR XDG_STATE_HOME="$DEFAULT_STATE_HOME" bash "$LAUNCHER"
+[ -f "$DEFAULT_STATE_HOME/polybar/polybar-eDP.log" ] ||
+    { printf 'FAIL: the default Polybar log did not use XDG_STATE_HOME\n' >&2
+      exit 1; }
+
+cat >"$MOCK_STATE/xrandr-output" <<'EOF'
+Screen 0: minimum 8 x 8, current 1920 x 1080, maximum 32767 x 32767
+eDP/../../owned connected primary 1920x1080+0+0 (normal left inverted right x axis y axis)
+EOF
+: >"$MOCK_STATE/launch-events"
+: >"$MOCK_STATE/ipc-events"
+bash "$LAUNCHER"
+grep -Fqx 'eDP/../../owned|closed|-f polybar --reload tray' \
+    "$MOCK_STATE/launch-events" ||
+    { printf 'FAIL: a monitor with path punctuation was not launched\n' >&2; exit 1; }
+[ -f "$POLYBAR_LOG_DIR/polybar-eDP_.._.._owned.log" ] ||
+    { printf 'FAIL: unsafe monitor-name characters reached the log path\n' >&2
+      exit 1; }
 
 cat >"$MOCK_STATE/xrandr-output" <<'EOF'
 Screen 0: minimum 8 x 8, current 4480 x 1440, maximum 32767 x 32767

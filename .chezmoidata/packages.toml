@@ -63,6 +63,9 @@ i3_x11 = [
     # autostart. It polls the pointer to peek Polybar at the screen edge, and
     # without this it dies on import and the edge simply does nothing.
     "python3-xlib",
+    # Browser session files use Mozilla's jsonlz4 envelope. Keep this in the
+    # distro Python used by the i3 helpers instead of relying on a user pip env.
+    "python3-lz4",
     "gimp", "vlc", "mpv",
     # Display manager + screen locker for a standalone i3 login session.
     # Installing lightdm may prompt you to pick the default display manager.

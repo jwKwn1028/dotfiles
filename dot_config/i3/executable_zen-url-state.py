@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """Collect and restore Zen/Firefox tab URLs for i3-resurrect.
 
 Reads the browsers' mozlz4 session stores to recover each window's selected tab,

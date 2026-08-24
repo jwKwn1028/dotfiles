@@ -60,24 +60,30 @@ if [ -x "$POLYBAR_LAUNCHER" ]; then
     "$POLYBAR_LAUNCHER"
 fi
 
-# Confirm i3 is up, after launch.sh has blocked until the bars are back. Only
-# i3's exec_always sets I3_RELOAD_TOAST, and i3 4.23 reruns exec_always on
-# $mod+Shift+r but not $mod+Shift+c; Super+Shift+P leaves it unset. The stamp
-# sits in XDG_RUNTIME_DIR, which logind unmounts with the session, so its
-# absence marks a login's first parse.
+# Confirm the completed setup after launch.sh has blocked until the bars are
+# back. randr-hotplug.sh supplies I3_DISPLAY_TOAST. Otherwise, only i3's
+# exec_always sets I3_RELOAD_TOAST: i3 4.23 reruns exec_always on restart but
+# not config reload, while Super+Shift+P leaves both variables unset. The stamp
+# sits in XDG_RUNTIME_DIR, which logind unmounts with the session, so its absence
+# marks a login's first parse.
 TOAST_STAMP="${XDG_RUNTIME_DIR:-/tmp}/i3-reload-toast"
+TOAST_TEXT="${I3_DISPLAY_TOAST:-}"
 if [ "${I3_RELOAD_TOAST:-0}" = 1 ]; then
-    if [ -e "$TOAST_STAMP" ]; then
-        TOAST_TEXT="i3 reloaded"
-    else
-        TOAST_TEXT="Welcome"
-    fi
-    if command -v rofi >/dev/null 2>&1; then
-        # rofi 1.7.5 ignores a `timeout` block in -e mode, so time it out here.
-        rofi -e "$TOAST_TEXT" -theme reload-toast &
-        toast_pid=$!
-        sleep 1
-        kill "$toast_pid" 2>/dev/null
+    if [ -z "$TOAST_TEXT" ]; then
+        if [ -e "$TOAST_STAMP" ]; then
+            TOAST_TEXT="i3 reloaded"
+        else
+            TOAST_TEXT="Welcome"
+        fi
     fi
     touch "$TOAST_STAMP"
+fi
+
+if [ -n "$TOAST_TEXT" ] && command -v rofi >/dev/null 2>&1; then
+    # rofi 1.7.5 ignores a `timeout` block in -e mode, so time it out here.
+    rofi -e "$TOAST_TEXT" -theme reload-toast &
+    toast_pid=$!
+    sleep 1
+    kill "$toast_pid" 2>/dev/null || true
+    wait "$toast_pid" 2>/dev/null || true
 fi

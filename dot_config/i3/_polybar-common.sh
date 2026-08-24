@@ -6,7 +6,7 @@
 # polybar_wait_state's budget is wall clock and short on purpose: polybar
 # applies visibility on receipt, so a state that has not landed in a fraction of
 # a second is unreachable, not slow -- i3 unmaps a fullscreened output's dock
-# and polybar cannot override it ("Ignoring restack of i3 window"). The caller
+# and polybar, which cannot restack itself, never gets it back. The caller
 # holds POLYBAR_CONTROL_LOCK across the wait while everything else gives up on
 # that lock after two seconds, so a longer budget only eats keypresses.
 
@@ -18,6 +18,7 @@ POLYBAR_PEEK_TRIGGER="$SNAP_RUNTIME_DIR/i3-polybar-peek.trigger"
 POLYBAR_PEEK_HOLD="$SNAP_RUNTIME_DIR/i3-polybar-peek.hold"
 POLYBAR_PEEK_WORKER_LOCK="$SNAP_RUNTIME_DIR/i3-polybar-peek-worker.lock"
 POLYBAR_SETTLE_MS="${I3_POLYBAR_SETTLE_MS:-200}"
+I3_SYSTEM_PYTHON="${I3_SYSTEM_PYTHON:-/usr/bin/python3}"
 export POLYBAR_CONTROL_LOCK POLYBAR_PEEK_OWNER POLYBAR_PEEK_TRIGGER
 export POLYBAR_PEEK_HOLD POLYBAR_PEEK_WORKER_LOCK
 
@@ -82,9 +83,9 @@ polybar_withdraw_orphan_docks() {
   done
 
   [ "${#orphans[@]}" -gt 0 ] || return 0
-  command -v python3 >/dev/null 2>&1 || return 0
+  [ -x "$I3_SYSTEM_PYTHON" ] || return 0
 
-  python3 - "${orphans[@]}" <<'PY' 2>/dev/null || return 1
+  "$I3_SYSTEM_PYTHON" - "${orphans[@]}" <<'PY' 2>/dev/null || return 1
 import sys
 
 from Xlib import X, display, protocol

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """Paint bar mode's selection block over a Polybar tray icon.
 
 Every other stop in bar-nav.sh gets its block from Polybar: the module has a

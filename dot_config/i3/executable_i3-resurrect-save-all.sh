@@ -14,6 +14,7 @@ set -euo pipefail
 STATE_DIR="${I3_RESURRECT_STATE_DIR:-$HOME/.config/i3/resurrect}"
 META_DIR="${I3_RESURRECT_META_DIR:-$HOME/.config/i3/resurrect-meta}"
 SWALLOW="${I3_RESURRECT_SWALLOW:-class,instance,title}"
+SYSTEM_PYTHON="${I3_SYSTEM_PYTHON:-/usr/bin/python3}"
 WORKSPACES_FILE="$META_DIR/workspaces.txt"
 FOCUSED_FILE="$META_DIR/focused-workspace.txt"
 ZATHURA_PAGES_FILE="$META_DIR/zathura-pages.json"
@@ -205,7 +206,7 @@ capture_zathura_page_state() {
 }
 
 capture_zen_page_state() {
-    if ! command -v python3 >/dev/null 2>&1 || [ ! -r "$ZEN_URL_STATE_HELPER" ]; then
+    if [ ! -x "$SYSTEM_PYTHON" ] || [ ! -r "$ZEN_URL_STATE_HELPER" ]; then
         printf '[]\n'
         return 0
     fi
@@ -217,7 +218,7 @@ capture_zen_page_state() {
     }
 
     ZEN_PROFILE_ROOTS="${ZEN_PROFILE_ROOTS:-$HOME/.var/app/app.zen_browser.zen/.zen:$HOME/.zen}" \
-        python3 "$ZEN_URL_STATE_HELPER" <<< "$tree" || printf '[]\n'
+        "$SYSTEM_PYTHON" "$ZEN_URL_STATE_HELPER" <<< "$tree" || printf '[]\n'
 }
 
 remember_zen_pages_for_workspace() {

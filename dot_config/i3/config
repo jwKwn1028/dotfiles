@@ -56,49 +56,25 @@ bindsym $mod+Down  focus down
 bindsym $mod+Up    focus up
 bindsym $mod+Right focus right
 bindsym $mod+Shift+m scratchpad show
-set $mode_move Move: [h] left [j] down [k] up [l] right
-bindsym $mod+g mode "$mode_move"
-mode "$mode_move" {
-    bindsym h move left,  mode "default"
-    bindsym j move down,  mode "default"
-    bindsym k move up,    mode "default"
-    bindsym l move right, mode "default"
-    bindsym $mod+h move left,  mode "default"
-    bindsym $mod+j move down,  mode "default"
-    bindsym $mod+k move up,    mode "default"
-    bindsym $mod+l move right, mode "default"
-    bindsym Return mode "default"
-    bindsym Escape mode "default"
-}
-bindsym $mod+Shift+Left  move left
-bindsym $mod+Shift+Down  move down
-bindsym $mod+Shift+Up    move up
-bindsym $mod+Shift+Right move right
+# Moving and resizing both live in the $mod+r mode below.
 
-# splits
-bindsym $mod+b split h
-bindsym $mod+v split v
+# No split bindings: autotiling picks the direction on every focus change.
+# tile-snap.sh and _snap-common.sh still issue `split h`/`split v` directly.
 bindsym $mod+Shift+space floating toggle
+# Recovery for a floating window no rule below caught, so it opened wherever the
+# app asked -- possibly part-offscreen.
+bindsym $mod+Shift+n move position center
 
 # --- floating utility windows ---
-for_window [class="Xfce4-power-manager-settings"] floating enable, move position center
-for_window [class="Nm-connection-editor"] floating enable, move position center
-for_window [class="Blueman-manager"] floating enable, move position center
-for_window [class="Blueman-adapters"] floating enable, move position center
-for_window [class="Pavucontrol"] floating enable, move position center
-for_window [class="(?i)^(xfce4-display-settings|xfce4-settings-manager|xfce4-settings-editor|xfce4-appearance-settings|xfce4-mouse-settings|xfce4-keyboard-settings|xfce4-notifyd-config|xfce4-session-settings|thunar-settings)$"] floating enable, move position center
-for_window [instance="(?i)^(xfce4-display-settings|xfce4-settings-manager|xfce4-settings-editor|xfce4-appearance-settings|xfce4-mouse-settings|xfce4-keyboard-settings|xfce4-notifyd-config|xfce4-session-settings|thunar-settings)$"] floating enable, move position center
-for_window [title="(?i).*xfce terminal settings.*"] floating enable, move position center
-for_window [class="(?i)^(xfce4-taskmanager|system-config-printer|org\\.gnome\\.diskutility|gnome-disks|gufw|driver-manager|mintsources|mintreport|mintbackup|timeshift|timeshift-gtk|timeshift-launcher|users-admin|time-admin)$"] floating enable, move position center
-for_window [instance="(?i)^(xfce4-taskmanager|system-config-printer|org\\.gnome\\.diskutility|gnome-disks|gufw|driver-manager|mintsources|mintreport|mintbackup|timeshift|timeshift-gtk|timeshift-launcher|users-admin|time-admin)$"] floating enable, move position center
-for_window [class="(?i)^(fcitx5-configtool|fcitx-config-gtk3|fcitx5-config-qt|mintlocale|mintlocale-im|im-config|ibus-setup-hangul)$"] floating enable, move position center
-for_window [instance="(?i)^(fcitx5-configtool|fcitx-config-gtk3|fcitx5-config-qt|mintlocale|mintlocale-im|im-config|ibus-setup-hangul)$"] floating enable, move position center
-for_window [class="(?i)^(light-locker-settings|onboard-settings|mugshot|menulibre|rofi-theme-selector)$"] floating enable, move position center
-for_window [instance="(?i)^(light-locker-settings|onboard-settings|mugshot|menulibre|rofi-theme-selector)$"] floating enable, move position center
-for_window [class="(?i).*mintupdate.*"] floating enable, move position center
-for_window [instance="(?i).*mintupdate.*"] floating enable, move position center
-for_window [title="(?i).*update manager.*"] floating enable, move position center
-for_window [title=".*업데이트 매니저.*"] floating enable, move position center
+# One alternation behind both criteria: an app sets class or instance, and two
+# hand-copied lists drift. Anchored; `.*name.*` members opt back into substring
+# matching. A window matching both just runs the same idempotent pair twice.
+set $float_settings xfce4-power-manager-settings|nm-connection-editor|blueman-manager|blueman-adapters|pavucontrol|xfce4-display-settings|xfce4-settings-manager|xfce4-settings-editor|xfce4-appearance-settings|xfce4-mouse-settings|xfce4-keyboard-settings|xfce4-notifyd-config|xfce4-session-settings|thunar-settings|xfce4-taskmanager|system-config-printer|org\.gnome\.diskutility|gnome-disks|gufw|driver-manager|mintsources|mintreport|mintbackup|timeshift|timeshift-gtk|timeshift-launcher|users-admin|time-admin|fcitx5-configtool|fcitx-config-gtk3|fcitx5-config-qt|mintlocale|mintlocale-im|im-config|ibus-setup-hangul|light-locker-settings|onboard-settings|mugshot|menulibre|rofi-theme-selector|.*mintupdate.*
+# Title fallbacks for the windows that set no useful class or instance.
+set $float_titles .*xfce terminal settings.*|.*update manager.*|.*업데이트 매니저.*
+for_window [class="(?i)^($float_settings)$"] floating enable, move position center
+for_window [instance="(?i)^($float_settings)$"] floating enable, move position center
+for_window [title="(?i)^($float_titles)$"] floating enable, move position center
 for_window [class="(?i)^kakaotalk\.exe$"] floating enable, resize set 420 760, move position center
 for_window [instance="(?i)^kakaotalk\.exe$"] floating enable, resize set 420 760, move position center
 
@@ -112,26 +88,39 @@ bindsym $mod+e exec --no-startup-id ~/.config/i3/tile-snap.sh ur
 bindsym $mod+z exec --no-startup-id ~/.config/i3/tile-snap.sh dl
 bindsym $mod+c exec --no-startup-id ~/.config/i3/tile-snap.sh dr
 bindsym --release $mod+u exec --no-startup-id ~/.config/i3/tile-snap.sh unsnap
-bindsym $mod+x fullscreen toggle
+bindsym $mod+f fullscreen toggle
 
-# --- move window to other monitor ---
-bindsym Control+$mod+Right move container to output right
-bindsym Control+$mod+Left  move container to output left
-
-# resize mode
-mode "resize" {
-    bindsym h resize shrink width  10 px or 10 ppt
-    bindsym j resize grow   height 10 px or 10 ppt
-    bindsym k resize shrink height 10 px or 10 ppt
-    bindsym l resize grow   width  10 px or 10 ppt
-    bindsym Return mode "default"
-    bindsym Escape mode "default"
+# hjkl moves, Shift+hjkl resizes, Tab sends the window to the other monitor.
+# Sticky -- no `mode "default"` on the actions. The mode name is the Polybar
+# label, hence keys only; this comment is the only record of what they do.
+#
+# Container selection (a/A) was tried and removed: below three windows on a
+# workspace there is no level above the window worth selecting.
+set $mode_window hjkl / HJKL / Tab
+mode "$mode_window" {
+    bindsym h move left
+    bindsym j move down
+    bindsym k move up
+    bindsym l move right
+    bindsym Shift+h resize shrink width  10 px or 10 ppt
+    bindsym Shift+j resize grow   height 10 px or 10 ppt
+    bindsym Shift+k resize shrink height 10 px or 10 ppt
+    bindsym Shift+l resize grow   width  10 px or 10 ppt
+    # `next` cycles outputs, so it toggles across two monitors; no `prev` exists.
+    # The trailing focus is required -- the move alone leaves focus behind.
+    # Focus staying on the moved window is not asked for here: unset
+    # mouse_warping (default `output`) warps the pointer onto it, beating
+    # focus_follows_mouse. mouse_warping none would silently undo that.
+    bindsym Tab move container to output next; focus output next
+    # Both exits hide the bar again, but only if window-mode.sh raised it.
+    bindsym Return exec --no-startup-id ~/.config/i3/window-mode.sh close, mode "default"
+    bindsym Escape exec --no-startup-id ~/.config/i3/window-mode.sh close, mode "default"
 }
-bindsym $mod+r mode "resize"
+bindsym $mod+r exec --no-startup-id ~/.config/i3/window-mode.sh open, mode "$mode_window"
 
 # i3 control
 bindsym $mod+Shift+c reload
-bindsym $mod+Shift+r restart
+bindsym $mod+Shift+i restart
 bindsym $mod+Shift+e exec --no-startup-id "i3-nagbar -t warning -m 'Exit i3?' -B 'Yes' 'i3-msg exit'"
 
 # i3-resurrect session save/restore
@@ -210,8 +199,10 @@ bindcode $mod+Shift+17 exec --no-startup-id ~/.config/i3/workspace-action.sh mov
 bindcode $mod+Shift+18 exec --no-startup-id ~/.config/i3/workspace-action.sh move 9
 bindcode $mod+Shift+19 exec --no-startup-id ~/.config/i3/workspace-action.sh move 10
 
-# Super+N, then 1-0 for one workspace or Shift+K for every window. Polybar is
-# shown while choosing; the all-window action hides it again after the kill.
+# Super+X, then 1-0 for one workspace or Shift+K for every window. Polybar is
+# shown while choosing. Return, Escape, and the all-window kill restore the
+# bar's prior visibility; only a number key leaves it up, to show the workspace
+# it just emptied.
 mode "kill workspace" {
     bindsym 1 [workspace=$ws1] kill, mode "default"
     bindsym 2 [workspace=$ws2] kill, mode "default"
@@ -223,11 +214,11 @@ mode "kill workspace" {
     bindsym 8 [workspace=$ws8] kill, mode "default"
     bindsym 9 [workspace=$ws9] kill, mode "default"
     bindsym 0 [workspace=$ws10] kill, mode "default"
-    bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-all-windows-and-hide-polybar.sh
-    bindsym Return mode "default"
-    bindsym Escape mode "default"
+    bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-all-windows.sh
+    bindsym Return exec --no-startup-id ~/.config/i3/kill-workspace-mode.sh close, mode "default"
+    bindsym Escape exec --no-startup-id ~/.config/i3/kill-workspace-mode.sh close, mode "default"
 }
-bindsym $mod+n exec --no-startup-id ~/.config/i3/show-polybar-or-kill-workspace.sh
+bindsym $mod+x exec --no-startup-id ~/.config/i3/kill-workspace-mode.sh open
 
 bindsym $mod+Mod1+h exec --no-startup-id ~/.config/i3/workspace-action.sh prev
 bindsym $mod+Mod1+l exec --no-startup-id ~/.config/i3/workspace-action.sh next
@@ -256,7 +247,7 @@ bindsym $mod+Shift+b exec --no-startup-id ~/.config/i3/toggle-polybar-resnap.sh
 # Keyboard cursor over polybar's modules; see bar-nav.sh. Mode name is a literal
 # single space so polybar renders no text, and literal because i3 keeps the
 # quotes inside a `set` value.
-bindsym $mod+i exec --no-startup-id ~/.config/i3/bar-nav.sh open, mode " "
+bindsym $mod+b exec --no-startup-id ~/.config/i3/bar-nav.sh open, mode " "
 mode " " {
     bindsym h     exec --no-startup-id ~/.config/i3/bar-nav.sh prev
     bindsym l     exec --no-startup-id ~/.config/i3/bar-nav.sh next
@@ -281,11 +272,13 @@ bindsym $mod+m exec --no-startup-id ~/.config/i3/show-desktop.sh
 bindsym $mod+Control+m move scratchpad
 # --- autostart ---
 exec --no-startup-id /usr/bin/gnome-keyring-daemon --start --components=secrets
-exec_always --no-startup-id ~/.config/i3/reserve-i3-shortcuts.sh
 exec_always --no-startup-id sh -c 'pgrep -u "$USER" polkit-gnome >/dev/null || /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/focus-tracker\.sh$"; setsid ~/.config/i3/focus-tracker.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/snap-watcher\.sh$"; setsid ~/.config/i3/snap-watcher.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/kakaotalk-float-watcher\.sh$"; setsid ~/.config/i3/kakaotalk-float-watcher.sh </dev/null >/dev/null 2>&1 &'
+# Runs display-setup.sh on a real hotplug, keyed on the connected-output set --
+# its own xrandr calls are RandR changes too, so raw events would loop.
+exec_always --no-startup-id sh -c 'pkill -f "bash .*/randr-hotplug\.sh$"; setsid ~/.config/i3/randr-hotplug.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/super-polybar-listener\.py$"; exec /usr/bin/python3 ~/.config/i3/super-polybar-listener.py'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/autotiling"; exec ~/.local/bin/autotiling --limit 6'
 # -d until the idle-tiling bug is caught; decisions land in ~/.xsession-errors.
@@ -296,18 +289,24 @@ exec --no-startup-id xrdb -merge ~/.Xresources
 exec --no-startup-id xsetroot -cursor_name left_ptr
 exec_always --no-startup-id /usr/bin/flock -n /tmp/disable-trackpoint-middle-click.lock ~/.local/bin/disable-trackpoint-middle-click
 exec_always --no-startup-id ~/.local/bin/touchpad apply
-exec --no-startup-id sh -c 'pgrep -x xfsettingsd          >/dev/null || xfsettingsd &'
-exec --no-startup-id sh -c 'pgrep -x xfce4-power-manager >/dev/null || xfce4-power-manager &'
-exec --no-startup-id sh -c 'pgrep -x picom               >/dev/null || picom -b'
-exec --no-startup-id sh -c 'pgrep -x nm-applet           >/dev/null || nm-applet &'
-exec --no-startup-id sh -c 'pgrep -x blueman-applet      >/dev/null || blueman-applet &'
+# exec_always: the `pgrep ||` guard makes a re-run a no-op, so $mod+Shift+i
+# revives a dead daemon -- picom especially, as Polybar's ARGB bar needs it.
+exec_always --no-startup-id sh -c 'pgrep -x xfsettingsd          >/dev/null || xfsettingsd &'
+exec_always --no-startup-id sh -c 'pgrep -x xfce4-power-manager >/dev/null || xfce4-power-manager &'
+exec_always --no-startup-id sh -c 'pgrep -x picom               >/dev/null || picom -b'
+exec_always --no-startup-id sh -c 'pgrep -x nm-applet           >/dev/null || nm-applet &'
+exec_always --no-startup-id sh -c 'pgrep -x blueman-applet      >/dev/null || blueman-applet &'
 # Dock Blueman after nm-applet so the tray order is Wi-Fi, then Bluetooth.
+# Stays `exec`: launch.sh already restarts it once nm-applet has docked, and a
+# second start racing that would break the order.
 exec --no-startup-id sh -c 'sleep 2; pgrep -x blueman-tray >/dev/null || blueman-tray &'
-exec --no-startup-id sh -c 'pgrep -x unclutter-xfixes    >/dev/null || unclutter-xfixes --timeout 3 &'
+exec_always --no-startup-id sh -c 'pgrep -x unclutter-xfixes    >/dev/null || unclutter-xfixes --timeout 3 &'
 exec --no-startup-id dropbox start -i
 # I3_RELOAD_TOAST flashes a toast once Polybar is back: "Welcome" on a login's
-# first parse, "i3 reloaded" after. Only $mod+Shift+r reaches it -- i3 4.23 skips
+# first parse, "i3 reloaded" after. Only $mod+Shift+i reaches it -- i3 4.23 skips
 # exec_always on $mod+Shift+c. Super+Shift+P calls the script without the
 # variable, so a manual display refresh stays silent.
 exec_always --no-startup-id env I3_RELOAD_TOAST=1 ~/.config/i3/display-setup.sh
-exec --no-startup-id xss-lock -- xflock4
+# Guarded like the daemons above, not a bare exec: a dead xss-lock silently
+# stops idle locking. $mod+Shift+i now revives it.
+exec_always --no-startup-id sh -c 'pgrep -x xss-lock >/dev/null || xss-lock -- xflock4 &'

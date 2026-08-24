@@ -27,6 +27,7 @@ export XDG_STATE_HOME="$MOCK_STATE/state-home"
 export HOME="$MOCK_STATE/home"
 export I3_POLYBAR_PEEK_MS=240
 export PATH="$MOCK_BIN:/usr/bin:/bin"
+export I3_SYSTEM_PYTHON="$MOCK_BIN/python3"
 
 cat > "$MOCK_BIN/xdotool" <<'EOF'
 #!/usr/bin/env bash
@@ -361,7 +362,7 @@ sleep 0.35
 reset_case hidden
 "$ROOT/workspace-action.sh" switch 6
 assert_state visible
-"$ROOT/show-polybar-or-kill-workspace.sh"
+"$ROOT/kill-workspace-mode.sh" open
 assert_state visible
 [ ! -e "$XDG_RUNTIME_DIR/i3-polybar-peek.owner" ] ||
   fail "kill-workspace mode did not cancel peek ownership"
@@ -370,16 +371,82 @@ grep -Fqx 'get_tree' "$MOCK_STATE/i3-events" ||
 sleep 0.35
 assert_state visible
 
-grep -Fq \
-  'bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-all-windows-and-hide-polybar.sh' \
-  "$ROOT/config" || fail "Shift+K is not bound to the kill-and-hide helper"
-"$ROOT/kill-all-windows-and-hide-polybar.sh"
+# A bar up only for a transient peek counts as hidden on open, so aborting the
+# mode has to take it away again rather than leave the peek promoted forever.
+[ -e "$XDG_RUNTIME_DIR/i3-kill-workspace.restore-hidden" ] ||
+  fail "a peek promoted by kill-workspace mode was not marked for restore"
+"$ROOT/kill-workspace-mode.sh" close
 assert_state hidden
+[ ! -e "$XDG_RUNTIME_DIR/i3-kill-workspace.restore-hidden" ] ||
+  fail "aborting kill-workspace mode left its restore marker behind"
+
+# The destructive case: a bar the user already had up must survive the abort.
+reset_case visible
+"$ROOT/kill-workspace-mode.sh" open
+assert_state visible
+[ ! -e "$XDG_RUNTIME_DIR/i3-kill-workspace.restore-hidden" ] ||
+  fail "kill-workspace mode marked an already-persistent bar for restore"
+"$ROOT/kill-workspace-mode.sh" close
+assert_state visible
+
+# A number key exits without `close`, leaving the bar up to show the emptied
+# workspace. The marker it leaves behind is harmless: the next open rewrites it
+# from the live state, so the abort after it must not hide a persistent bar.
+reset_case hidden
+"$ROOT/kill-workspace-mode.sh" open
+assert_state visible
+[ -e "$XDG_RUNTIME_DIR/i3-kill-workspace.restore-hidden" ] ||
+  fail "kill-workspace mode did not mark a hidden bar for restore"
+"$ROOT/kill-workspace-mode.sh" open
+[ ! -e "$XDG_RUNTIME_DIR/i3-kill-workspace.restore-hidden" ] ||
+  fail "a second open did not rewrite the marker from the live bar state"
+"$ROOT/kill-workspace-mode.sh" close
+assert_state visible
+
+# The config strings below are i3 literals: `$mod` and `$ws1` are i3 variables
+# and must reach grep unexpanded, which is what -F and the single quotes are for.
+# shellcheck disable=SC2016
+grep -Fqx \
+  'bindsym $mod+x exec --no-startup-id ~/.config/i3/kill-workspace-mode.sh open' \
+  "$ROOT/config" || fail "Super+X is not bound to the kill-workspace mode helper"
+for exit_key in Return Escape; do
+  grep -Fqx \
+    "    bindsym $exit_key exec --no-startup-id ~/.config/i3/kill-workspace-mode.sh close, mode \"default\"" \
+    "$ROOT/config" || fail "kill-workspace mode's $exit_key does not restore Polybar"
+done
+# The number keys are the one exit that deliberately does not restore.
+# shellcheck disable=SC2016
+grep -Fq 'bindsym 1 [workspace=$ws1] kill, mode "default"' "$ROOT/config" ||
+  fail "a kill-workspace number key no longer exits straight to default mode"
+
+reset_case hidden
+
+# Shift+K exits through the same restore as Return and Escape, not an
+# unconditional hide: a bar this mode showed goes away with the windows.
+"$ROOT/kill-workspace-mode.sh" open
+assert_state visible
+grep -Fq \
+  'bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-all-windows.sh' \
+  "$ROOT/config" || fail "Shift+K is not bound to the global-kill helper"
+"$ROOT/kill-all-windows.sh"
+assert_state hidden
+[ ! -e "$XDG_RUNTIME_DIR/i3-kill-workspace.restore-hidden" ] ||
+  fail "the global kill left kill-workspace mode's restore marker behind"
 mapfile -t final_kill_events < <(tail -n 2 "$MOCK_STATE/i3-events")
 [ "${final_kill_events[0]:-}" = '[all] kill; mode "default"' ] ||
   fail "Shift+K helper did not kill every window and leave kill-workspace mode"
 [ "${final_kill_events[1]:-}" = 'get_tree' ] ||
-  fail "Shift+K helper did not hide Polybar after the global kill"
+  fail "Shift+K helper did not restore Polybar after the global kill"
+
+# ...and one the user had up on purpose survives it, which the old
+# unconditional hide got wrong.
+reset_case visible
+"$ROOT/kill-workspace-mode.sh" open
+assert_state visible
+"$ROOT/kill-all-windows.sh"
+assert_state visible
+grep -Fqx '[all] kill; mode "default"' "$MOCK_STATE/i3-events" ||
+  fail "the global kill did not run against an already-persistent bar"
 
 # Hiding a bar i3 already unmapped for fullscreen: polybar clears its flag
 # without unmapping, so the withdraw has to take the dock away now.

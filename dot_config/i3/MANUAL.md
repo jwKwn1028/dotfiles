@@ -26,7 +26,8 @@ The config is built around these major features:
   changes.
 - Standalone Super tap/hold gestures for transient Polybar visibility.
 - Global title-bar toggling that also resizes snapped windows.
-- Laptop/external monitor placement policy.
+- Automatic laptop/external monitor placement, hotplug handling, and matching
+  Rofi status toasts.
 - Floating rules for system dialogs, settings tools, input-method tools,
   update tools, and KakaoTalk/Wine windows.
 - Show-desktop behavior via a dedicated `_desktop` workspace.
@@ -47,8 +48,8 @@ General behavior:
 
 Theme colors use a Tokyo Night style palette:
 
-- Focused border/background/text/indicator/child border: `#c0caf5`,
-  `#1a1b26`, `#c0caf5`, `#c0caf5`, `#c0caf5`.
+- Focused border/background/text/indicator/child border: `#86be43`,
+  `#1a1b26`, `#c0caf5`, `#86be43`, `#86be43`.
 - Unfocused and focused-inactive windows use `#16161e` with text `#565f89`.
 
 ## Keybinding Reference
@@ -57,7 +58,7 @@ Theme colors use a Tokyo Night style palette:
 
 | Binding | Action |
 | --- | --- |
-| `Super+Return` | Launch Ghostty with `LIBGL_ALWAYS_SOFTWARE=1`. |
+| `Super+Return` | Launch Ghostty. |
 | `Super+Shift+Return` | Launch `xfce4-terminal`. |
 | `Super+Space` | Open Rofi drun with `XDG_CURRENT_DESKTOP=XFCE:i3` and the `spotlight` theme. |
 | `Super+Tab` | Focus the previously focused window via `focus-prev.sh`. |
@@ -85,39 +86,41 @@ numeric workspace navigation.
 | `Alt+F4` | Kill focused window. |
 | `Super+H/J/K/L` | Focus left/down/up/right. |
 | `Super+Arrow keys` | Focus left/down/up/right. |
-| `Super+G`, then `H/J/K/L` | Move window left/down/up/right and return to the default mode. Super may remain held for the direction key. |
-| `Super+Shift+Arrow keys` | Move window left/down/up/right. |
 | `Super+Shift+H/L` | Move the focused window to the previous/next numbered workspace, follow it, and wrap between workspaces `1` and `10`. |
 | `Super+Shift+M` | Show a scratchpad window. |
 | `Super+Ctrl+M` | Move focused window to scratchpad. |
-| `Super+B` | Set horizontal split. |
-| `Super+V` | Set vertical split. |
+| `Super+Shift+N` | Centre the focused floating window on its output. Recovery for one that no `for_window` rule caught. |
 | `Super+Shift+Space` | Toggle floating mode. |
-| `Super+X` | Toggle fullscreen. |
-| `Ctrl+Super+Right` | Move container to output on the right. |
-| `Ctrl+Super+Left` | Move container to output on the left. |
+| `Super+F` | Toggle fullscreen. |
 
-### Resize Mode
+### Window Mode
 
-Enter resize mode with `Super+R`.
+Enter window mode with `Super+R`. It is sticky: the actions do not exit the
+mode, so a run of adjustments needs one entry. Polybar shows the compact mode
+label `hjkl / HJKL / Tab`; the table below records what those keys do.
 
-Inside resize mode:
+`window-mode.sh open` shows Polybar first. `Return` or `Escape` restores the
+previous state, so a bar that was already up stays up and one that was hidden
+hides again. Kill-workspace mode shares this contract and exempts only its
+number keys.
 
 | Binding | Action |
 | --- | --- |
-| `H` | Shrink width by 10 px or 10 ppt. |
-| `J` | Grow height by 10 px or 10 ppt. |
-| `K` | Shrink height by 10 px or 10 ppt. |
-| `L` | Grow width by 10 px or 10 ppt. |
-| `Return` | Return to default mode. |
-| `Escape` | Return to default mode. |
+| `H/J/K/L` | Move the window left/down/up/right. |
+| `Shift+H` | Shrink width by 10 px or 10 ppt. |
+| `Shift+J` | Grow height by 10 px or 10 ppt. |
+| `Shift+K` | Shrink height by 10 px or 10 ppt. |
+| `Shift+L` | Grow width by 10 px or 10 ppt. |
+| `Tab` | Send the window to the next output and follow it. Toggles across two monitors; i3 has no `prev` for outputs. |
+| `Return` | Restore Polybar visibility and return to default mode. |
+| `Escape` | Restore Polybar visibility and return to default mode. |
 
 ### i3 Control
 
 | Binding | Action |
 | --- | --- |
 | `Super+Shift+C` | Reload i3 config. |
-| `Super+Shift+R` | Restart i3. |
+| `Super+Shift+I` | Restart i3. |
 | `Super+Shift+E` | Show an `i3-nagbar` confirmation, then exit i3 if confirmed. |
 
 ### Workspaces
@@ -144,34 +147,49 @@ guard to `move-to-workspace.sh`. Numeric relative navigation stops at workspace
 `1` or `10`; it does not wrap or trigger a Polybar peek at those boundaries.
 Relative window moves instead wrap modulo ten and use the same move/follow and
 Polybar-peek path as shifted number-row moves.
-`reserve-i3-shortcuts.sh` removes XFCE's custom `Ctrl+Super+L → xflock4`
-shortcut, refreshes `xfsettingsd` to release its stale X11 key grab, and
-reloads i3 so it can acquire the chord. XFCE's default `Ctrl+Alt+L` lock
-shortcut remains unchanged.
+XFCE's conflicting custom `Ctrl+Super+L` and `Super+R` shortcuts are removed
+from the live XFCE configuration. Its default `Ctrl+Alt+L` lock and `Alt+F2`
+appfinder shortcuts remain unchanged.
 
 Workspace output policy:
 
 - Workspaces `1` to `6` are assigned to the primary output.
-- Workspaces `7` to `10` are assigned to `HDMI-A-0`, `DP-1`, `DP-2`, or a
-  non-primary output.
+- Workspaces `7` to `10` are assigned to `nonprimary`. The keyword, not an
+  output name: names like `DP-1` go stale when the hardware changes, and the
+  keyword is portable across machines.
 - If no external output is active, workspaces `7` to `10` remain available on
   the laptop output and accept moved windows normally.
 
 ### Kill Workspace Mode
 
-Enter the mode with `Super+N`.
+Enter the mode with `Super+X`.
 
-If Polybar is hidden, `show-polybar-or-kill-workspace.sh` shows it first, then
-enters the mode.
+If Polybar is hidden, `kill-workspace-mode.sh open` shows it first, then enters
+the mode.
+
+The exits split by intent: aborting leaves no trace, acting leaves the result on
+screen. `Return` and `Escape` restore the bar's prior visibility, so one this
+mode showed hides again and one that was already up stays up. A number key
+leaves the bar as it is, because the point of the kill is to watch the
+workspace come up empty.
+
+`Shift+K` restores rather than leaving the bar up: a global kill leaves nothing
+to navigate to, so there is no result for the bar to show. It restores rather
+than hiding outright, which is the same thing whenever the bar was hidden before
+`Super+X` and avoids destroying a bar that was up on purpose when it was not.
 
 Inside kill-workspace mode:
 
 | Binding | Action |
 | --- | --- |
-| `1` ... `0` | Kill all windows on workspace `1` ... `10`. |
-| `Shift+K` | Kill all windows everywhere, leave the mode, then hide Polybar. |
-| `Return` | Return to default mode. |
-| `Escape` | Return to default mode. |
+| `1` ... `0` | Kill all windows on workspace `1` ... `10`, leaving Polybar as it is. |
+| `Shift+K` | Kill all windows everywhere, leave the mode, restore Polybar's prior visibility. |
+| `Return` | Restore Polybar's prior visibility, return to default mode. |
+| `Escape` | Restore Polybar's prior visibility, return to default mode. |
+
+Most exits never clear the marker `open` writes, and none of them need to: the
+next `open` rewrites it from the live bar state, and nothing but this mode's own
+`Return` and `Escape` ever reads it.
 
 ### Media, Brightness, and Screenshots
 
@@ -195,21 +213,22 @@ Inside kill-workspace mode:
 | Binding | Action |
 | --- | --- |
 | `Super+Shift+B` | Toggle Polybar visibility and resnap snapped windows. |
-| `Super+I` | Enter bar mode: a keyboard cursor over Polybar's clickable items. |
+| `Super+B` | Enter bar mode: a keyboard cursor over Polybar's clickable items. |
 | `Super+Shift+T` | Toggle title bars and resnap snapped windows. |
 | `Super+M` | Toggle the `_desktop` workspace. |
 
 ### Bar Mode
 
 Polybar's window is an X11 dock and never accepts keyboard focus, so its click
-handlers are unreachable by keyboard. `Super+I` enters bar mode instead: the
+handlers are unreachable by keyboard. `Super+B` enters bar mode instead: the
 cursor lives in an i3 binding mode driven by `bar-nav.sh`, and moves over
-Polybar's real modules. If Polybar is hidden, `Super+I` shows it first.
+Polybar's real modules. If Polybar is hidden, `Super+B` shows it first.
 
 The mode itself is named a single space, so Polybar's i3 module, which renders
-the active mode's name, prints nothing for it. The other modes keep their worded
-names. The block on the selected module is the only indicator bar mode needs: it
-says both that the mode is on and where the cursor is.
+the active mode's name, prints nothing for it. Other modes keep visible labels;
+window mode uses its compact key legend. The block on the selected module is the
+only indicator bar mode needs: it says both that the mode is on and where the
+cursor is.
 
 The selected module wears the same block as the focused workspace. A module's
 colors are fixed once the bar starts, so the cursor does not restyle anything:
@@ -240,16 +259,16 @@ on screen, because the keyboard now belongs to that window; an in-place toggle
 keeps the cursor up so the value can be nudged again.
 
 Leaving restores the bar's previous visibility, so reaching a module by keyboard
-is never a way to strand a hidden bar on screen. `Super+I` with the bar up
-leaves it up; `Super+I` with the bar hidden shows it for the duration and hides
+is never a way to strand a hidden bar on screen. `Super+B` with the bar up
+leaves it up; `Super+B` with the bar hidden shows it for the duration and hides
 it again on the way out, whether that exit was `Escape` or a stop that opened a
 window. A bar that was up only for a transient workspace peek counts as hidden:
 it was already on its way out. Hiding the bar by any other means while the mode
 is open wins — leaving re-checks rather than toggling blindly.
 
-`J`/`K` on the volume module step by 1 point, not the 5 the scroll wheel and the
-`XF86Audio` keys use. Reaching this mode means parking the cursor on the module,
-which is the fine-adjustment gesture; the media keys stay coarse.
+`J`/`K` and the mouse wheel step volume by 1 point. Polybar's pulseaudio
+`interval = 1` is that scroll step, not a polling interval. The `XF86Audio`
+keys remain the coarse 5-point adjustment.
 
 The stops are the bar's own modules, left to right, and mirror their real click
 and scroll handlers:
@@ -261,11 +280,11 @@ and scroll handlers:
 | `battery` | Open `xfce4-power-manager-settings`. | — | Brightness down/up 5%. |
 | `wifi` | Open the graphical NetworkManager menu. | `nm-applet`'s context menu. | — |
 | `bluetooth` | Open the graphical Blueman menu. | `blueman-tray`'s context menu. | — |
+| `powermenu` | Expand the bar's power menu; pick from it with the mouse. | — | — |
 
 `wifi` and `bluetooth` are tray icons. Their block is painted by
 `bar-nav-marker.py` rather than by Polybar, and `Return` on one is a real mouse
 click on the icon; see [NetworkManager Tray](#networkmanager-tray).
-| `powermenu` | Expand the bar's power menu; pick from it with the mouse. | — | — |
 
 Workspaces are deliberately absent: `Super+1`–`Super+0` and `Super+Alt+H/L`
 already reach them.
@@ -279,7 +298,11 @@ The block goes as the menu opens: it stands for a cursor that cannot move within
 the entries, and it would paint over them as one unbroken wash. The mode stays
 up, unlike a stop that opens a window, so `Escape` still ends it the usual way:
 the menu collapses and the bar returns to whatever visibility it had before
-`Super+I`.
+`Super+B`.
+
+Shutdown and restart both pass through `confirm-poweroff.sh`. Only an explicit
+confirmation acts; a timeout or cancellation leaves the session alone. The
+lock entry uses `xflock4`, matching the idle lock started through `xss-lock`.
 
 ## XFWM-Style Snap System
 
@@ -488,16 +511,29 @@ scoped to a display.
 
 ## Tests
 
-`tests/` holds standalone checks; there is no runner and nothing runs
-automatically.
+`tests/run-fast.sh` runs every quick i3 and Polybar check. It works both from
+the applied `~/.config` tree and from chezmoi source state: in source state it
+maps `executable_` filenames into a temporary applied-shaped tree, so tests
+always exercise the files being edited. It pins Python checks to
+`/usr/bin/python3`, matching the runtime daemons, and also runs Bash syntax,
+ShellCheck (when installed), and `i3 -C`.
 
 | Test | Covers |
 | --- | --- |
+| `run-fast.sh` | All fast checks, source-state mapping, syntax, lint, and i3 config parsing. |
 | `test-overflow-watcher.py` | Pure functions of `overflow-watcher.py`; runs in milliseconds. |
 | `test-overflow-live.py` | Drives a throwaway Xephyr i3 session through every overflow rule on one and two screens. Needs `Xephyr`, `xterm`, `autotiling`; takes minutes. |
+| `test-config-consistency.py` | Bar-nav arrays/twins, current and safe power commands, shared restore helpers, and system-Python entrypoints. |
+| `test-provisioning-contract.py` | System-Python runtime imports remain paired with `python3-i3ipc`, `python3-xlib`, and `python3-lz4` in the desktop apt profile. Skips from an applied tree when the chezmoi package manifest is unavailable. |
+| `test-bar-nav.sh` | Bar-mode navigation, selected-module actions, marker state, and prior-visibility restoration. |
 | `test-polybar-peek.sh` | `polybar-peek.sh` show/hide, ownership, and debounce behavior. |
+| `test-i3-resurrect-polybar.sh` | Successful, hidden-bar, and early-failure restore paths preserve the bar's prior visibility and raise it when restored. |
+| `test-randr-hotplug.sh` | Output-event coalescing, connected-set changes, mid-run hotplugs, and connection-status toast selection. |
 | `test-super-polybar-listener.py` | Standalone-Super tap/hold gesture detection. |
 | `test-top-edge-peek.py` | Top-edge pointer gesture: hysteresis and per-monitor tops. |
+| `test-window-mode.sh` | Window mode's show-on-entry and restore-prior-Polybar-state contract. |
+| `../../polybar/tests/test-launch.sh` | Multi-monitor launch, tray ordering, lock-fd closure, hung-bar kill escalation, log defaults and filename safety, and rotation. |
+| `../../polybar/tests/test-confirm-poweroff.sh` | Explicit confirmation and safe cancellation/timeout behavior for every prompt backend, including the no-backend path. |
 
 The live test never touches the running session:
 
@@ -543,8 +579,31 @@ active output. The internal laptop panel (`eDP*`/`LVDS*`) gets the `tray` bar; o
 a machine without one, the primary output gets it instead. Other outputs use the
 same layout without the tray because X11 permits only one tray owner.
 
+Per-output logs live under
+`${XDG_STATE_HOME:-$HOME/.local/state}/polybar/`. A log larger than 200 KB is
+trimmed to its newest 500 lines before the next launch. `POLYBAR_LOG_DIR`,
+`POLYBAR_LOG_MAX_BYTES`, and `POLYBAR_LOG_KEEP_LINES` override those defaults.
+
 `display-setup.sh` starts it after arranging the outputs on every i3
-reload/restart and after a manual `Super+Shift+P` layout refresh.
+reload/restart, after a manual `Super+Shift+P` layout refresh, and after an
+automatic hotplug handled by `randr-hotplug.sh`. Polybar's own
+`screenchange-reload` is disabled: that reload recreates a visible bar, breaking
+the hidden-by-default contract, and cannot create a bar for a newly active
+output. `launch.sh` remains the sole owner of the per-output bar lifecycle.
+
+Polybar does not set `wm-restack`: that option only works with
+`override-redirect = true`, so it was ignored here. `_polybar-common.sh` raises
+the bar windows explicitly when a visibility action requires it.
+
+`window-mode.sh`, called by `Super+R`'s mode bindings, shows the bar on entry
+and restores the previous state on `Return`/`Escape`. It reuses the same
+show/restore contract as `bar-nav.sh` but keeps its own marker
+(`i3-window-mode.restore-hidden`), so an interleaved bar-mode session cannot
+consume its state.
+
+The i3-resurrect restore path sources `_polybar-common.sh` too. It hides a bar
+that was visible before restoration, uses the same fullscreen orphan-dock
+repair as normal toggles, and restores and raises that bar on exit.
 
 `toggle-polybar-resnap.sh`, bound to `Super+Shift+B`, handles bar visibility:
 
@@ -620,7 +679,7 @@ order or `L` walks the cursor leftward; see below.
 
 `polybar_show_persistent` in `_polybar-common.sh` makes the bar visible and
 keeps it that way for a binding mode, promoting a transient peek to persistent
-visibility. `show-polybar-or-kill-workspace.sh` and `bar-nav.sh` both use it
+visibility. `kill-workspace-mode.sh` and `bar-nav.sh` both use it
 before entering their modes.
 
 `polybar-peek.sh` provides transient workspace feedback for the Super-number
@@ -673,14 +732,18 @@ visible, and if the process dies the helper's worker hides the bar by itself.
 - Entering bar mode during an edge peek promotes the bar for the duration of
   the mode, and leaving the mode hides it again — a bar up only for a peek
   counts as hidden. See [Bar Mode](#bar-mode).
-- A monitor holding a fullscreen window does not peek. i3 unmaps that monitor's
-  dock for as long as the fullscreen lasts and will not map it back, so the
-  broadcast `show` could only raise the bar on the *other* screen, nowhere near
-  the pointer that asked for it — the two heads visibly disagreeing about
-  whether the bar is up. Reaching the top edge of a full-screen video therefore
-  does nothing, while the same gesture on the other head still works. The
-  gesture asks i3 once when the pointer arrives at the edge, not once per poll,
-  and re-arms on the same threshold a hold releases at.
+- A monitor *displaying* a fullscreen window does not peek. i3 unmaps that
+  monitor's dock for as long as the fullscreen lasts and will not map it back,
+  so the broadcast `show` could only raise the bar on the *other* screen,
+  nowhere near the pointer that asked for it — the two heads visibly
+  disagreeing about whether the bar is up. Reaching the top edge of a
+  full-screen video therefore does nothing, while the same gesture on the other
+  head still works. Only the workspace each output currently shows is
+  considered: i3 keeps a switched-away workspace in the tree with its rect and
+  its fullscreen window intact, and counting those wedged the peek off a head
+  for whole sessions, since restarting i3 restores the same layout rather than
+  clearing it. The gesture asks i3 once when the pointer arrives at the edge,
+  not once per poll, and re-arms on the same threshold a hold releases at.
 - It needs `python3-xlib`, which is in `.chezmoidata/packages.toml` for the
   `linuxmint-i3-x11` profile. Without it the watcher dies on import and the
   edge simply does nothing.
@@ -706,6 +769,26 @@ Behavior:
   - Laptop output is primary at `0x0`.
 - Runs `wallpaper.sh` afterward.
 - Relaunches one synchronized Polybar instance per active output afterward.
+
+`randr-hotplug.sh` applies that setup automatically:
+
+- Subscribes to i3's `output` events and coalesces each event burst for
+  `I3_RANDR_HOTPLUG_QUIET`, default `0.7` seconds.
+- Compares the sorted set of XRandR outputs marked `connected`, rather than
+  reacting to every event. Mode and position changes made by
+  `display-setup.sh` therefore do not trigger a loop.
+- Runs `display-setup.sh` when that set changes, then checks it again so a
+  second monitor change during setup is not lost.
+- Uses `$XDG_RUNTIME_DIR/i3-randr-hotplug.lock` to keep one watcher active.
+- Passes `Display connected`, `Display disconnected`, or `Display changed`
+  through `I3_DISPLAY_TOAST`. `display-setup.sh` shows it only after the layout,
+  wallpaper, and bars are ready, using the same `reload-toast` Rofi theme as
+  the `Welcome` and `i3 reloaded` messages. A same-count connector replacement
+  uses `Display changed` because its direction is ambiguous after debouncing.
+
+Starting or restarting the watcher records the current output set without
+announcing it. Session startup and `Super+Shift+I` continue to use `Welcome` or
+`i3 reloaded`; `Super+Shift+P` remains a silent manual refresh.
 
 `wallpaper.sh` uses `feh` if available:
 
@@ -747,9 +830,12 @@ desktop view.
 
 ## Floating Rules
 
-The config makes utility and dialog-style windows floating and centered.
+The config makes utility and dialog-style windows floating and centered. The
+settings-tool names are one case-insensitive, anchored alternation applied to
+both the class and instance fields; only entries written with `.*` deliberately
+use substring matching. Title-only fallbacks use a separate alternation.
 
-Explicit classes:
+Settings utility names:
 
 - `Xfce4-power-manager-settings`
 - `Nm-connection-editor`
@@ -831,7 +917,7 @@ Behavior:
 - Subscribes to i3 window events and reacts to new, floating, and fullscreen
   changes involving KakaoTalk.
 - Ignores minimized/hidden KakaoTalk windows.
-- Leaves fullscreen KakaoTalk windows alone, so `Super+X` toggles fullscreen
+- Leaves fullscreen KakaoTalk windows alone, so `Super+F` toggles fullscreen
   normally without fighting the watcher.
 - If a visible, non-fullscreen KakaoTalk window becomes tiled, enables floating,
   resizes it to `420x760`, and centers it.
@@ -1015,18 +1101,20 @@ One-shot startup:
 - `blueman-applet` and, two seconds later, `blueman-tray` if not already running.
 - `unclutter-xfixes --timeout 3` if not already running.
 - `dropbox start -i`; the Dropbox launcher no-ops if the daemon is already running.
-- `xss-lock -- xflock4`.
 
 Always on reload/restart:
 
-- Remove XFCE's conflicting custom `Ctrl+Super+L` shortcut if it exists,
-  refresh `xfsettingsd`, then reload once so i3 can acquire the released grab.
 - Stop and restart `focus-tracker.sh`.
 - Stop and restart `snap-watcher.sh`.
 - Stop and restart `kakaotalk-float-watcher.sh`.
+- Stop and restart `randr-hotplug.sh`; it records the current connected-output
+  set and then drives later hotplugs through `display-setup.sh`.
 - Stop and restart `super-polybar-listener.py`.
 - Stop and restart `~/.local/bin/autotiling --limit 6`.
 - Stop and restart `overflow-watcher.py`.
+- Start `top-edge-peek.py`; its runtime lock rejects duplicate instances.
+- Start `xss-lock -- xflock4` if it is not already running, so an i3 restart
+  revives a dead idle-lock daemon.
 - Start the polkit authentication agent
   (`/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1`) if no
   `polkit-gnome` process is already running.
@@ -1096,7 +1184,8 @@ Monitor/bar/snap helpers:
 - `xwininfo`
 - `xprop`
 - `feh`
-- Python 3 with the `i3ipc` module, for `overflow-watcher.py`
+- System Python (`/usr/bin/python3`) with the `i3ipc` and `Xlib` modules, for
+  the event and X11 helpers
 
 Session restore:
 
@@ -1105,8 +1194,8 @@ Session restore:
 - `busctl`
 - `zathura`
 - `sioyek`
-- Python 3
-- Python module `lz4.block` for decoding browser session files
+- System Python (`/usr/bin/python3`)
+- Python module `lz4.block` (`python3-lz4`) for decoding browser session files
 - `xclip` for live browser URL capture
 
 Local helper programs expected outside this directory:
@@ -1136,9 +1225,12 @@ Inside this directory:
 - `overflow-watcher.py`: moves too-small windows to another workspace.
 - `workspace-action.sh`: numbered switch/move and relative workspace wrapper
   that requests a peek.
-- `show-polybar-or-kill-workspace.sh`: shows Polybar before kill mode.
-- `kill-all-windows-and-hide-polybar.sh`: implements kill mode's `Shift+K`
-  sequence, then hides Polybar.
+- `kill-workspace-mode.sh`: shows Polybar on entering kill-workspace mode and
+  restores the previous visibility when the mode is aborted.
+- `kill-all-windows.sh`: implements kill mode's `Shift+K` sequence, then
+  restores Polybar's prior visibility.
+- `window-mode.sh`: shows Polybar on entering window mode and restores the
+  previous visibility on exit.
 - `bar-nav.sh`: keyboard cursor over Polybar's own modules.
 - `bar-nav-marker.py`: paints that cursor's block over a tray icon, which
   Polybar cannot style.
@@ -1147,6 +1239,8 @@ Inside this directory:
 - `focus-tracker.sh`: records current and previous focus.
 - `focus-prev.sh`: focuses the previous window.
 - `display-setup.sh`: applies monitor layout and wallpaper.
+- `randr-hotplug.sh`: watches the connected-output set, runs display setup, and
+  requests the matching Rofi connection-status toast.
 - `wallpaper.sh`: applies laptop/external wallpapers through `feh`.
 - `move-to-workspace.sh`: validated move-to-workspace command.
 - `show-desktop.sh`: toggles `_desktop` workspace.
@@ -1160,7 +1254,8 @@ Inside this directory:
   program lists.
 - `resurrect-meta`, `resurrect-meta-b`, `resurrect-meta-c`: saved workspace,
   focus, browser URL, and Zathura page metadata.
-- `tests/`: standalone checks for the overflow watcher and the Polybar peek.
+- `tests/`: standalone checks for the watchers, hotplug trigger, and Polybar
+  interaction helpers.
 
 Runtime files outside this directory:
 
@@ -1169,13 +1264,26 @@ Runtime files outside this directory:
 - `$XDG_RUNTIME_DIR/i3-focus-tracker.lock`
 - `$XDG_RUNTIME_DIR/i3-snap-watcher.lock`
 - `$XDG_RUNTIME_DIR/i3-kakaotalk-float-watcher.lock`
+- `$XDG_RUNTIME_DIR/i3-randr-hotplug.lock`
 - `$XDG_RUNTIME_DIR/i3-polybar-toggle.lock`
 - `$XDG_RUNTIME_DIR/i3-polybar-peek.owner`
 - `$XDG_RUNTIME_DIR/i3-polybar-peek.trigger`
 - `$XDG_RUNTIME_DIR/i3-polybar-peek.hold`
 - `$XDG_RUNTIME_DIR/i3-super-polybar-listener.lock`
+- `$XDG_RUNTIME_DIR/i3-polybar-nav.idx`: bar-mode cursor position.
+- `$XDG_RUNTIME_DIR/i3-polybar-nav.restore-hidden`: prior bar visibility for
+  bar mode.
+- `$XDG_RUNTIME_DIR/i3-polybar-nav.marker` and `i3-polybar-nav.marker.lock`:
+  the tray block `bar-nav-marker.py` paints, and its single-painter lock.
+- `$XDG_RUNTIME_DIR/i3-window-mode.restore-hidden`: prior bar visibility for
+  window mode.
+- `$XDG_RUNTIME_DIR/i3-polybar-peek-worker.lock`
+- `$XDG_RUNTIME_DIR/i3-top-edge-peek.lock`
+- `$XDG_RUNTIME_DIR/i3-reload-toast`: session stamp that distinguishes the
+  first `Welcome` toast from later `i3 reloaded` toasts.
 - `$XDG_RUNTIME_DIR/tile-snap-<con_id>.lock`
 - `${XDG_STATE_HOME:-$HOME/.local/state}/i3/snap.log`
+- `${XDG_STATE_HOME:-$HOME/.local/state}/polybar/polybar-<output>.log`
 - `/tmp/disable-trackpoint-middle-click.lock`
 
 ## Maintenance Notes
@@ -1203,8 +1311,11 @@ Runtime files outside this directory:
 - `overflow-watcher.py` and its tests need the `i3ipc` Python module, and
   `top-edge-peek.py` needs `Xlib`. Both are installed by
   `.chezmoidata/packages.toml` as `python3-i3ipc` and `python3-xlib` in the
-  `linuxmint-i3-x11` group. `~/.local/bin/autotiling` is not, and is expected to
-  be present already.
+  `linuxmint-i3-x11` group. Browser state decoding is installed there as
+  `python3-lz4`. The helpers deliberately use `/usr/bin/python3` so an activated
+  Conda or other user environment cannot shadow those distro modules.
+  `~/.local/bin/autotiling` is not provisioned and is expected to be present
+  already.
 
 ## Quick Commands
 
@@ -1232,11 +1343,13 @@ Inspect the snap/debug log:
 tail -n 100 "${XDG_STATE_HOME:-$HOME/.local/state}/i3/snap.log"
 ```
 
-Run the fast overflow-watcher tests:
+Run every fast i3/Polybar check:
 
 ```sh
-~/.config/i3/tests/test-overflow-watcher.py
+~/.config/i3/tests/run-fast.sh
 ```
+
+From chezmoi source state, use `bash dot_config/i3/tests/executable_run-fast.sh`.
 
 Watch the overflow watcher decide, without restarting the running one:
 

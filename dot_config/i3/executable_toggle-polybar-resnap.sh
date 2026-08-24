@@ -4,7 +4,7 @@
 #
 # An explicit visibility request owns the final state, so cancelling transient
 # ownership stops a peek's delayed worker from applying a second, stale hide.
-# Polybar's wm-restack is ignored under override-redirect, so raising here is
+# Polybar cannot restack itself without override-redirect, so raising here is
 # what keeps the binding deterministic when i3's workspace stack covers the bar.
 
 set -u

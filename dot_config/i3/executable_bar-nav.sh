@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keyboard cursor over Polybar's own modules: Super+I, then h/l to move, j/k to
+# Keyboard cursor over Polybar's own modules: Super+B, then h/l to move, j/k to
 # adjust, Return to click, Shift+Return to right-click.
 #
 # Polybar never takes keyboard focus, so the cursor lives in the calling i3
@@ -14,7 +14,8 @@
 #
 # The arrays below are parallel, indexed by stop, left to right. Empty action =
 # no-op. `*_opens = 1` takes the keyboard, so the mode exits first. Volume steps
-# by 1, not the wheel's 5: parking the cursor is the fine adjustment.
+# by 1, matching the wheel -- config.ini's `[module/pulseaudio] interval = 1` is
+# polybar's scroll step, not a poll rate. The XF86Audio keys stay at 5.
 #
 # Easy to break:
 #   - reset_pairs skips $1. Hide and show one module twice quickly and polybar

@@ -7,6 +7,9 @@
 
 set -euo pipefail
 
+DIR="$(dirname "$(readlink -f "$0")")"
+. "$DIR/_polybar-common.sh"
+
 STATE_DIR="${I3_RESURRECT_STATE_DIR:-$HOME/.config/i3/resurrect}"
 META_DIR="${I3_RESURRECT_META_DIR:-$HOME/.config/i3/resurrect-meta}"
 LAYOUT_DELAY="${I3_RESURRECT_LAYOUT_DELAY:-0.25}"
@@ -84,67 +87,20 @@ workspace_wants_external() {
     return 1
 }
 
-polybar_windows() {
-    command -v xdotool >/dev/null 2>&1 || return 0
-    xdotool search --class '^[Pp]olybar$' 2>/dev/null || true
-}
-
-window_viewable() {
-    command -v xwininfo >/dev/null 2>&1 || return 1
-    xwininfo -id "$1" 2>/dev/null | grep -q 'IsViewable'
-}
-
-polybar_visible() {
-    local win
-
-    for win in $(polybar_windows); do
-        window_viewable "$win" && return 0
-    done
-    return 1
-}
-
-wait_for_polybar_state() {
-    local wanted="$1"
-    local attempts=80
-
-    while [ "$attempts" -gt 0 ]; do
-        if [ "$wanted" = 1 ]; then
-            polybar_visible && return 0
-        else
-            polybar_visible || return 0
-        fi
-        sleep 0.025
-        attempts=$((attempts - 1))
-    done
-
-    return 0
-}
-
-set_polybar_visibility() {
-    local wanted="$1"
-    local cmd
-
-    command -v polybar-msg >/dev/null 2>&1 || return 0
-    if [ "$wanted" = 1 ]; then
-        cmd=show
-    else
-        cmd=hide
-    fi
-
-    polybar-msg cmd "$cmd" >/dev/null 2>&1 || return 0
-    wait_for_polybar_state "$wanted"
-}
-
 hide_polybar_for_restore() {
     if polybar_visible; then
         POLYBAR_WAS_VISIBLE=1
-        set_polybar_visibility 0 || true
+        polybar_set_state hide 0 || true
+        polybar_wait_for_state 0 2000 >/dev/null || true
     fi
 }
 
 restore_polybar_after_restore() {
     if [ "$POLYBAR_WAS_VISIBLE" = 1 ]; then
-        set_polybar_visibility 1 || true
+        polybar_set_state show 1 || true
+        if polybar_wait_for_state 1 2000 >/dev/null; then
+            polybar_raise
+        fi
     fi
     return 0
 }

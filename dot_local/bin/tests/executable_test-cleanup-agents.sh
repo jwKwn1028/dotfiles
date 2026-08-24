@@ -240,6 +240,24 @@ test_claude_delete_removes_chat_state() {
   pass 'Claude delete decisions remove the transcript and orphaned history'
 }
 
+test_claude_hooks_survive_apply() {
+  local home output
+  home="$(new_home claude-hooks)"
+  output="$TEST_TMP/claude-hooks/output"
+  mkdir -p -- "$home/.claude/hooks/nested"
+  printf 'hook\n' >"$home/.claude/hooks/session-start.sh"
+  printf 'hook\n' >"$home/.claude/hooks/nested/deep.sh"
+  printf 'remove me\n' >"$home/.claude/cache.tmp"
+
+  HOME="$home" bash "$CLEANUP" --apply >"$output" 2>&1
+
+  assert_exists "$home/.claude/hooks/session-start.sh"
+  assert_exists "$home/.claude/hooks/nested/deep.sh"
+  assert_absent "$home/.claude/cache.tmp"
+  assert_contains "$output" "Keep: $home/.claude/hooks"
+  pass 'Claude hooks directory survives --apply'
+}
+
 test_absent_codex_databases_are_a_noop() {
   local home output
   home="$(new_home absent-databases)"
@@ -261,6 +279,7 @@ test_codex_keep_prunes_history
 test_codex_delete_removes_chat_state
 test_claude_keep_prunes_history
 test_claude_delete_removes_chat_state
+test_claude_hooks_survive_apply
 test_absent_codex_databases_are_a_noop
 
 printf 'PASS: cleanup-agents safety fixtures (%d cases)\n' "$pass_count"

@@ -33,6 +33,7 @@ This preserves:
   ~/.claude/CLAUDE.md
   ~/.claude/agents/
   ~/.claude/commands/
+  ~/.claude/hooks/
   ~/.claude/skills/
   ~/.claude/plugins/
   ~/.claude/backups/
@@ -98,6 +99,9 @@ is_protected() {
       return 0
       ;;
     "$CLAUDE_DIR/commands"|"$CLAUDE_DIR/commands/"*)
+      return 0
+      ;;
+    "$CLAUDE_DIR/hooks"|"$CLAUDE_DIR/hooks/"*)
       return 0
       ;;
     "$CLAUDE_DIR/skills"|"$CLAUDE_DIR/skills/"*)
