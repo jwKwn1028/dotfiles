@@ -4,8 +4,9 @@
 {{ $nativeProfilesIni := joinPath .chezmoi.homeDir ".mozilla/firefox/profiles.ini" -}}
 {{ $snapProfilesIni := joinPath .chezmoi.homeDir "snap/firefox/common/.mozilla/firefox/profiles.ini" -}}
 {{ $flatpakProfilesIni := joinPath .chezmoi.homeDir ".var/app/org.mozilla.firefox/.mozilla/firefox/profiles.ini" -}}
-# Installs portable preferences into Firefox's installation-selected profile.
-# Browsing, account, extension, and generated profile state remain local.
+# Installs portable preferences into Firefox's installation-selected profile and
+# seeds handlers.json on a fresh one. Browsing, account, extension, and
+# generated profile state remain local.
 # Native profile state: {{ if lstat $nativeProfilesIni }}{{ include $nativeProfilesIni | sha256sum }}{{ else }}missing{{ end }}
 # Snap profile state: {{ if lstat $snapProfilesIni }}{{ include $snapProfilesIni | sha256sum }}{{ else }}missing{{ end }}
 # Flatpak profile state: {{ if lstat $flatpakProfilesIni }}{{ include $flatpakProfilesIni | sha256sum }}{{ else }}missing{{ end }}
@@ -121,6 +122,43 @@ done < <(
 if [[ -z "$profile_dir" ]]; then
     echo "No usable Firefox profile found; skipping profile configuration."
     exit 0
+fi
+
+# Firefox rewrites handlers.json whenever a handler changes in the UI, so seed a
+# fresh profile only; enforcing it would revert handlers added later.
+readonly handlers_json="${profile_dir}/handlers.json"
+if [[ "${1:-}" != "--check" ]] && [[ ! -e "$handlers_json" ]]; then
+    temp_handlers="$(mktemp "${profile_dir}/.handlers.json.XXXXXX")"
+    cat >"$temp_handlers" <<'HANDLERS_EOF'
+{
+    "defaultHandlersVersion": {},
+    "mimeTypes": {
+        "application/pdf": { "action": 4, "extensions": ["pdf"] },
+        "image/webp": { "action": 3, "extensions": ["webp"] },
+        "image/avif": { "action": 3, "extensions": ["avif"] }
+    },
+    "schemes": {
+        "mailto": {
+            "stubEntry": true,
+            "handlers": [
+                null,
+                {
+                    "name": "Gmail",
+                    "uriTemplate": "https://mail.google.com/mail/?extsrc=mailto&url=%s"
+                }
+            ]
+        },
+        "spotify": { "action": 4 },
+        "zoommtg": { "action": 4 },
+        "discord": { "action": 4 },
+        "appflowy-flutter": { "action": 4 }
+    },
+    "isDownloadsImprovementsAlreadyMigrated": false
+}
+HANDLERS_EOF
+    chmod 0644 "$temp_handlers"
+    mv -f -- "$temp_handlers" "$handlers_json"
+    echo "Seeded Firefox handlers.json."
 fi
 
 readonly user_js="${profile_dir}/user.js"

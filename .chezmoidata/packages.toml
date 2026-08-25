@@ -26,6 +26,8 @@ common = [
     "unzip", "zip", "7zip", "p7zip-full", "bzip2", "gzip",
     "nodejs", "npm", "pipx",
     "ranger",
+    # Host half of the browserpass integration below; must not drift from it.
+    "pass",
     # The TUI only -- `task` itself is deliberately absent: Ubuntu ships 2.6.2
     # (flat-file store) but dot_taskrc targets 3.x (sqlite), so the apt binary
     # cannot read this data. Install task by hand from upstream until 24.04
@@ -52,6 +54,10 @@ i3_x11 = [
     # without this the themed Thunar renders with missing icons.
     "papirus-icon-theme",
     "pavucontrol", "blueman", "brightnessctl", "playerctl", "thunderbird",
+    # Browserpass host component for Zen and Helium; the after_60/after_70
+    # scripts wire the native messaging manifests. Not i3-specific, but this is
+    # the only desktop-gated apt list.
+    "webext-browserpass",
     "fcitx5", "fcitx5-hangul", "fcitx5-frontend-all", "fcitx5-config-qt",
     # nm-applet supplies the graphical wifi menu embedded by Polybar's tray.
     "network-manager-gnome",

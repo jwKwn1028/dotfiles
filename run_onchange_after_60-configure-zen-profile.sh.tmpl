@@ -4,8 +4,9 @@
 {{ $profilesIni := joinPath .chezmoi.homeDir ".var/app/app.zen_browser.zen/.zen/profiles.ini" -}}
 {{ $chromeSrc := joinPath .chezmoi.sourceDir "dot_local/share/zen-chrome" -}}
 # Installs the sanitized Zen user.js and the chrome/ customizations into Zen's
-# installation-selected profile. The generated profile itself remains local and
-# ignored by chezmoi.
+# installation-selected profile, wires browserpass' native messaging host, and
+# seeds handlers.json on a fresh profile. The generated profile itself remains
+# local and ignored by chezmoi.
 # Profile selection state: {{ if lstat $profilesIni }}{{ include $profilesIni | sha256sum }}{{ else }}missing{{ end }}
 # chrome/ asset state, so this re-runs when the customizations change:
 {{ range $asset := list "userChrome.css" "userContent.css" "zen-newtab-wallpaper.png" -}}
@@ -20,6 +21,41 @@ exit 0
 readonly zen_root={{ joinPath .chezmoi.homeDir ".var/app/app.zen_browser.zen/.zen" | quote }}
 readonly profiles_ini={{ $profilesIni | quote }}
 readonly chrome_src={{ joinPath .chezmoi.homeDir ".local/share/zen-chrome" | quote }}
+readonly nmh_dir={{ joinPath .chezmoi.homeDir ".var/app/app.zen_browser.zen/.mozilla/native-messaging-hosts" | quote }}
+
+# Writes stdin to $1 with mode $2, only when the content differs.
+install_file() {
+    local dest="$1" mode="$2" tmp
+    mkdir -p -- "${dest%/*}"
+    tmp="$(mktemp "${dest}.XXXXXX")"
+    cat >"$tmp"
+    chmod "$mode" -- "$tmp"
+    if [[ -f "$dest" ]] && cmp -s "$tmp" "$dest"; then
+        rm -f -- "$tmp"
+        return 0
+    fi
+    mv -f -- "$tmp" "$dest"
+    echo "Installed ${dest##*/}."
+}
+
+# Browserpass reaches `pass` through flatpak-spawn, via the shim and manifest
+# below plus the bus grant in dot_local/share/flatpak/overrides/. Manifest paths
+# are sandbox-internal -- flatpak maps ~/.var/app/app.zen_browser.zen over $HOME
+# -- so this is built from .chezmoi.homeDir, not $zen_root.
+install_file "${zen_root}/browserpass-native-host" 0755 <<'BROWSERPASS_SHIM_EOF'
+#!/usr/bin/env sh
+exec /usr/bin/flatpak-spawn --host /usr/lib/browserpass/browserpass-native "$@"
+BROWSERPASS_SHIM_EOF
+
+install_file "${nmh_dir}/com.github.browserpass.native.json" 0644 <<'BROWSERPASS_MANIFEST_EOF'
+{
+    "name": "com.github.browserpass.native",
+    "description": "Browserpass native component for the Firefox extension",
+    "path": {{ printf "%s/.zen/browserpass-native-host" .chezmoi.homeDir | quote }},
+    "type": "stdio",
+    "allowed_extensions": ["browserpass@maximbaz.com"]
+}
+BROWSERPASS_MANIFEST_EOF
 
 if [[ ! -f "$profiles_ini" ]]; then
     echo "Zen has not created a profile yet; skipping profile configuration."
@@ -105,9 +141,8 @@ if [[ -z "$profile_dir" ]]; then
     exit 0
 fi
 
-# Copied, not symlinked: Zen is a flatpak granted only `persistent=.zen`, so a
-# link into ~/.local/share dangles inside the sandbox. zen-themes.css is Zen
-# Mods' own file and stays untouched.
+# Copied, not symlinked: the sandbox sees only its own ~/.var/app tree, so a
+# link into ~/.local/share dangles. zen-themes.css is Zen Mods' and stays.
 if [[ -d "$chrome_src" ]]; then
     mkdir -p -- "${profile_dir}/chrome"
     for asset in userChrome.css userContent.css zen-newtab-wallpaper.png; do
@@ -119,6 +154,38 @@ if [[ -d "$chrome_src" ]]; then
             echo "Updated chrome/${asset}."
         fi
     done
+fi
+
+# Zen rewrites handlers.json whenever a handler changes in the UI, so seed a
+# fresh profile only; enforcing it would revert handlers added later.
+readonly handlers_json="${profile_dir}/handlers.json"
+if [[ -e "$handlers_json" ]]; then
+    echo "handlers.json exists; leaving Zen's copy alone."
+else
+    install_file "$handlers_json" 0644 <<'HANDLERS_EOF'
+{
+    "defaultHandlersVersion": {},
+    "mimeTypes": {
+        "application/pdf": { "action": 0, "extensions": ["pdf"] },
+        "image/webp": { "action": 3, "extensions": ["webp"] },
+        "image/avif": { "action": 3, "extensions": ["avif"] },
+        "image/jxl": { "action": 0, "extensions": ["jxl"] }
+    },
+    "schemes": {
+        "mailto": {
+            "stubEntry": true,
+            "handlers": [
+                null,
+                {
+                    "name": "Gmail",
+                    "uriTemplate": "https://mail.google.com/mail/?extsrc=mailto&url=%s"
+                }
+            ]
+        }
+    },
+    "isDownloadsImprovementsAlreadyMigrated": false
+}
+HANDLERS_EOF
 fi
 
 readonly user_js="${profile_dir}/user.js"

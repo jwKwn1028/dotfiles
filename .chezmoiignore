@@ -112,10 +112,18 @@ snap/firefox/common/.mozilla/firefox/
 {{ end -}}
 
 # ─── Desktop-class payloads ───────────────────────────────────────────────
-# Zen's chrome/ source, a 3.3M wallpaper included. Gated on class like the
-# script that installs it: a macOS desktop wants these, a server does not.
+# Zen's chrome/ source and Helium's new-tab background. Gated on class like the
+# scripts that install them: a macOS desktop wants these, a server does not.
 {{ if ne $class "desktop" -}}
 /.local/share/zen-chrome/
+/.local/share/helium-newtab/
+{{ end -}}
+
+# Zen's flatpak override: `persistent=.mozilla` keeps the native messaging
+# manifest visible in the sandbox, and the bus grant lets the browserpass shim
+# call flatpak-spawn. Linux desktops only -- macOS has no flatpak.
+{{ if or (ne $class "desktop") (ne .chezmoi.os "linux") -}}
+/.local/share/flatpak/overrides/app.zen_browser.zen
 {{ end -}}
 
 /prospect.md
