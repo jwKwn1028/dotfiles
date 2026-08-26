@@ -11,7 +11,6 @@
 {{-   end -}}
 {{- end -}}
 {{- $desktopProfile := promptStringOnce . "desktopProfile" "Desktop profile [linuxmint-i3-x11|none]" $desktopProfileDefault -}}
-{{- $context7 := promptStringOnce . "context7ApiKey" "Context7 API key (blank to skip)" "" -}}
 {{- $sshRemoteUser := promptStringOnce . "sshRemoteUser" "Remote SSH username" "" -}}
 {{- /* *Host = the ssh_config alias (also 50-remote.zsh.tmpl's rsync target);
        *HostName = the address it resolves to. Neither may be hardcoded. */ -}}
@@ -27,7 +26,6 @@
     email             = {{ $email | quote }}
     class             = {{ $class | quote }}
     desktopProfile    = {{ $desktopProfile | quote }}
-    context7ApiKey    = {{ $context7 | quote }}
     sshRemoteUser     = {{ $sshRemoteUser | quote }}
     sshGpuHost        = {{ $sshGpuHost | quote }}
     sshGpuHostName    = {{ $sshGpuHostName | quote }}
