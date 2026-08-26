@@ -23,6 +23,7 @@ make_common_mocks() {
     cat >"$bin/systemctl" <<'EOF'
 #!/bin/bash
 printf '%s\n' "$*" >>"$POWER_ACTION_LOG"
+exit "${POWER_ACTION_STATUS:-0}"
 EOF
 
     cat >"$bin/timeout" <<'EOF'
@@ -73,6 +74,7 @@ run_prompt() {
     local action="$2"
     local status="$3"
     local choice="${4:-}"
+    local action_status="${5:-0}"
 
     : >"$ACTION_LOG"
     env \
@@ -80,6 +82,7 @@ run_prompt() {
         POWER_ACTION_LOG="$ACTION_LOG" \
         POWER_DIALOG_STATUS="$status" \
         POWER_DIALOG_CHOICE="$choice" \
+        POWER_ACTION_STATUS="$action_status" \
         /usr/bin/bash "$SCRIPT" "$action" 1
 }
 
@@ -101,6 +104,13 @@ assert_cancelled() {
 }
 
 run_prompt "$ZENITY_BIN" poweroff 0
+assert_action poweroff
+status=0
+run_prompt "$ZENITY_BIN" poweroff 0 '' 42 || status=$?
+[ "$status" -eq 42 ] || {
+    printf 'FAIL: failed systemctl action exited %s instead of 42\n' "$status" >&2
+    exit 1
+}
 assert_action poweroff
 run_prompt "$ZENITY_BIN" poweroff 5
 assert_cancelled

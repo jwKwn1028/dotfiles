@@ -212,12 +212,14 @@ split has to be expressed as two outputs rather than one command.
 
 ### `dot_local/bin/executable_touchpad` and `executable_dot_toggle-touchpad.sh`
 
-There are now **two** touchpad scripts, and both are X11-only:
+The canonical touchpad utility and its compatibility entry point are both
+X11-only:
 
 - `dot_local/bin/executable_touchpad` — `xinput` plus XFCE pointer settings,
   with a desired-state file and an `apply` action called from i3 autostart and
   `~/.x-unstick.sh`.
-- `executable_dot_toggle-touchpad.sh` — newer, `xinput`-only, `toggle|on|off`.
+- `executable_dot_toggle-touchpad.sh` — compatibility wrapper for the old
+  `~/.toggle-touchpad.sh` path; maps `toggle|on|off` to the canonical utility.
 
 Both hardcode `export DISPLAY="${DISPLAY:-:0}"` and fall back to
 `$HOME/.Xauthority`, so under a Wayland session they either abort at their
@@ -552,8 +554,8 @@ Keep X11 variables too so tmux remains usable in the fallback session.
    screenshot/screen-share behavior and the existing Flameshot workflow.
 5. Add output management with `kanshi` or Sway `output` directives.
 6. Add input configuration for the ELAN touchpad and both TrackPoints, replacing
-   both X11 touchpad scripts and the XFCE/Xorg pointer policy rather than only
-   the helper under `dot_local/bin/`.
+   the X11 touchpad utility, its compatibility wrapper, and the XFCE/Xorg pointer
+   policy rather than only swapping `xinput` for `swaymsg`.
 7. Add Waybar config and style. Decide explicitly which peek, keyboard-bar, and
    kill-mode behaviors survive; do not port Polybar in place.
 8. Adjust the clipboard helper and tmux environment.

@@ -11,9 +11,17 @@ DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_snap-common.sh"
 
 mapfile -t entries < <(i3-msg -t get_tree | jq -r '
+  def snap_size:
+    if . == "_snap_full" then 4
+    elif test("^_snap_(left|right|up|down)$") then 2
+    elif test("^_snap_(ul|ur|dl|dr)$") then 1
+    else 0
+    end;
   .. | objects | select(.window? != null) |
   . as $n |
-  ([(.marks? // [])[] | select(startswith("_snap_"))][0]) as $m |
+  ([(.marks? // [])[] |
+      select(test("^_snap_(full|left|right|up|down|ul|ur|dl|dr)$"))]) as $marks |
+  ($marks | if length == 0 then null else max_by(snap_size) end) as $m |
   select($m != null) |
   "\($n.id) \($m | sub("^_snap_"; ""))"')
 

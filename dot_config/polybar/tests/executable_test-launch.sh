@@ -40,6 +40,7 @@ EOF
 
 cat >"$MOCK_BIN/xrandr" <<'EOF'
 #!/usr/bin/env bash
+[ "${POLYBAR_XRANDR_FAIL:-0}" = 1 ] && exit 1
 cat "$POLYBAR_TEST_STATE_DIR/xrandr-output"
 EOF
 
@@ -110,6 +111,19 @@ printf '%s\n' "$*" >>"$POLYBAR_TEST_STATE_DIR/ipc-events"
 EOF
 
 chmod +x "$MOCK_BIN"/*
+
+# A transient RandR failure must not tear down the working bars or tray applet.
+: >"$MOCK_STATE/killall-events"
+: >"$MOCK_STATE/applet-events"
+POLYBAR_XRANDR_FAIL=1 bash "$LAUNCHER"
+[ ! -s "$MOCK_STATE/killall-events" ] || {
+    printf 'FAIL: RandR failure killed existing Polybar processes\n' >&2
+    exit 1
+}
+[ ! -s "$MOCK_STATE/applet-events" ] || {
+    printf 'FAIL: RandR failure stopped the Bluetooth tray applet\n' >&2
+    exit 1
+}
 
 cat >"$MOCK_STATE/xrandr-output" <<'EOF'
 Screen 0: minimum 8 x 8, current 4480 x 1440, maximum 32767 x 32767

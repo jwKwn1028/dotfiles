@@ -37,14 +37,6 @@ if ! flock -n 9; then
     pgrep -x polybar >/dev/null && exit 0
 fi
 
-RESTART_BLUEMAN_TRAY=0
-if pgrep -x blueman-tray >/dev/null 2>&1; then
-    RESTART_BLUEMAN_TRAY=1
-    pkill -x blueman-tray >/dev/null 2>&1 || true
-fi
-
-timeout 5 killall -q --wait polybar 2>/dev/null || killall -q -9 polybar 2>/dev/null
-
 XRANDR_OUTPUT=$(xrandr --query 2>/dev/null) || exit 0
 mapfile -t ACTIVE_OUTPUTS < <(
     awk '
@@ -126,6 +118,24 @@ for monitor in "${ACTIVE_OUTPUTS[@]}"; do
     esac
 done
 
+# Everything that can be validated without disrupting the desktop is now ready.
+# If an error or signal arrives after stopping the tray, the EXIT trap redocks
+# it instead of leaving Bluetooth controls missing for the rest of the session.
+RESTART_BLUEMAN_TRAY=0
+restore_blueman_tray() {
+    [ "$RESTART_BLUEMAN_TRAY" = 1 ] || return 0
+    setsid -f blueman-tray >/dev/null 2>&1 9>&-
+}
+trap restore_blueman_tray EXIT
+
+if pgrep -x blueman-tray >/dev/null 2>&1; then
+    if pkill -x blueman-tray >/dev/null 2>&1; then
+        RESTART_BLUEMAN_TRAY=1
+    fi
+fi
+
+timeout 5 killall -q --wait polybar 2>/dev/null || killall -q -9 polybar 2>/dev/null
+
 for monitor in "${ACTIVE_OUTPUTS[@]}"; do
     if [ "$monitor" = "$TRAY_OUTPUT" ]; then
         launch_bar "$monitor" tray
@@ -159,5 +169,7 @@ if [ "$RESTART_BLUEMAN_TRAY" = 1 ]; then
         icon_docked '^Nm-applet$' && break
         sleep 0.1
     done
-    setsid -f blueman-tray >/dev/null 2>&1 9>&-
+    if restore_blueman_tray; then
+        RESTART_BLUEMAN_TRAY=0
+    fi
 fi

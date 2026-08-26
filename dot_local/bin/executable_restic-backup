@@ -69,7 +69,7 @@ ROOT_DEVICE=$(stat -c %d /)
 readonly MOUNT_PATH HOME_REPOSITORY SYSTEM_REPOSITORY ROOT_DEVICE
 
 validate_layout() {
-    local repository=$1
+    local repository=$1 mount_device
 
     [[ $MOUNT_PATH != / ]] || die "refusing to use / as the backup mount"
     [[ $repository == "$MOUNT_PATH"/* ]] ||
@@ -77,6 +77,10 @@ validate_layout() {
     [[ -d $MOUNT_PATH ]] || die "backup mount directory does not exist: $MOUNT_PATH"
     mountpoint -q -- "$MOUNT_PATH" ||
         die "$MOUNT_PATH is not mounted; refusing to write onto the Linux system disk"
+    mount_device=$(stat -Lc %d -- "$MOUNT_PATH") ||
+        die "could not identify the backup mount filesystem: $MOUNT_PATH"
+    [[ $mount_device != "$ROOT_DEVICE" ]] ||
+        die "$MOUNT_PATH is a mountpoint on the root filesystem; refusing to back up onto the system disk"
     [[ -r $RESTIC_PASSWORD_FILE ]] ||
         die "missing repository password: $RESTIC_PASSWORD_FILE (run '$PROGRAM init')"
 }

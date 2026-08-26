@@ -360,7 +360,8 @@ Do not copy these to a Mac merely because the paths are harmless:
 - `dot_config/pipewire/` and `dot_config/systemd/`.
 - `dot_config/zathura/` unless a supported macOS installation is deliberately
   selected and tested.
-- `executable_dot_toggle-touchpad.sh` and
+- `dot_local/bin/executable_touchpad`, its
+  `executable_dot_toggle-touchpad.sh` compatibility wrapper, and
   `dot_local/bin/executable_disable-trackpoint-middle-click`.
 - `executable_dot_x-unstick.sh`.
 - `Applications/` Helium AppImage files and the duplicate Linux desktop entry.

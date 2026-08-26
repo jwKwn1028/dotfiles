@@ -53,22 +53,26 @@ xfconf_key() {
 # Keep the XFCE setting in sync for whichever node actually has an xfconf entry
 # (the Touchpad node does; the shadow Mouse node does not, and is skipped).
 sync_xfconf() {                 # sync_xfconf 0|1
-  local want=$1 id name key
+  local want=$1 id name key failed=0
   have xfconf-query || return 0
   for id in $(touchpad_ids); do
     name=$(xinput list --name-only "$id" 2> /dev/null) || continue
     key=$(xfconf_key "$name")
     if xfconf-query -c pointers -p "$key" > /dev/null 2>&1; then
-      xfconf-query -c pointers -p "$key" -s "$want" 2> /dev/null
+      if ! xfconf-query -c pointers -p "$key" -s "$want" 2> /dev/null; then
+        echo "touchpad: could not update XFCE state for $name" >&2
+        failed=1
+      fi
     fi
   done
+  [ "$failed" = 0 ]
 }
 
 read_state() { [ -r "$STATE_FILE" ] && head -n1 "$STATE_FILE" || printf '%s\n' "$DEFAULT_STATE"; }
 write_state() { mkdir -p "$STATE_DIR"; printf '%s\n' "$1" > "$STATE_FILE"; }
 
 apply_nodes() {                 # apply_nodes disabled|enabled  (no state write)
-  local want=$1 xi ids id name
+  local want=$1 xi ids id name failed=0
   case "$want" in
     disabled) xi=disable ;;
     enabled)  xi=enable ;;
@@ -81,9 +85,19 @@ apply_nodes() {                 # apply_nodes disabled|enabled  (no state write)
   fi
   for id in $ids; do
     name=$(xinput list --name-only "$id" 2> /dev/null)
-    xinput "$xi" "$id" 2> /dev/null && printf '  %s: %s (id=%s)\n' "$want" "$name" "$id"
+    if xinput "$xi" "$id" 2> /dev/null; then
+      printf '  %s: %s (id=%s)\n' "$want" "$name" "$id"
+    else
+      echo "touchpad: failed to $xi $name (id=$id)" >&2
+      failed=1
+    fi
   done
-  [ "$want" = disabled ] && sync_xfconf 0 || sync_xfconf 1
+  [ "$failed" = 0 ] || return 1
+  if [ "$want" = disabled ]; then
+    sync_xfconf 0
+  else
+    sync_xfconf 1
+  fi
 }
 
 status() {

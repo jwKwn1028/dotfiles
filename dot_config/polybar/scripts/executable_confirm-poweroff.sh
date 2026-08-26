@@ -48,7 +48,10 @@ prompt_with_zenity() {
         --timeout="$TIMEOUT_SECONDS" \
         --no-wrap
 
-    [ "$?" -eq 0 ] && perform_action
+    if [ "$?" -eq 0 ]; then
+        perform_action
+        return $?
+    fi
     return 0
 }
 
@@ -61,6 +64,7 @@ prompt_with_rofi() {
 
     if [ "$status" -eq 0 ] && [ "$choice" = "$CONFIRM_LABEL" ]; then
         perform_action
+        return $?
     fi
     return 0
 }
@@ -72,7 +76,10 @@ prompt_with_xmessage() {
         -default "Cancel" \
         "$MESSAGE"
 
-    [ "$?" -eq 0 ] && perform_action
+    if [ "$?" -eq 0 ]; then
+        perform_action
+        return $?
+    fi
     return 0
 }
 

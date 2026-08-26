@@ -38,6 +38,21 @@ for arg in "$@"; do
   esac
 done
 
+case "$KEEP_BACKUPS" in
+  ''|*[!0-9]*|0)
+    printf 'error: KEEP_BACKUPS must be a positive integer\n' >&2
+    exit 2
+    ;;
+esac
+
+LOCK_WAIT_SECONDS=${SYNC_LOCK_WAIT_SECONDS:-30}
+case "$LOCK_WAIT_SECONDS" in
+  ''|*[!0-9]*)
+    printf 'error: SYNC_LOCK_WAIT_SECONDS must be a nonnegative integer\n' >&2
+    exit 2
+    ;;
+esac
+
 log()  { printf '%s\n' "$*"; }
 err()  { printf 'error: %s\n' "$*" >&2; }
 die()  { err "$*"; exit 1; }
@@ -76,6 +91,11 @@ HEL=$(find_helium)
 [ -n "$HEL" ] && [ -f "$HEL" ] || die "could not find Helium Bookmarks file (set HELIUM_BOOKMARKS=...)"
 
 command -v python3 >/dev/null || die "python3 is required but not installed"
+command -v flock >/dev/null || die "flock is required but not installed"
+
+LOCK_FILE="${HEL%/*}/.sync-zen-to-helium-bookmarks.lock"
+exec 9>"$LOCK_FILE"
+flock -w "$LOCK_WAIT_SECONDS" 9 || die "another bookmark sync is already running"
 
 log "Zen source : $ZEN"
 log "Helium dest: $HEL"
@@ -96,7 +116,7 @@ fi
 
 # --- Back up the current Helium bookmarks ----------------------------------
 if [ "$DRY_RUN" -eq 0 ]; then
-  BACKUP="${HEL}.bak-$(date +%Y%m%d-%H%M%S)"
+  BACKUP="${HEL}.bak-$(date +%Y%m%d-%H%M%S-%N)"
   cp -p "$HEL" "$BACKUP"
   log "Backup     : $BACKUP"
 
@@ -113,7 +133,7 @@ fi
 
 # --- Build the new Helium bookmark tree from Zen ----------------------------
 python3 - "$ZEN" "$HEL" "$DRY_RUN" <<'PY'
-import sys, os, json, sqlite3, uuid, hashlib, shutil, tempfile
+import sys, os, json, sqlite3, uuid, hashlib, shutil, tempfile, urllib.parse
 
 zen_path, hel_path, dry = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 
@@ -126,31 +146,37 @@ def to_chrome_time(ff_micros):
         return "0"
     return str(int(ff_micros) + EPOCH_DELTA)
 
-# Read from a private snapshot so a running Zen can't change the data mid-read.
-# places.sqlite is in WAL mode, so -wal must come along: recent bookmarks live
-# there until Zen checkpoints. ("?immutable=1" skips -wal and reports them as
-# absent, which would delete them from Helium on the rebuild.)
+# Use SQLite's online backup API to take one transactionally consistent snapshot.
+# Copying places.sqlite, -wal, and -shm as separate files can mix different
+# database moments while Zen is writing and either miss or corrupt recent rows.
 snapdir = tempfile.mkdtemp(prefix="zen-places-")
+source = snapshot = None
 try:
     snap = os.path.join(snapdir, "places.sqlite")
-    for ext in ("", "-wal", "-shm"):
-        if os.path.exists(zen_path + ext):
-            shutil.copy2(zen_path + ext, snap + ext)
-    # Writable copy, so SQLite can replay the WAL.
-    con = sqlite3.connect(snap)
-    con.row_factory = sqlite3.Row
+    quoted_path = urllib.parse.quote(os.path.abspath(zen_path), safe="/")
+    source = sqlite3.connect(f"file:{quoted_path}?mode=ro", uri=True, timeout=30)
+    snapshot = sqlite3.connect(snap)
+    source.backup(snapshot)
+    source.close()
+    source = None
+    snapshot.row_factory = sqlite3.Row
 
     # id -> url
-    places = {row["id"]: row["url"] for row in con.execute("SELECT id, url FROM moz_places")}
+    places = {row["id"]: row["url"] for row in snapshot.execute("SELECT id, url FROM moz_places")}
 
     # parent -> ordered list of child rows
     children = {}
-    for row in con.execute(
+    for row in snapshot.execute(
             "SELECT id, parent, type, title, fk, dateAdded, lastModified "
             "FROM moz_bookmarks ORDER BY parent, position"):
         children.setdefault(row["parent"], []).append(row)
-    con.close()
+    snapshot.close()
+    snapshot = None
 finally:
+    if source is not None:
+        source.close()
+    if snapshot is not None:
+        snapshot.close()
     shutil.rmtree(snapdir, ignore_errors=True)
 
 _counter = [3]  # node ids 1-3 are reserved for the three root folders
