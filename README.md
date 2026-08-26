@@ -1,6 +1,6 @@
 # dotfiles
 
-Personal machine configuration managed with [chezmoi](https://chezmoi.io),
+Personal and opinionated machine configuration managed with [chezmoi](https://chezmoi.io),
 targeting **Linux Mint 22.3 / Ubuntu 24.04** with i3/X11.
 
 This repo carries both the **configuration** (dotfiles) and the
@@ -23,14 +23,6 @@ Rebuilds a Linux Mint 22.3 / Ubuntu 24.04 x86_64 machine to the state this
 repository describes, using `class = desktop` and
 `desktopProfile = linuxmint-i3-x11`. Steps 1–6 bootstrap and apply the managed
 state; 7–11 cover software and state the repository deliberately cannot carry.
-
-The `server` class is useful for installing the common CLI package set, but it
-is not yet a complete server profile: some GUI configuration remains managed
-even with `desktopProfile = none`. On a server, choose that profile, inspect
-`chezmoi managed`, and skip the desktop-only steps and checks below.
-
-Budget an hour or more: the cargo crates in step 5 are built from source, and
-several steps prompt for a password.
 
 ### What is and is not recovered
 
@@ -128,8 +120,7 @@ Run this in a terminal you can answer prompts in. In order:
    continues rather than aborting.
 5. `run_once_after_40` — adds zsh to `/etc/shells` and `chsh`es to it
    (**password prompt**).
-6. `run_once_after_50` — JuliaMono, NanumGothicCoding, and JetBrainsMono Nerd
-   Font into `~/.local/share/fonts`.
+6. `run_once_after_50` — Fonts into `~/.local/share/fonts`.
 7. `run_onchange_after_60/62/65/70` — browser and Thunderbird preferences.
    These print "has not created a profile yet" and skip; step 8 completes them.
 8. `run_after_90` / `run_after_91` — X11 keyboard/TrackPoint config and the TLP
@@ -154,8 +145,7 @@ Deliberate gaps requiring manual installation when wanted:
   upstream; `taskwarrior-tui` does come from apt.
 - **i3-resurrect** — the save/restore scripts look for it at
   `~/.local/bin/i3-resurrect`: `pipx install i3-resurrect`.
-- **Optional scientific software** — `.zshenv` puts FullProf, VESTA, Quantum
-  ESPRESSO, juliaup, and typst on PATH if present. Nothing installs them, and
+- **Optional scientific software** — `.zshenv` puts on PATH if present. Nothing installs them, and
   their absence only makes those PATH entries inert.
 
 Agent tooling (Claude Code and Codex plugins, skills, MCP servers, hooks) is
