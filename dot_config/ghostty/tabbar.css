@@ -1,8 +1,6 @@
-/* 15px tab strip: titles only, square, contiguous. #292d3e bar/inactive,
- * #363d5c focused (Helix cursorline), #c0caf5 text (Helix fg).
- * Selectors must be flat: Ghostty nests nodes, so `tabbar tabbox > tab` misses.
- * Colors must be literals: libadwaita names resolve to #171717 here.
- * The ~18px inset at each end is inside AdwTabBar, unreachable from CSS. */
+/* 15px tab strip: #292d3e bar/inactive, #363d5c focused, #c0caf5 text.
+ * Selectors must be flat (Ghostty nests nodes) and colors literal (libadwaita
+ * names resolve to #171717). The ~18px end inset is inside AdwTabBar. */
 
 tabbar, tabbox, tabbar box, tabbar revealer, tabbar scrolledwindow, tabbar viewport {
   min-height: 0;

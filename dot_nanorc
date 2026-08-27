@@ -1,7 +1,6 @@
 # nano config -- mirrors ~/.config/helix/config.toml as closely as nano allows.
-# Things nano cannot do: modal editing (jk→normal), relative line numbers,
-# cursor-shape per mode, bufferline tabs, indent guides, wrap-indicator glyph,
-# current-line highlight (no cursorline option in any nano version).
+# nano cannot do: modal editing, relative line numbers, per-mode cursor shape,
+# bufferline tabs, indent guides, wrap-indicator glyph, current-line highlight.
 
 ## --- editor behavior -------------------------------------------------------
 
@@ -47,15 +46,13 @@ set functioncolor   #9c6
 set minicolor       #cbf,#123
 
 ## --- syntax highlighting --------------------------------------------------
-# nano 9.0 installs syntaxes under ~/.local/share/nano (user-build prefix).
-# Include both the main and extra syntax sets from the local nano install.
+# nano 9.0 installs syntaxes under ~/.local/share/nano; include both sets.
 
 include "~/.local/share/nano/*.nanorc"
 include "~/.local/share/nano/extra/*.nanorc"
 
 ## --- keybindings ----------------------------------------------------------
-# Helix [keys.insert] alt-hjkl movement -- nano isn't modal so these are
-# always active.
+# Helix [keys.insert] alt-hjkl movement -- nano isn't modal, so always active.
 
 bind M-h left  main
 bind M-j down  main

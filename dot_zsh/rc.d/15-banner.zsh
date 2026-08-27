@@ -1,32 +1,21 @@
 # Startup banner: a centered, bold greeting drawn through the first live prompt.
 #
-# Optional configuration, set before this file is sourced or edited into the
-# defaults below:
-#
+# Optional configuration, set before this file is sourced:
 #   ZSH_BANNER_SPECIAL_MESSAGES=("Message one" "Message two")
 #   ZSH_BANNER_SPECIAL_COLORS=("#FFAF00")
 #   ZSH_BANNER_SPECIAL_CHANCE=1/100  # ratio, or an integer percentage
+# Colors correspond to the messages; a shorter color list is cycled.
 #
-# Colors correspond to the messages above; a shorter color list is cycled.
+# Rendered through PROMPT, not written directly, so leading spaces stay out of
+# scrollback and ZLE re-expands the padding after a resize. Consequences: width
+# is measured in cells, so wide and combining characters still center; literal
+# percent signs must be doubled; a zero-width escape preserves the blank line
+# before Starship; raw ANSI bytes confuse ZLE's prompt-width accounting.
 #
-# Rendered through PROMPT rather than written directly, so leading spaces never
-# reach the scrollback and ZLE re-expands the padding against COLUMNS after a
-# resize. Consequences of living inside a prompt:
-#
-#   - Width is measured in terminal cells, not code points, so wide and
-#     combining characters still center.
-#   - Literal percent signs in messages or task descriptions must be doubled.
-#   - A zero-width prompt escape preserves the blank line before Starship, which
-#     command substitution would strip with the trailing newlines.
-#   - Raw ANSI color bytes confuse ZLE's prompt-width accounting.
-#
-# The anonymous function keeps scratch variables out of the session.
-#
-# Selection: birthday beats normal and rare. Today's task list shows on the
-# first top-level terminal opened between 06:00 and 08:59, with a state file
-# holding the day it last showed. ZSH_BANNER_SPECIAL_CHANCE takes odds (1/100)
-# or a legacy integer percentage, falling back to 1/100 when invalid; two RANDOM
-# values are combined so denominators above 32767 still work.
+# Selection: birthday beats normal and rare. The task list shows on the first
+# top-level terminal between 06:00 and 08:59, tracked by a state file. CHANCE
+# takes odds or a legacy percentage, falling back to 1/100; two RANDOM values
+# are combined so denominators above 32767 still work.
 
 if (( ! ${+ZSH_BANNER_SPECIAL_MESSAGES} )); then
   typeset -ga ZSH_BANNER_SPECIAL_MESSAGES=(

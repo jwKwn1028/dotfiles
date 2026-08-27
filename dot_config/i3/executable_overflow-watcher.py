@@ -1,22 +1,14 @@
 #!/usr/bin/python3
 """Send a window to another workspace when it lands smaller than a quarter of the screen.
 
-Companion to autotiling: autotiling picks the split direction, this decides when
-a workspace is packed enough that the window belongs somewhere else.
-
-Target selection, walking workspace numbers upward and wrapping 10 -> 1:
-
-1. the first occupied workspace that still has room for another window,
-2. otherwise the first empty workspace,
-3. otherwise the next workspace number.
-
-Both freshly opened windows and hand-offs from the manual bindings
-(``$mod+Shift+h/l``, ``$mod+Shift+<number>``) go through the same rule. Moving a
-window around inside one workspace is a rearrange, not an arrival, and does not.
-
-A moved window requests the same transient Polybar peek the workspace keybindings
-do. The peek command is overridable because Polybar IPC is not scoped to a
-display, and a nested test session must not drive the real bar.
+Companion to autotiling: autotiling picks the split direction, this decides when a
+workspace is packed enough that the window belongs somewhere else. Walking
+workspace numbers upward and wrapping 10 -> 1, the target is the first occupied
+workspace that still has room, else the first empty one, else the next number.
+Freshly opened windows and hand-offs from the manual bindings go through the same
+rule; moving a window inside one workspace is a rearrange, not an arrival. A moved
+window requests the same transient Polybar peek the workspace keybindings do,
+overridable so a nested test session cannot drive the real bar.
 
 Easy to get wrong:
 
@@ -66,9 +58,8 @@ def wrap_order(current: int, max_ws: int = MAX_WS) -> list[int]:
 def room_for_one_more(parent_area, child_count, ws_area, fraction, stacked=False):
     """Would the next sibling in this container still clear the size floor?
 
-    i3 attaches a moved container as a sibling of the target workspace's focused
-    container, so the arriving window gets an even share of that parent - unless
-    the parent is tabbed or stacked, where it gets the whole thing.
+    i3 attaches a moved container as a sibling of the target's focused container,
+    so the arrival gets an even share -- unless the parent is tabbed or stacked.
     """
     share = parent_area if stacked else parent_area / (child_count + 1)
     return share >= (fraction - EPSILON) * ws_area
@@ -77,8 +68,7 @@ def room_for_one_more(parent_area, child_count, ws_area, fraction, stacked=False
 def pick_target(current: int, occupancy: dict[int, bool], max_ws: int = MAX_WS) -> int:
     """Where a too-small window should go.
 
-    `occupancy` maps workspace number -> whether that workspace has room for one
-    more window. Workspaces missing from the map are empty.
+    `occupancy` maps workspace number -> has room. Missing workspaces are empty.
     """
     order = wrap_order(current, max_ws)
     for num in order:
@@ -91,11 +81,10 @@ def pick_target(current: int, occupancy: dict[int, bool], max_ws: int = MAX_WS) 
 
 
 def insertion_parent(ws):
-    """The container an arriving window will be attached to on workspace `ws`.
+    """The container an arriving window will attach to on workspace `ws`.
 
-    i3 descends the target workspace's own focus chain and attaches the window as
-    a sibling of the leaf it lands on. A floating or absent focus leaves the
-    window at the workspace's top level.
+    i3 descends the workspace's focus chain and attaches as a sibling of the leaf
+    it lands on; a floating or absent focus leaves it at the top level.
     """
     con = ws
     while con.focus:
@@ -107,7 +96,7 @@ def insertion_parent(ws):
 
 
 def workspace_has_room(ws, fraction: float) -> bool:
-    # ponytail: only the arriving window is measured. Attaching next to a leaf
+    # Only the arriving window is measured.
     parent = insertion_parent(ws)
     return room_for_one_more(
         area(parent),
@@ -146,7 +135,7 @@ class Watcher:
         con_id = event.container.id
 
         if con_id in self.self_moved:
-            # ponytail: cleared when our own move event arrives. A move that
+            # Cleared when our own move event arrives.
             self.self_moved.discard(con_id)
             return
 

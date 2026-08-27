@@ -1,5 +1,4 @@
-/* One look for every mode: spotlight.rasi carries theme, font, and matching, so
-   `rofi -show window` does not fall back to the stock theme. */
+/* One look for every mode: spotlight.rasi carries theme, font, and matching. */
 configuration {
   modi: "drun,run,window";
   show-icons: true;

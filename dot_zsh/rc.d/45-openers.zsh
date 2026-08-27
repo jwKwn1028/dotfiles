@@ -1,14 +1,11 @@
-# --------------------------------------------------------
-# Universal Extract
-# --------------------------------------------------------
+# --- Universal Extract ---
 ex() {
   emulate -L zsh
   (( $# )) || { print -u2 "usage: ex <archive>..."; return 2; }
   local a
   for a in "$@"; do
     [[ -f "$a" ]] || { print -u2 "ex: '$a' is not a valid file"; return 1; }
-    # tar.* patterns must precede the bare-compressor ones so foo.tar.gz
-    # untars instead of merely gunzipping.
+    # tar.* patterns must precede the bare-compressor ones so foo.tar.gz untars.
     case "$a" in
       *.tar.bz2)        tar xjf "$a"        ;;
       *.tar.gz)         tar xzf "$a"        ;;
@@ -30,13 +27,9 @@ ex() {
   done
 }
 
-# --------------------------------------------------------
-# PDF / EPUB pickers
-# --------------------------------------------------------
-# One implementation; so/zo just choose the preferred viewer:
-#   so -> sioyek first, zathura as fallback
-#   zo -> zathura first, sioyek as fallback
-# With a path argument the viewer opens it directly; bare, fzf picks.
+# --- PDF / EPUB pickers ---
+# One implementation; so prefers sioyek, zo prefers zathura, each falling back
+# to the other. A path argument opens directly; bare, fzf picks.
 _zsh_open_pdf() {
   emulate -L zsh
   local caller="${funcstack[2]:-open-pdf}"
@@ -69,9 +62,7 @@ _zsh_open_pdf() {
   fi
 
   case "$viewer" in
-    # --new-window overrides our hxp-tuned `should_launch_new_window 0` pref so
-    # ad-hoc browsing opens each PDF in its own window instead of replacing
-    # the hxp preview window.
+    # --new-window overrides the hxp-tuned pref so each PDF gets its own window.
     sioyek)  sioyek --new-window "$file" >/dev/null 2>&1 &! ;;
     zathura) zathura "$file"             >/dev/null 2>&1 &! ;;
   esac
@@ -98,12 +89,9 @@ bo() {
   ebook-viewer "$file" >/dev/null 2>&1 &!
 }
 
-# --------------------------------------------------------
-# File manager
-# --------------------------------------------------------
-# Bare `thunar` opens $PWD rather than $HOME, and detaches so the terminal
-# stays usable. `command` keeps ~/.local/bin/thunar (the GTK_THEME wrapper)
-# in play; the .desktop and systemd launch paths never see this function.
+# --- File manager ---
+# Bare `thunar` opens $PWD, detached. `command` keeps the ~/.local/bin/thunar
+# GTK_THEME wrapper in play; .desktop and systemd launches never see this.
 thunar() {
   emulate -L zsh
   command thunar "${@:-$PWD}" >/dev/null 2>&1 &!

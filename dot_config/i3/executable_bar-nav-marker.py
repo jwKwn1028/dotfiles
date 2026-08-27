@@ -1,24 +1,16 @@
 #!/usr/bin/python3
 """Paint bar mode's selection block over a Polybar tray icon.
 
-Every other stop in bar-nav.sh gets its block from Polybar: the module has a
-hidden twin that differs only by `format-background`. The tray cannot work that
-way. It is one module holding XEmbed windows Polybar does not own, so a
-background paints behind every icon at once, and a marker module can only sit
-on the tray's outer edges -- with a third applet docked (Fcitx5) that is never
-next to the icon it names.
+Every other stop in bar-nav.sh gets its block from a hidden twin module. The tray
+cannot: it is one module holding XEmbed windows Polybar does not own, so a
+background would paint behind every icon at once. Draw it here instead -- an
+override-redirect ARGB window over the icon, filled with ${colors.selection}
+premultiplied for a 32-bit ARGB visual (0xff per channel scaled by the 0x4d
+alpha), and with no input region, so bar-nav's Return still reaches the icon.
 
-So draw it here instead: an override-redirect ARGB window over the icon, filled
-with ${colors.selection}, which the compositor blends over the icon exactly as
-Polybar blends a module's background over the wallpaper. That color is #4dffffff
-premultiplied for a 32-bit ARGB visual, each channel 0xff scaled by the 0x4d
-alpha. The window has no input region at all, so the click bar-nav sends still
-reaches the icon underneath -- Return is a real pointer click that has to land
-on the icon, not on the block.
-
-bar-nav.sh writes "x y width height" into the marker file to place the block
-and truncates the file to hide it. This exits when bar mode does, taking the
-window with it, so a crash upstream cannot strand a block on the bar.
+bar-nav.sh writes "x y width height" into the marker file to place the block and
+truncates it to hide. This exits when bar mode does, so a crash upstream cannot
+strand a block on the bar.
 """
 
 from __future__ import annotations

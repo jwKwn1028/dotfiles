@@ -1,6 +1,4 @@
-# --------------------------------------------------------
-# Aliases
-# --------------------------------------------------------
+# --- Aliases ---
 alias twt='taskwarrior-tui'
 alias v='vim .'
 alias c='code .'
@@ -36,27 +34,16 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../..'
 
-# --------------------------------------------------------
-# Ripgrep (rg)
-# --------------------------------------------------------
+# --- Ripgrep (rg) ---
 alias rg='rg --smart-case'
 
-# --------------------------------------------------------
-# Taskwarrior quick-add by weekday
-# --------------------------------------------------------
+# --- Taskwarrior quick-add by weekday ---
 # Name patterns:
-#   t<t|n><D><d|s>
-#   t<t|n><D><d|s><HH:MM>
-#   tt = this week          tn = next week
-#   D  = ISO weekday, 1=Mon .. 7=Sun
-#   d  = due                s  = scheduled
-# Examples:
-#   tt4s prep slides        -> scheduled Thursday this week
-#   tt2s16:30 golf          -> scheduled Tuesday this week at 16:30
-#   tn2d dentist +health    -> due Tuesday next week
-#   tt1d retro              -> due Monday this week (may be in the past)
-# The date is computed here (not via Taskwarrior's ambiguous weekday
-# synonym); trailing args (+tag, project:x, ...) pass on to `task add`.
+#   t<t|n><D><d|s>[HH:MM]    tt = this week, tn = next week
+#   D = ISO weekday 1=Mon..7=Sun,  d = due,  s = scheduled
+# e.g. tt4s prep slides / tt2s16:30 golf / tn2d dentist +health
+# The date is computed here, not via Taskwarrior's ambiguous weekday synonym;
+# trailing args (+tag, project:x, ...) pass on to `task add`.
 _task_when() {   # <this|next> <ISO-dow 1-7>  ->  YYYY-MM-DD
   emulate -L zsh
   local base=$1 d=$2 dow off
@@ -88,9 +75,8 @@ _task_quick_add $wname $D $attr '' \"\$@\""
   done
 }
 
-# A time is part of the command name, so there cannot be a finite set of
-# predeclared functions for it. Recognize timed shortcuts only after normal
-# command lookup fails, and delegate all other misses to any existing handler.
+# A time is part of the command name, so no finite set of functions covers it.
+# Recognize timed shortcuts only after normal lookup fails; delegate other misses.
 if (( $+functions[command_not_found_handler] )) &&
    [[ ${functions[command_not_found_handler]} != *'_task_quick_add'* ]]; then
   functions[_task_command_not_found_fallback]=$functions[command_not_found_handler]

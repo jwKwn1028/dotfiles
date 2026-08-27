@@ -1,35 +1,20 @@
 #!/usr/bin/env bash
 # Keyboard cursor over Polybar's own modules: Super+B, then h/l to move, j/k to
-# adjust, Return to click, Shift+Return to right-click.
+# adjust, Return to click, Shift+Return to right-click. Sticky -- only a stop
+# that opens a window leaves the mode.
 #
-# Polybar never takes keyboard focus, so the cursor lives in the calling i3
-# mode. The highlight is a hidden twin module swapped in over IPC (see
-# config.ini) -- except the tray, which holds XEmbed windows polybar does not
-# own, so it gets no `-sel` twin and bar-nav-marker.py paints a block. Sticky:
-# only a stop that opens a window leaves the mode.
+# Polybar never takes keyboard focus, so the cursor lives in the calling i3 mode.
+# The highlight is a hidden twin module swapped in over IPC (see config.ini),
+# except the tray: its XEmbed windows are not polybar's, so bar-nav-marker.py
+# paints a block instead, matched on geometry rather than the window tree.
 #
-# Runtime state: .idx cursor position; .restore-hidden, written only when the
-# bar was not already persistent; .marker, "x y width height" for the tray
-# block, bar-height so it reads like the other stops.
+# Runtime state: .idx cursor position; .restore-hidden, written only when the bar
+# was not already persistent; .marker, "x y width height" for the tray block.
 #
-# The arrays below are parallel, indexed by stop, left to right. Empty action =
-# no-op. `*_opens = 1` takes the keyboard, so the mode exits first. Volume steps
-# by 1, matching the wheel -- config.ini's `[module/pulseaudio] interval = 1` is
-# polybar's scroll step, not a poll rate. The XF86Audio keys stay at 5.
-#
-# Easy to break:
-#   - reset_pairs skips $1. Hide and show one module twice quickly and polybar
-#     collapses the pair, keeping the plain half.
-#   - power_menu deselects its stop first, or the block washes over its menu.
-#   - close() clears .marker before .idx (bar-nav-marker.py exits with .idx and
-#     would leave a block painted) and resets every pair, since a polybar
-#     restart mid-mode desyncs .idx.
-#   - flock keeps one painter per mode.
-#   - A bar up only for a transient peek counts as hidden on open.
-#
-# tray_window filters the applet's invisible 10x10 helpers and popup down to
-# the mapped, tray-sized window. bar_rect_at matches geometry, not the tree:
-# an icon's parent is Polybar's tray container, not the bar.
+# The parallel arrays below are indexed by stop, left to right; empty action =
+# no-op, `*_opens = 1` takes the keyboard so the mode exits first. Easy to break:
+# power_menu must deselect its stop first, close() must clear .marker before .idx
+# and reset every pair, and a bar up only for a transient peek counts as hidden.
 
 set -u
 

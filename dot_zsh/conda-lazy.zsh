@@ -1,11 +1,9 @@
-# Shared lazy conda init for both interactive shells and the login shells coding
+# Shared lazy conda init for interactive shells and the login shells coding
 # agents use (`zsh -lc`).
 #
-# auto_activate is off (~/.condarc), so unless the command already resolves
-# inside $conda_prefix (login shells put miniconda3/bin on PATH), base is
-# activated first. Covers both "not found" (python in non-login shells) and
-# "shadowed by a system binary" (Ubuntu's /usr/bin/pip). `conda` is exempt: the
-# hook defines it as a function.
+# auto_activate is off (~/.condarc), so base is activated unless the command
+# already resolves inside $conda_prefix -- covers both "not found" and
+# "shadowed by a system binary". `conda` is exempt: the hook makes it a function.
 
 lazy_conda_commands=(conda python pip jupyter mamba)
 

@@ -26,13 +26,10 @@ include ~/.config/task/tokyonight-storm.theme
 #include solarized-light-256.theme
 #include no-color.theme
 
-# =====================================================================
-# Custom views / reports   (work in the CLI *and* in taskwarrior-tui)
-#   task today  ·  task agenda  ·  task week  ·  task upcoming  ·  task stuck
-# =====================================================================
+# --- Custom views / reports (work in the CLI and in taskwarrior-tui) ---
+#   task today · agenda · week · upcoming · stuck
 
-# GLOBAL: prefix report dates with the weekday, e.g. "Mon 2026-07-20".
-# Affects every report (list, next, all, ...). Delete this line for plain ISO.
+# GLOBAL: prefix report dates with the weekday. Delete this line for plain ISO.
 dateformat.report=a Y-M-D
 
 # today   — fires now: overdue, due today, or scheduled for today. Urgency-ranked.

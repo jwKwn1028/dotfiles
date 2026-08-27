@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 {{ $class := "desktop" -}}
 {{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
-# Installs the fonts the desktop configs name by family:
-#   - JuliaMono               : the UI face everywhere -- ghostty, polybar,
-#                               rofi, editors, XSETTINGS, Thunar's GTK theme
-#   - NanumGothicCoding       : Korean monospace fallback in ghostty
-#   - JetBrainsMono Nerd Font : icon glyphs used by polybar and starship
-#
-# Installed to ~/.local/share/fonts from upstream archives. New Computer Modern
-# was the previous UI face; no longer installed, existing copies left in place.
+# Installs the fonts the desktop configs name by family: JuliaMono (the UI face
+# everywhere -- ghostty, polybar, rofi, editors, XSETTINGS, Thunar's GTK theme),
+# NanumGothicCoding (Korean monospace fallback in ghostty), and JetBrainsMono
+# Nerd Font (icon glyphs for polybar and starship). Installed to
+# ~/.local/share/fonts from upstream archives. New Computer Modern was the
+# previous UI face; no longer installed, existing copies left in place.
 set -euo pipefail
 
 {{ if ne $class "desktop" -}}
@@ -19,21 +17,18 @@ fontdir="$HOME/.local/share/fonts"
 mkdir -p "$fontdir"
 
 # Test the family name recorded inside the file, never the filename: the
-# codeface build of NanumGothicCoding registers as "NanumGothic_Coding" and
-# silently fails to match the configs.
+# codeface build of NanumGothicCoding registers as "NanumGothic_Coding".
 #
 # `grep -ix ... >/dev/null`, not `grep -qix`: -q exits at the first match,
-# SIGPIPEs fc-list upstream, and under `set -o pipefail` turns the pipeline
-# non-zero -- reporting "missing" exactly when the font IS installed.
+# SIGPIPEs fc-list, and under `set -o pipefail` turns the pipeline non-zero --
+# reporting "missing" exactly when the font IS installed.
 have_family() {
     fc-list : family 2>/dev/null | tr ',' '\n' | grep -ix -- "$1" >/dev/null
 }
 
-# install_zip URL DESTDIR FAMILY=GLOB [FAMILY=GLOB ...]
-# Fetches a zip once and copies each GLOB into DESTDIR, skipping the download
-# when every named family already resolves. Multiple families per call because
-# one archive can carry several faces. Best-effort: a failure warns rather than
-# aborting provisioning.
+# install_zip URL DESTDIR FAMILY=GLOB [FAMILY=GLOB ...] -- fetches a zip once
+# and copies each GLOB into DESTDIR, skipping the download when every named
+# family already resolves. Best-effort: a failure warns rather than aborting.
 install_zip() {
     local url="$1" dest="$2"
     shift 2
@@ -62,8 +57,8 @@ install_zip() {
         return 1
     fi
     mkdir -p "$dest"
-    # Naver's archive carries macOS resource forks (._*). They match *.ttf but
-    # are not fonts, and fontconfig reports each one as a broken font file.
+    # Naver's archive carries macOS resource forks (._*): they match *.ttf but
+    # are not fonts, and fontconfig reports each as a broken font file.
     for spec in "$@"; do
         find "$tmp/extracted" -type f -name "${spec#*=}" ! -name '._*' \
             -exec cp {} "$dest/" \;
@@ -80,9 +75,8 @@ install_zip \
     'JuliaMono=JuliaMono-*.ttf' || true
 
 # --- NanumGothicCoding ---
-# Naver's own GitHub release. Do not substitute the AUR package or the older
-# mirrors: ttf-nanumgothic_coding still points at dev.naver.com, which Naver
-# retired, so it cannot build.
+# Naver's own GitHub release. Not the AUR package or the older mirrors:
+# ttf-nanumgothic_coding still points at the retired dev.naver.com.
 install_zip \
     "https://github.com/naver/nanumfont/releases/download/VER2.5/NanumGothicCoding-2.5.zip" \
     "$fontdir/NanumGothicCoding" \
@@ -97,8 +91,8 @@ install_zip \
 fc-cache -f "$fontdir" >/dev/null
 echo "==> fonts done."
 
-# Surface anything the desktop configs still cannot resolve, rather than
-# leaving it to be discovered as tofu in the terminal later.
+# Surface anything the desktop configs still cannot resolve, rather than leaving
+# it to be discovered as tofu in the terminal later.
 for family in "JuliaMono" "NanumGothicCoding" "JetBrainsMono Nerd Font"; do
     have_family "$family" || echo "WARN: $family is still unresolved."
 done

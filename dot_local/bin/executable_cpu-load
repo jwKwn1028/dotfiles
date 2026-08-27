@@ -1,25 +1,21 @@
 #!/usr/bin/env bash
-# Shared CPU-load calculator for polybar's cpu module and the zsh `sysmon`
-# monitor, so both report the same number.
+# Shared CPU-load calculator for polybar's cpu module and zsh `sysmon`, so both
+# report the same number.
 #
 # Definition (matches top/htop/mpstat): load% = 100 * busy / total, where
 #   busy = total - (idle + iowait)      # iowait counts as idle, NOT as load
 #
 # Stateful and non-blocking: each call diffs /proc/stat against the previous
-# snapshot, so the % averages over the time since it. No sleep on the hot path.
+# snapshot, so the % averages over the time since it.
 #
 # Usage: cpu-load [instance] [interval_seconds]
-#   instance  state key, so independent callers (e.g. "polybar", "sysmon") keep
-#             separate snapshots and don't corrupt each other's delta.
-#             Default: "default".
-#   interval  how often the caller polls. Used only to decide when a snapshot
-#             is too fresh to replace. Default: 2.
+#   instance  state key, so independent callers keep separate snapshots
+#   interval  the caller's poll rate; decides when a snapshot is too fresh
 #
-# One instance key is shared by several *processes*: polybar runs a bar per
-# monitor, each with its own cpu module. They must not consume each other's
-# snapshot, which would shrink the window from `interval` to milliseconds and
-# read whatever burst it lands on (a steady 5% machine shows 50%). So the first
-# caller in a cycle advances the window and the rest reuse its result.
+# One key is shared by several processes (polybar runs a bar per monitor). They
+# must not consume each other's snapshot, which would shrink the window to
+# milliseconds and read whatever burst it lands on, so the first caller in a
+# cycle advances the window and the rest reuse its result.
 
 export LC_ALL=C                        # keep EPOCHREALTIME's decimal point a "."
 
@@ -27,8 +23,7 @@ instance="${1:-default}"
 interval="${2:-2}"
 state="${XDG_RUNTIME_DIR:-/tmp}/cpu-load.${instance}.state"
 
-# Read the aggregate cpu line; fields after "cpu" are:
-#   user nice system idle iowait irq softirq steal guest guest_nice
+# Aggregate cpu line: user nice system idle iowait irq softirq steal guest*.
 # Emit two running totals: "<total_jiffies> <idle_jiffies>".
 snapshot() {
   local _ user nice system idle iowait irq softirq steal
@@ -44,9 +39,8 @@ read -r cur_total cur_idle <<< "$(snapshot)"
 prev_total='' prev_idle='' prev_us='' prev_load=''
 [[ -r $state ]] && read -r prev_total prev_idle prev_us prev_load < "$state"
 
-# Too soon: another process already measured this cycle. 75% of the interval,
-# so two callers polling at the same rate can never both advance -- whatever
-# the phase between them, one of the two gaps is under a quarter interval.
+# Too soon: another process already measured this cycle. 75% of the interval, so
+# two callers polling at the same rate can never both advance.
 if [[ -n $prev_us && -n $prev_load ]] &&
    (( now_us - prev_us < interval * 750000 )); then
   echo "$prev_load"
@@ -54,8 +48,7 @@ if [[ -n $prev_us && -n $prev_load ]] &&
 fi
 
 if [[ -z $prev_total ]]; then
-  # No prior snapshot: take one short self-contained sample so the very first
-  # call still returns a meaningful number instead of 0.
+  # No prior snapshot: take one short sample so the first call is meaningful.
   prev_total=$cur_total prev_idle=$cur_idle
   sleep 0.3
   read -r cur_total cur_idle <<< "$(snapshot)"
@@ -72,8 +65,7 @@ else
   (( load > 100 )) && load=100
 fi
 
-# Rename rather than write in place: with several processes on one instance key
-# a concurrent reader must never see a half-written line.
+# Rename, not write-in-place: a concurrent reader must never see a half line.
 printf '%s %s %s %s\n' "$cur_total" "$cur_idle" "$now_us" "$load" > "$state.$$"
 mv -f "$state.$$" "$state"
 

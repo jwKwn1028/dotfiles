@@ -1,19 +1,16 @@
 # Package manifest for the distro-specific run_once_* provisioning scripts.
 # Edit these lists to add or remove software; chezmoi re-runs the installers
-# when this file changes.
-#
-# apt names target Linux Mint 22.3 / Ubuntu 24.04.
+# when this file changes. apt names target Linux Mint 22.3 / Ubuntu 24.04.
 
 [packages.apt]
-# PPAs added before the apt install pass (needed for packages not in the
-# default Mint/Ubuntu repos).
+# PPAs added before the apt install pass, for packages not in the Mint repos.
 ppas = [
     "ppa:maveonair/helix-editor",   # helix editor
 ]
 
 # Installed on every machine (CLI / dev tooling).
-# NOTE: on Debian/Ubuntu, `fd-find` -> `fdfind` and `bat` -> `batcat`;
-# the shell configs already alias these, so no extra symlinks are needed.
+# NOTE: Debian ships `fd-find`->`fdfind` and `bat`->`batcat`; the shell configs
+# already alias these, so no extra symlinks are needed.
 common = [
     "git", "git-lfs", "curl", "wget",
     "restic", "openssl",
@@ -29,17 +26,14 @@ common = [
     # Host half of the browserpass integration below; must not drift from it.
     "pass",
     # The TUI only -- `task` itself is deliberately absent: Ubuntu ships 2.6.2
-    # (flat-file store) but dot_taskrc targets 3.x (sqlite), so the apt binary
-    # cannot read this data. Install task by hand from upstream until 24.04
-    # carries 3.x.
+    # (flat-file) but dot_taskrc targets 3.x (sqlite). Install task by hand.
     "taskwarrior-tui",
-    # AGENTS.md requires linting the run_once_* scripts before changing them,
-    # so treat it as a dependency of working in this repo, not an optional tool.
+    # AGENTS.md requires linting the run_once_* scripts, so treat it as a
+    # dependency of working in this repo, not an optional tool.
     "shellcheck",
 ]
 
-# Installed only where a battery is present, gated at runtime by the installer
-# because neither class nor desktopProfile encodes "is a laptop".
+# Battery-only, gated at runtime: neither class nor desktopProfile encodes "laptop".
 laptop = [
     "tlp", "tlp-rdw",
 ]
@@ -54,23 +48,19 @@ i3_x11 = [
     # without this the themed Thunar renders with missing icons.
     "papirus-icon-theme",
     "pavucontrol", "blueman", "brightnessctl", "playerctl", "thunderbird",
-    # Browserpass host component for Zen and Helium; the after_60/after_70
-    # scripts wire the native messaging manifests. Not i3-specific, but this is
-    # the only desktop-gated apt list.
+    # Browserpass host for Zen and Helium; after_60/after_70 wire the manifests.
+    # Not i3-specific, but this is the only desktop-gated apt list.
     "webext-browserpass",
     "fcitx5", "fcitx5-hangul", "fcitx5-frontend-all", "fcitx5-config-qt",
     # nm-applet supplies the graphical wifi menu embedded by Polybar's tray.
     "network-manager-gnome",
-    # i3ipc bindings for dot_config/i3/overflow-watcher.py, started from the i3
-    # autostart. Without it the watcher dies on import and windows that land
-    # too small are never handed to another workspace.
+    # i3ipc bindings for overflow-watcher.py; without it the watcher dies on
+    # import and windows that land too small are never moved.
     "python3-i3ipc",
-    # X bindings for dot_config/i3/top-edge-peek.py, also started from the i3
-    # autostart. It polls the pointer to peek Polybar at the screen edge, and
-    # without this it dies on import and the edge simply does nothing.
+    # X bindings for top-edge-peek.py; without it the edge peek does nothing.
     "python3-xlib",
-    # Browser session files use Mozilla's jsonlz4 envelope. Keep this in the
-    # distro Python used by the i3 helpers instead of relying on a user pip env.
+    # Mozilla's jsonlz4 envelope for browser session files. Keep it in the
+    # distro Python used by the i3 helpers.
     "python3-lz4",
     "gimp", "vlc", "mpv",
     # Display manager + screen locker for a standalone i3 login session.
@@ -99,12 +89,10 @@ apps = [
 #
 # Every entry carries `bin`, the command the crate installs, which is often not
 # the crate name (yazi-fm -> yazi, cargo-update -> cargo-install-update).
-# Provisioning skips a crate whose `bin` is already on PATH, so a distro that
-# packages one of these is not made to rebuild it from source.
+# Provisioning skips a crate whose `bin` is already on PATH.
 
-# `cargo install --locked <crate>` from crates.io.
-# eza = modern ls; the rest are Helix LSPs / formatters + utilities.
-# yazi-fm/yazi-cli provide the `yazi` file manager used by the shell configs.
+# `cargo install --locked <crate>` from crates.io. eza = modern ls; the rest are
+# Helix LSPs / formatters plus utilities. yazi-fm/yazi-cli provide `yazi`.
 registry = [
     { crate = "eza",           bin = "eza" },
     { crate = "yazi-fm",       bin = "yazi" },
@@ -118,9 +106,8 @@ registry = [
     { crate = "cargo-update",  bin = "cargo-install-update" },
 ]
 
-# `cargo install --git <url> --locked` for crates not published to crates.io.
-# Optional `package` names one crate inside a repo that contains several with
-# binaries; cargo refuses to guess and aborts without it.
+# `cargo install --git <url> --locked` for crates not on crates.io. Optional
+# `package` names one crate in a multi-crate repo; cargo aborts without it.
 git = [
     # rtk: CLI output filter, configured by dot_config/rtk/filters.toml.
     { url = "https://github.com/rtk-ai/rtk",                     bin = "rtk" },

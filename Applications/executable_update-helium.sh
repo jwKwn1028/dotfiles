@@ -2,9 +2,8 @@
 #
 # update-helium.sh — automatically update the Helium browser AppImage.
 #
-# Checks the latest release of imputnet/helium-linux on GitHub, and if it is
-# newer than the locally installed AppImage, downloads it, swaps it in, and
-# updates helium.desktop to point at the new version.
+# Checks imputnet/helium-linux's latest release and, if it is newer than the
+# installed AppImage, downloads it, swaps it in, and repoints helium.desktop.
 #
 set -euo pipefail
 
@@ -45,10 +44,9 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# Re-assert Helium preferences that updates tend to reset. Helium updates
-# occasionally re-pin the zen-mode top chrome (the URL panel), undoing the
-# "hidden by default, reveal on hover / Ctrl+L" behavior. Skipped while Helium
-# is running, since it rewrites Preferences on exit and would clobber the change.
+# Re-assert preferences updates tend to reset: Helium re-pins the zen-mode top
+# chrome (the URL panel), undoing "hidden by default, reveal on hover". Skipped
+# while Helium runs, since it rewrites Preferences on exit.
 enforce_helium_prefs() {
     local pref="$HOME/.config/net.imput.helium/Default/Preferences"
     [[ -f "$pref" ]] || return 0

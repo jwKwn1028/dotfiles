@@ -1,23 +1,17 @@
 #!/usr/bin/env bash
-# One synchronized Polybar per active monitor; visibility is broadcast over IPC
-# so every monitor toggles at once.
-#
-# The launcher lock serializes reloads and fallback launches, so a second
-# launcher reuses the running one's bars instead of racing killall into
-# duplicates. Long-lived children get 9>&- or they inherit the lock, and every
-# later reload then waits five seconds, sees Polybar up, and skips the rebuild.
-# Kills escalate to SIGKILL: a Polybar wedged on a dead i3 IPC socket never
-# answers SIGTERM, and an unbounded `--wait` would hold the lock forever.
+# One synchronized Polybar per active monitor; visibility is broadcast over IPC.
+# The launcher lock serializes reloads so a second launcher reuses the running
+# bars instead of racing killall into duplicates; long-lived children need 9>&-
+# or they inherit it. Kills escalate to SIGKILL: a Polybar wedged on a dead i3
+# IPC socket never answers SIGTERM.
 #
 # X11 permits one tray owner, so icons stay on the laptop panel (primary if
-# there is no internal one) -- an external can be unplugged mid-session. Dock
-# order is arrival order, hence the wait for nm-applet before blueman-tray,
-# keeping Wi-Fi left of Bluetooth for bar mode's h/l. Applets also own invisible
-# 10x10 helper windows, so size identifies a real icon.
+# there is none). Dock order is arrival order, hence the wait for nm-applet
+# before blueman-tray, keeping Wi-Fi left of Bluetooth. Applets also own
+# invisible 10x10 helper windows, so size identifies a real icon.
 #
-# Bars start hidden; the initial hide keeps broadcasting briefly after the first
-# IPC endpoint so a slow secondary cannot miss it. Tray icons are foreign client
-# windows Polybar's cursor-click never reaches, so tray-cursor.py paints them.
+# Bars start hidden. Tray icons are foreign windows Polybar's cursor-click never
+# reaches, so tray-cursor.py paints them.
 
 POLYBAR_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 POLYBAR_LAUNCH_LOCK="$POLYBAR_RUNTIME_DIR/polybar-launch.lock"
@@ -118,9 +112,7 @@ for monitor in "${ACTIVE_OUTPUTS[@]}"; do
     esac
 done
 
-# Everything that can be validated without disrupting the desktop is now ready.
-# If an error or signal arrives after stopping the tray, the EXIT trap redocks
-# it instead of leaving Bluetooth controls missing for the rest of the session.
+# From here an error would leave the tray undocked, so an EXIT trap redocks it.
 RESTART_BLUEMAN_TRAY=0
 restore_blueman_tray() {
     [ "$RESTART_BLUEMAN_TRAY" = 1 ] || return 0

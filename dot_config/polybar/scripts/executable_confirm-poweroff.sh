@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Confirm a poweroff or reboot. A timeout always cancels: walking away from a
-# confirmation dialog must never turn a stray click into a delayed power action.
+# Confirm a poweroff or reboot. A timeout always cancels.
 
 set -u
 

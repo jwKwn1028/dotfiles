@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Restore every saved i3 workspace layout, then the windows that filled it.
 #
-# "workspace N output ..." directives in the i3 config only apply when i3 creates
-# a workspace, so a workspace saved on the laptop output stays there on restore.
-# External-assigned workspaces are forced over before the layouts are rebuilt.
+# "workspace N output ..." only applies when i3 creates a workspace, so
+# external-assigned workspaces are forced over before the layouts are rebuilt.
 
 set -euo pipefail
 

@@ -1,18 +1,15 @@
 # --- Remote Access Tools ---
-# Values are prompted by .chezmoi.toml.tmpl and stored only in the local
-# chezmoi config. Environment variables can still override them per session.
+# Values come from the local chezmoi config; env vars override per session.
 HPC_REMOTE_USER=${HPC_REMOTE_USER:-{{ .sshRemoteUser | quote }}}
 HPC_REMOTE_HOST=${HPC_REMOTE_HOST:-{{ .sshGpuHost | quote }}}
 
-# 1. Quick SFTP Connect
-# Usage: just type 'cdcluster' to browse your server files
+# 1. Quick SFTP connect -- type 'cdcluster' to browse server files
 cdcluster() {
   emulate -L zsh
   sftp "${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
 }
 
-# 2. "Get" Function (Smart Download)
-# Usage: grem path/to/file
+# 2. Smart download -- grem path/to/file
 
 grem() {
   emulate -L zsh
@@ -25,8 +22,7 @@ grem() {
   fi
 
   local -a rsync_opts remotes
-  # --checksum: compare by content hash, not size+mtime, so an edit that keeps
-  # both is still transferred. Override with --no-checksum for large trees.
+  # --checksum: compare by content hash, so an edit keeping size+mtime transfers.
   rsync_opts=(-aPzh --checksum --info=progress2 --protect-args)
 
   # If the first argument starts with '-', treat leading args as rsync options.
@@ -57,8 +53,7 @@ grem() {
   rsync "${rsync_opts[@]}" -- "${remotes[@]}" ./
 }
 
-# 3. "Put" Function (Upload)
-# Usage: prem local_file.py [remote_dest]
+# 3. Upload -- prem local_file.py [remote_dest]
 prem() {
   emulate -L zsh
 
@@ -73,8 +68,7 @@ prem() {
   # See grem: content-hash comparison so same-size, same-mtime edits transfer.
   rsync_opts=(-aPzh --checksum --info=progress2 --protect-args)
 
-  # Keep rsync filter globs quoted so zsh passes them through unchanged, e.g.
-  # prem --exclude='*.safetensors' -- model-dir/ /remote/dest
+  # Keep rsync filter globs quoted, e.g. prem --exclude='*.safetensors' -- src/ dst
   if [[ $1 == -* ]]; then
     while (( $# )) && [[ $1 != -- ]]; do
       rsync_opts+=("$1")
@@ -114,9 +108,8 @@ prem() {
 
   local remote="${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
 
-  # Empty dst -> "host:" -> the remote home dir (rsync's default), so we do not
-  # depend on the remote shell to expand a literal "~". An explicit dst keeps
-  # directory semantics via a forced trailing slash.
+  # Empty dst -> "host:" -> the remote home, so we do not rely on the remote
+  # shell expanding "~". An explicit dst forces directory semantics.
   rsync "${rsync_opts[@]}" -- \
     "${srcs[@]}" "${remote}:${dst:+${dst%/}/}"
 }

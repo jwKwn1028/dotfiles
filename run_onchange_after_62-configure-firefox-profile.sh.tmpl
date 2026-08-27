@@ -46,8 +46,7 @@ if [[ -z "$profiles_ini" ]]; then
     exit 0
 fi
 
-# Candidate order is: installation-selected profile, profile marked default,
-# then every remaining profile. This avoids committing a machine-specific ID.
+# Candidate order: installation-selected profile, default-marked, then the rest.
 profile_dir=""
 while IFS= read -r candidate; do
     case "$candidate" in

@@ -2,18 +2,9 @@
 # Shared helpers for tile-snap / resnap / snap-watcher / toggle-titles.
 # Source from sibling scripts:  . "$DIR/_snap-common.sh"
 #
-# Provides:
-#   SNAP_RUNTIME_DIR     - per-user runtime dir (cleared on reboot)
-#   SNAP_TITLES_STATE    - title-bar on/off state file
-#   SNAP_FOCUS_HISTORY   - last/current focus ids for focus-prev
-#   SNAP_LOG             - rolling debug log
-#   snap_log <msg>       - timestamped line; caps the file at ~200 KB, no-op if
-#                          the log dir cannot be created
-#   mark_to_quads <r>    - region -> covered quadrants (ul ur dl dr subset)
-#   region_size <r>      - region area in quadrants (4, 2, 1)
-#   regions_by_size      - full, halves, quadrants, largest first
-#   apply_autotiling_split <con_id> [depth_limit]
-#                        - apply the same split h/v rule used by autotiling
+# Provides SNAP_RUNTIME_DIR, SNAP_TITLES_STATE, SNAP_FOCUS_HISTORY, SNAP_LOG,
+# snap_log, mark_to_quads (region -> quadrants), region_size (area in quadrants),
+# regions_by_size (largest first), and apply_autotiling_split.
 
 SNAP_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 SNAP_TITLES_STATE="$SNAP_RUNTIME_DIR/i3-titles.state"

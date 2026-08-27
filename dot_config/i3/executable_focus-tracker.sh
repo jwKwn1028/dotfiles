@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Subscribe to i3 window-focus events and persist last-2 con_ids to
-# $XDG_RUNTIME_DIR/i3-focus-history (line 1: current, line 2: previous).
-# Runs as a long-lived background process started from i3 autostart.
+# Persist the last 2 focused con_ids to $XDG_RUNTIME_DIR/i3-focus-history
+# (line 1: current, line 2: previous). Long-lived, started from i3 autostart.
 
 set -u
 

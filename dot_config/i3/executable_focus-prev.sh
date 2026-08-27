@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Focus the most-recently-focused window before the current one.
-# Pressing again returns to the original (2-window alt-tab toggle).
-# If that lands on a different workspace, request a transient Polybar peek so
-# the jump is visible, matching workspace-action.sh.
+# Focus the previously focused window; pressing again toggles back. If that lands
+# on another workspace, request a transient Polybar peek like workspace-action.sh.
 set -u
 
 DIR="$(dirname "$(readlink -f "$0")")"

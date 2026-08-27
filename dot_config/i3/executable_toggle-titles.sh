@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# Toggle i3 title bars for every window on every workspace and monitor, plus
-# the default for future windows.
+# Toggle i3 title bars on every window, plus the default for future windows.
 #
-# `default_border` and `for_window` are config-only, so no script can set the
-# future default; snap-watcher.sh reads this state file per window event
-# instead. Existing windows are handled here by con_id, floating and tiling.
+# `default_border` and `for_window` are config-only, so snap-watcher.sh reads
+# this state file per window event instead.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"

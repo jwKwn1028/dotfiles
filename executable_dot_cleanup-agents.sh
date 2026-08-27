@@ -115,11 +115,10 @@ is_protected() {
   return 1
 }
 
-# Classify a top-level ~/.codex child as belonging to the interactively handled
-# "chat" or "memory" bucket, or "" for everything else. Buckets are owned by the
-# Codex functions below, so clean_directory_contents leaves them alone. Matching
-# is by prefix so a schema-version bump (state_5 -> state_6, ...) still lands in
-# the right bucket.
+# Classify a top-level ~/.codex child into the interactively handled "chat" or
+# "memory" bucket, or "" otherwise, so clean_directory_contents leaves those
+# alone. Matched by prefix, so a schema bump (state_5 -> state_6) still lands
+# in the right bucket.
 codex_bucket() {
   case "$(basename "$1")" in
     sessions|history.jsonl)
@@ -187,13 +186,12 @@ clean_other_marker_paths() {
 }
 
 # ---- Interactive chat + memory handling (Claude) ----------------------------
-# clean_directory_contents skips "$PROJECTS_DIR", so these functions are the
-# sole authority over it. As on the Codex side, every transcript is previewed
-# and offered for deletion, and the complete memory store gets its own preview
-# and confirmation.
+# clean_directory_contents skips "$PROJECTS_DIR", so these functions own it:
+# every transcript is previewed and offered for deletion, and the memory store
+# gets its own preview and confirmation.
 
-# Print "name<TAB>description<TAB>type<TAB>originSessionId" for a memory file,
-# always four tab-separated fields even when the frontmatter lacks some keys.
+# Print name/description/type/originSessionId for a memory file: always four
+# tab-separated fields, even when the frontmatter lacks some keys.
 read_memory_meta() {
   local out
   out="$(python3 - "$1" 2>/dev/null <<'PY'
@@ -354,9 +352,8 @@ process_claude_chats() {
   (( found )) || printf 'No Claude chat transcripts found.\n'
 }
 
-# Reconcile Claude's history index with the per-chat decisions, matching the
-# Codex history behavior: prune it when chats remain, or offer to remove it
-# after every chat has been deleted.
+# Reconcile Claude's history index with the per-chat decisions: prune it while
+# chats remain, or offer to remove it once every chat has been deleted.
 finalize_claude_chat_side() {
   local any_kept=0 jsonl sid reply=""
   local kept=()
@@ -444,8 +441,8 @@ PY
   esac
 }
 
-# Remove project files that are neither chat transcripts nor memory. The chat
-# and memory passes above own their respective stores.
+# Remove project files that are neither chat transcripts nor memory; the chat
+# and memory passes above own those stores.
 sweep_claude_projects_remainder() {
   [[ -d "$PROJECTS_DIR" ]] || return 0
 
@@ -460,14 +457,12 @@ sweep_claude_projects_remainder() {
   done < <(find "$PROJECTS_DIR" -type f ! -name '*.jsonl' ! -path '*/memory/*' -print0 2>/dev/null)
 
   if (( ! DRY_RUN )); then
-    # Prune now-empty project directories bottom-up. Kept chats or memory keep
-    # their containing directories in place.
+    # Prune now-empty project directories bottom-up.
     find "$PROJECTS_DIR" -depth -type d -empty -delete 2>/dev/null || true
   fi
 }
 
-# Preview the complete Claude memory store and, with --apply, erase it only
-# after a separate yes.
+# Preview the Claude memory store; with --apply, erase only after a separate yes.
 process_claude_memory() {
   if [[ ! -d "$PROJECTS_DIR" ]]; then
     printf 'No Claude memory stored (nothing to erase).\n'
@@ -529,18 +524,17 @@ process_claude_memory() {
 
 # ---- Interactive chat + memory handling (Codex) -----------------------------
 # clean_directory_contents skips the Codex chat/memory buckets (see
-# codex_bucket), so these functions are the sole authority over them. They give
-# Codex the same courtesy as Claude: every session transcript is previewed and
+# codex_bucket), so these own them: every session transcript is previewed and
 # offered for deletion (default keep), the chat index/logs follow those choices,
-# and the memory store is previewed and only erased after an explicit yes.
+# and the memory store is only erased after an explicit yes.
 
 # True when a string is a plausible session/thread id (safe to splice into SQL).
 codex_id_safe() {
   [[ "$1" =~ ^[0-9a-fA-F-]+$ ]]
 }
 
-# Echo the session id for a rollout transcript (from session_meta, else the
-# UUID in the filename), or nothing.
+# Echo the session id for a rollout transcript (session_meta, else the filename
+# UUID), or nothing.
 codex_session_id() {
   python3 - "$1" 2>/dev/null <<'PY' || true
 import json, os, re, sys
@@ -751,8 +745,8 @@ process_codex_chats() {
 }
 
 # Reconcile the chat index/logs (history.jsonl, state_*/logs_* DBs) with the
-# per-chat decisions: keep them while any chat is kept (pruning history to the
-# kept ids), otherwise offer to remove the now-orphaned chat state.
+# per-chat decisions: keep while any chat is kept, pruning history to the kept
+# ids; otherwise offer to remove the orphaned chat state.
 finalize_codex_chat_side() {
   local any_kept=0 sid
   local kept=()

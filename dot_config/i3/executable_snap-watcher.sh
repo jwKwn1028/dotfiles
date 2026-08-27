@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 # Watches i3 window events. new: auto-snap into the largest free region if the
-# workspace already holds tile-snapped (`_snap_*`) windows. close: expand the
-# remaining snapped windows into the freed quadrants, largest region first.
-# A resubscribe loop survives socket drops; a flock blocks duplicate instances.
+# workspace already holds `_snap_*` windows. close: expand the remaining snapped
+# windows into the freed quadrants, largest region first.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_snap-common.sh"
 
 # ---------- single-instance ----------
-# Wait 5s rather than `flock -n`: `exec_always` pkills the old watcher and
-# spawns a new one, which would otherwise exit before the old fd was released.
+# Wait 5s, not `flock -n`: exec_always pkills the old watcher, releasing the fd.
 mkdir -p "$SNAP_RUNTIME_DIR" 2>/dev/null
 LOCK="$SNAP_RUNTIME_DIR/i3-snap-watcher.lock"
 exec 200>"$LOCK"
@@ -22,9 +20,8 @@ snap_log "watcher starting (pid $$)"
 
 # ---------- region helpers ----------
 
-# expand_region <current_region> <other_quads>
-# Largest region still containing all of current_region's quadrants and not
-# overlapping other_quads. Echoes the region name, empty if none fits.
+# expand_region <current_region> <other_quads> -- largest region still holding
+# current_region's quadrants without overlapping other_quads; empty if none fits.
 expand_region() {
   local cur="$1" others="$2"
   local cur_quads r quads q includes_all conflict
@@ -45,8 +42,7 @@ expand_region() {
   done < <(regions_by_size)
 }
 
-# pick_fill_region <occupied_quads>
-# Largest free region for a new window, preferring halves over quadrants.
+# pick_fill_region <occupied_quads> -- largest free region, halves before quadrants.
 pick_fill_region() {
   local occ="$1"
   local has_ul=0 has_ur=0 has_dl=0 has_dr=0 q
@@ -69,9 +65,8 @@ pick_fill_region() {
   (( !has_dr )) && { echo "dr"; return; }
 }
 
-# workspace_snap_entries <con_id>
-# Emit "id region" lines for snapped windows on the target's workspace. One
-# canonical _snap_* mark per window, so stale duplicates cannot inflate it.
+# workspace_snap_entries <con_id> -- "id region" lines for snapped windows on the
+# target's workspace, one canonical mark each so duplicates cannot inflate it.
 workspace_snap_entries() {
   local win_id="$1"
   i3-msg -t get_tree | jq -r --argjson id "$win_id" '
@@ -153,20 +148,19 @@ handle_new() {
   win_id=$(jq -r '.container.id // empty' <<<"$line")
   [ -z "$win_id" ] && return
 
-  # Apply the title-bar toggle per window: i3 has no runtime default-border set.
+  # Per window: i3 has no runtime default-border set.
   if [ -f "$SNAP_TITLES_STATE" ] && [ "$(cat "$SNAP_TITLES_STATE")" = "on" ]; then
     i3-msg "[con_id=$win_id] border normal" >/dev/null 2>&1
   else
     i3-msg "[con_id=$win_id] border pixel 1" >/dev/null 2>&1
   fi
 
-  # Skip windows that are already floating (dialogs, scratchpad, for_window rules).
+  # Skip already-floating windows (dialogs, scratchpad, for_window rules).
   floating=$(jq -r '.container.floating // ""' <<<"$line")
   case "$floating" in
     user_on|auto_on) return ;;
   esac
 
-  # Collect snap marks on the workspace containing this window.
   entries=$(workspace_snap_entries "$win_id")
   [ -z "$entries" ] && return
   occupied=$(entries_to_quads "$entries")
@@ -184,7 +178,7 @@ handle_new() {
 
 # ---------- close-window handler ----------
 rebalance_workspace_snaps() {
-  # Input: a sequence of "id region" lines on stdin.
+  # Input: "id region" lines on stdin.
   local lines sorted_lines ids=() regs=() n i j others new_region
   lines=$(cat)
   [ -z "$lines" ] && return

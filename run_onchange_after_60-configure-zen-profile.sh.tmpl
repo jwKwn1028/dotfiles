@@ -5,8 +5,7 @@
 {{ $chromeSrc := joinPath .chezmoi.sourceDir "dot_local/share/zen-chrome" -}}
 # Installs the sanitized Zen user.js and the chrome/ customizations into Zen's
 # installation-selected profile, wires browserpass' native messaging host, and
-# seeds handlers.json on a fresh profile. The generated profile itself remains
-# local and ignored by chezmoi.
+# seeds handlers.json on a fresh profile. The profile itself stays local.
 # Profile selection state: {{ if lstat $profilesIni }}{{ include $profilesIni | sha256sum }}{{ else }}missing{{ end }}
 # chrome/ asset state, so this re-runs when the customizations change:
 {{ range $asset := list "userChrome.css" "userContent.css" "zen-newtab-wallpaper.png" -}}
@@ -40,8 +39,7 @@ install_file() {
 
 # Browserpass reaches `pass` through flatpak-spawn, via the shim and manifest
 # below plus the bus grant in dot_local/share/flatpak/overrides/. Manifest paths
-# are sandbox-internal -- flatpak maps ~/.var/app/app.zen_browser.zen over $HOME
-# -- so this is built from .chezmoi.homeDir, not $zen_root.
+# are sandbox-internal, so this is built from .chezmoi.homeDir, not $zen_root.
 install_file "${zen_root}/browserpass-native-host" 0755 <<'BROWSERPASS_SHIM_EOF'
 #!/usr/bin/env sh
 exec /usr/bin/flatpak-spawn --host /usr/lib/browserpass/browserpass-native "$@"
@@ -62,9 +60,8 @@ if [[ ! -f "$profiles_ini" ]]; then
     exit 0
 fi
 
-# Candidate order is: installation-selected profile, profile marked default,
-# then every remaining profile. This mirrors how Firefox-family applications
-# select a profile while avoiding a machine-specific profile name in Git.
+# Candidate order: installation-selected profile, the profile marked default,
+# then the rest -- mirrors Firefox while keeping a profile name out of Git.
 profile_dir=""
 while IFS= read -r candidate; do
     case "$candidate" in

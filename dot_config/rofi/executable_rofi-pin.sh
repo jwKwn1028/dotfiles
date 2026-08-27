@@ -1,35 +1,27 @@
 #!/usr/bin/env bash
 # Pin apps to the top of rofi's drun list.
 #
-# rofi orders drun by launch count in ~/.cache/rofi3.druncache
-# ("<count> <desktop-id>", highest first), so pinning writes counts far above
-# anything organic. Only the empty-query list is ordered; typing re-ranks by fzf.
-#
-# Two rofi 1.7 behaviours constrain the numbers below:
-#   - Launching a pin increments its count, so pins must be spaced or they
-#     reorder each other. STEP is the launches needed to pass one pin.
-#   - Every write subtracts the lowest count from all entries, so the lowest pin
-#     would normalise to 0 and unpin. FLOOR is an inert entry matching no real
-#     app that holds the minimum, evicted once history fills max-history-size.
+# rofi orders drun by launch count in ~/.cache/rofi3.druncache ("<count> <id>",
+# highest first), so pinning writes counts far above anything organic; typing
+# re-ranks by fzf. Launching a pin increments its count, so STEP is the launches
+# needed to pass one pin; every write subtracts the lowest count from all
+# entries, so FLOOR is an inert entry holding the minimum. Desktop files beside
+# this script are installed so rofi can resolve their IDs.
 #
 #   ./rofi-pin.sh                            # apply the PINS list below
 #   ./rofi-pin.sh foo.desktop bar.desktop    # pin these instead (first is top)
-#
-# Desktop files stored beside this script are installed into the user's
-# applications directory so rofi can resolve their desktop IDs. Real history is
-# kept below the pins, dropping any entry just pinned.
 
 set -euo pipefail
 
 PINS=(
-  app.zen_browser.zen.desktop    # Zen Browser
-  micro.desktop                  # micro
-  com.mitchellh.ghostty.desktop  # Ghostty
-  dev.zed.Zed.desktop            # Zed
-  helium.desktop                 # Helium
-  org.kde.okular.desktop         # Okular
-  spotify.desktop                # Spotify
-  mintupdate.desktop             # Update Manager
+  app.zen_browser.zen.desktop
+  micro.desktop
+  com.mitchellh.ghostty.desktop
+  dev.zed.Zed.desktop
+  helium.desktop
+  org.kde.okular.desktop
+  spotify.desktop
+  mintupdate.desktop
 )
 
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/rofi3.druncache"

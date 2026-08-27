@@ -19,8 +19,7 @@ configuration {
 
     background-color: transparent;
     text-color:       @tn-fg;
-    /* Matches Ghostty. 13, not 16: JuliaMono's x-height is 0.550em against
-       New Computer Modern Mono's 0.431em. */
+    /* Matches Ghostty. 13, not 16: JuliaMono's x-height is 0.550em. */
     font: "JuliaMono Regular 13";
 }
 
@@ -70,8 +69,7 @@ element {
 }
 
 element-icon {
-    /* 18px, not 22px: the icon tracks the text size, and the font dropped from
-       16pt to 13pt. 22px next to 13pt text reads as an icon list with captions. */
+    /* 18px, not 22px: the icon tracks the 13pt text size. */
     size:             18px;
     background-color: transparent;
     vertical-align:   0.5;

@@ -15,28 +15,26 @@ language-servers = ["basedpyright", "ruff"]
 auto-format = false
 formatter = { command = "ruff", args = ["format", "--stdin-filename", "stdin.py", "-"] }
 
-# Debugger (DAP): debugpy via `uv run --with debugpy`, which runs the adapter
-# inside the project's venv without a per-project install. `uv` rather than
-# `python` because here `python` is a zsh function Helix cannot spawn. Check
-# with `hx --health python`; keybindings are under Alt-d in config.toml.
+# Debugger (DAP): debugpy via `uv run --with debugpy`, which runs the adapter in
+# the project's venv. `uv` not `python` -- here `python` is a zsh function Helix
+# cannot spawn. Check with `hx --health python`; keys are under Alt-d.
 [language.debugger]
 name = "debugpy"
 transport = "stdio"
 command = "uv"
 args = ["run", "--with", "debugpy", "python", "-m", "debugpy.adapter"]
 
-# Debug the file you name (filename completion, defaults to main.py). justMyCode
-# = false lets you step into library/stdlib code; set true to stay in your own.
+# Debug the file you name (defaults to main.py). justMyCode = false steps into
+# library/stdlib code; set true to stay in your own.
 [[language.debugger.templates]]
 name = "launch (file)"
 request = "launch"
 completion = [ { name = "entrypoint", completion = "filename", default = "main.py" } ]
 args = { program = "{0}", console = "internalConsole", justMyCode = false }
 
-# Attach to an already-running process started with:
+# Attach to a process started with:
 #   python -m debugpy --listen 5678 --wait-for-client your_app.py
-# Helix's template args are a flat string map (no nested tables), so use
-# debugpy's top-level host/port form rather than a nested `connect` object.
+# Helix template args are a flat string map, so use debugpy's top-level host/port.
 [[language.debugger.templates]]
 name = "attach (port)"
 request = "attach"
@@ -104,9 +102,8 @@ soft-wrap = { enable = true, wrap-at-text-width = true }
 
 [language-server.tinymist]
 command = "tinymist"
-# `exportPdf = "onSave"` means tinymist writes its own PDF on each save under
-# `target/`. hxp writes a separate PDF next to the source, so they don't fight.
-# If you'd rather hxp own the only PDF, set exportPdf = "never".
+# `exportPdf = "onSave"`: tinymist writes its own PDF under `target/`, so it does
+# not fight hxp's PDF beside the source. Set "never" to let hxp own the only one.
 config = { exportPdf = "onSave", outputPath = "$root/target/$dir/$name", formatterMode = "typstyle", previewFeature = "enable" }
 
 
@@ -134,8 +131,7 @@ name = "markdown"
 # marksman: wiki-link nav + completion. zk: your notebook. harper-ls: grammar.
 language-servers = ["marksman", "zk", "harper-ls"]
 auto-format = true
-# `--prose-wrap preserve` keeps your manual line wrapping. Switch to "always"
-# if you want prettier to reflow at print-width.
+# `--prose-wrap preserve` keeps manual wrapping; "always" reflows at print-width.
 formatter = { command = "prettier", args = ["--parser", "markdown", "--prose-wrap", "preserve"] }
 soft-wrap = { enable = true, wrap-at-text-width = true }
 
@@ -158,9 +154,8 @@ soft-wrap = { enable = true, wrap-at-text-width = true }
 
 
 # ---------------- Grammar (harper-ls) ----------------
-# Pure-Rust, runs locally, no Java. Wired into markdown / latex / typst above.
-# To opt out for one filetype, just remove "harper-ls" from that entry's
-# language-servers array.
+# Pure-Rust, runs locally, no Java. Wired into markdown / latex / typst above;
+# remove "harper-ls" from a language's list to opt out.
 [language-server.harper-ls]
 command = "harper-ls"
 args = ["--stdio"]
@@ -175,8 +170,7 @@ AnA = true
 RepeatedWords = true
 LongSentences = false
 
-# If you ever want the heavier ltex-ls-plus alongside harper, install it
-# (see install notes) and add a block like:
+# For the heavier ltex-ls-plus alongside harper, install it and add:
 #
 # [language-server.ltex]
 # command = "ltex-ls-plus"

@@ -58,8 +58,7 @@ fix_kakaotalk_windows() {
       continue
     fi
 
-    # A fullscreen window is intentional from i3's point of view. Repairing it
-    # here makes `fullscreen toggle` and this watcher issue opposite commands.
+    # A fullscreen window is intentional; repairing it would fight the i3 toggle.
     if [[ "$fullscreen" != "0" ]]; then
       continue
     fi

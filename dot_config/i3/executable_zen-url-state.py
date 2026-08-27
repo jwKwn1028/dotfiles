@@ -2,12 +2,10 @@
 """Collect and restore Zen/Firefox tab URLs for i3-resurrect.
 
 Reads the browsers' mozlz4 session stores to recover each window's selected tab,
-matches those pages against the live i3 tree, and falls back to asking the
-focused window directly when the session file is behind.
-
-That fallback goes through the clipboard and restores its previous contents. The
-save binding may still have modifiers physically down, so it lets them settle
-and clears any that remain before synthesizing keys.
+matches those against the live i3 tree, and falls back to asking the focused
+window directly when the session file is behind. That fallback goes through the
+clipboard and restores its previous contents; the save binding may still have
+modifiers down, so it clears any that remain before synthesizing keys.
 """
 
 import json

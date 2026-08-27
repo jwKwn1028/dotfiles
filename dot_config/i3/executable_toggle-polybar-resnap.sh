@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 # Toggle polybar (or explicitly show/hide it), wait for the change to reach X,
-# raise the bar, then re-fit snapped windows.
-#
-# An explicit visibility request owns the final state, so cancelling transient
-# ownership stops a peek's delayed worker from applying a second, stale hide.
-# Polybar cannot restack itself without override-redirect, so raising here is
-# what keeps the binding deterministic when i3's workspace stack covers the bar.
+# raise the bar, then re-fit snapped windows. An explicit request owns the final
+# state, so cancelling transient ownership stops a peek's worker applying a stale
+# hide. Polybar cannot restack itself without override-redirect, hence the raise.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"

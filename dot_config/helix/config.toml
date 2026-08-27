@@ -33,9 +33,8 @@ select = "underline"
 cursor-line = "warning"
 other-lines = "disable"
 
-# Soft wrapping: enabled globally, wrapping at the viewport edge so code uses
-# the full terminal width. Prose languages (markdown/latex/typst/text) opt into
-# wrap-at-text-width in languages.toml instead.
+# Soft wrapping at the viewport edge so code uses the full terminal width. Prose
+# languages opt into wrap-at-text-width in languages.toml instead.
 [editor.soft-wrap]
 enable = true
 max-wrap = 25
@@ -55,9 +54,8 @@ parents = true
 "ret" = ["open_below", "normal_mode"]
 # "C" = ":clipboard-yank"
 "V" = ":clipboard-paste-after"
-# SyncTeX forward-search: jump the running zathura/sioyek to the line under
-# the cursor. Works fully for .tex; partial for .md (synctex maps to the
-# pandoc-generated tex); typst has no synctex so this just raises the viewer.
+# SyncTeX forward-search: jumps the running zathura/sioyek to the cursor line.
+# Full for .tex, partial for .md, raise-only for typst (no synctex).
 "C-l" = ":sh ~/.local/bin/hx-fwd-search '%{buffer_name}' %{cursor_line} %{cursor_column}"
 "C-y" = [
   ':insert-output HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi run "%{buffer_name}"',
@@ -69,8 +67,8 @@ parents = true
   ':echo " "',
 ]
 
-# DAP / debug submenu. Helix ships no default debug keys, so these are ours.
-# Leader = Alt-d; drives the debugpy adapter configured in languages.toml.
+# DAP / debug submenu (leader Alt-d): Helix ships no default debug keys. Drives
+# the debugpy adapter configured in languages.toml.
 [keys.normal.A-d]
 t = "dap_toggle_breakpoint"
 d = "dap_launch"          # start a session (prompts you to pick a template)

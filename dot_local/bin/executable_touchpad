@@ -5,23 +5,15 @@
 # Both are the same physical pad and both must be toggled or the surface stays
 # alive. External mice and the TrackPoint are left alone.
 #
-# Usage: touchpad [disable|enable|toggle|status|apply]
-#   disable  turn the touchpad off (DEFAULT action)
-#   enable   turn it on
-#   toggle   flip the current desired state
-#   status   print live + desired state
-#   apply    (re)apply the desired state from the state file — used by
-#            ~/.x-unstick.sh and by i3 autostart on login/reload.
-#
-# The desired state persists in $XDG_STATE_HOME/touchpad.state (default:
-# disabled), so login autostart and recovery scripts can re-assert it.
+# Usage: touchpad [disable|enable|toggle|status|apply]   (default: disable)
+#   apply re-asserts the desired state from the state file, for ~/.x-unstick.sh
+#   and i3 autostart. State persists in $XDG_STATE_HOME/touchpad.state.
 
 set -u
 
-# Case-insensitive ERE matching the built-in touchpad's node names. Matches
-# "ELAN0688:00 04F3:320B Touchpad" and its shadow "... Mouse", but NOT external
-# mice or "TPPS/2 Elan TrackPoint". Override with TOUCHPAD_MATCH=... if hardware
-# changes.
+# Case-insensitive ERE for the built-in pad's node names -- matches the Touchpad
+# node and its shadow Mouse, not external mice or the TrackPoint. Override with
+# TOUCHPAD_MATCH=... if hardware changes.
 MATCH="${TOUCHPAD_MATCH:-ELAN0688}"
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"

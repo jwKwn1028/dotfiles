@@ -4,22 +4,18 @@
 {{ $ntpBg := joinPath .chezmoi.sourceDir "dot_local/share/helium-newtab/background.jpg" -}}
 # Merges the publishable subset of Helium's Chromium preferences into its
 # profile. Helium keeps settings, browsing data and identity in one JSON blob,
-# so the profile itself stays local (.chezmoiignore) and only the settings
-# below are carried in Git: UI chrome layout, theme, fonts, languages, and the
-# search/newtab toggles. Also installs the new-tab background and links the
-# browserpass native messaging host. Deliberately excluded, and not to be added:
-# anything under signin/sync/gcm, password_manager, autofill, extensions,
-# profile.content_settings, media.device_id_salt, enterprise_profile_guid,
-# session and window state, and every counter or timestamp.
+# so the profile stays local (.chezmoiignore) and only UI chrome layout, theme,
+# fonts, languages, and the search/newtab toggles are carried in Git. Also
+# installs the new-tab background and links the browserpass messaging host.
+# Deliberately excluded and not to be added: signin/sync/gcm, password_manager,
+# autofill, extensions, profile.content_settings, media.device_id_salt,
+# enterprise_profile_guid, session/window state, and every counter or timestamp.
 #
-# Every key here must stay out of Chromium's MAC-protected "tracked
-# preferences" set (protection.macs in the live file). Writing a tracked pref
-# from outside the browser invalidates its MAC and makes Helium reset it on
-# next launch, so homepage, session.restore_on_startup, show_home_button,
-# default_search_provider_data and extensions.settings are off limits.
-#
-# This is a run_onchange_ script with the prefs inlined, so editing them below
-# is what re-triggers the merge.
+# Keys must also stay out of Chromium's MAC-protected "tracked preferences"
+# (protection.macs): writing one from outside invalidates its MAC and Helium
+# resets it on next launch -- so homepage, session.restore_on_startup,
+# show_home_button, default_search_provider_data and extensions.settings are off
+# limits. run_onchange_ with the prefs inlined, so editing them re-triggers it.
 # New-tab background state: {{ if lstat $ntpBg }}{{ include $ntpBg | sha256sum }}{{ else }}missing{{ end }}
 set -euo pipefail
 
@@ -77,8 +73,8 @@ import json, os, sys, tempfile
 path, dry_run = sys.argv[1], sys.argv[2] == "1"
 
 managed = {
-    # Helium's own window chrome: zen mode with a hidden top bar, vertical
-    # tabs on the left, and the toolbar buttons pared back to the menu.
+    # Helium's own window chrome: zen mode with a hidden top bar, vertical tabs
+    # on the left, and the toolbar buttons pared back to the menu.
     "helium": {
         "browser": {
             "layout": 2,

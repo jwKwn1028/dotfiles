@@ -4,28 +4,23 @@
 #
 # Drops exact duplicates (keeping the most recent), unresolved command names,
 # trivial standalone commands, and commands carrying credential-like values.
-# Names in $XDG_CONFIG_HOME/zsh-history-cleaner/keep are always treated as real
-# -- uninstalled software, virtualenv-only functions, tools from another machine
-# sharing this history. An unresolved name is also kept when it looks like an
-# explicitly invoked script; path-shaped diagnostics are rejected. A timestamped
-# backup is written before the history is replaced.
+# Names in $XDG_CONFIG_HOME/zsh-history-cleaner/keep are always treated as real.
+# An unresolved name is also kept when it looks like an explicitly invoked
+# script. A timestamped backup is written before the history is replaced.
 #
 # Load-bearing, each having broken this script before:
 #
-#   - It re-enters through an isolated interactive zsh so the user's aliases and
+#   - Re-enters through an isolated interactive zsh so the user's aliases and
 #     functions count as valid commands; that shell never writes the real
 #     history file. `shift` before `source` is required: `source` with no
 #     arguments leaves the caller's positional parameters visible to the sourced
-#     file, which handed this script its own path as HISTORY_FILE and destroyed
-#     it on a no-argument run.
+#     file, which once handed this script its own path as HISTORY_FILE.
 #   - In an interactive shell $history hides the newest event, so a sentinel
 #     occupies that slot; without it the last real entry was dropped.
 #   - Kept entries are copied as raw file records, not replayed with `print -s`:
-#     replaying restamps every entry (SHARE_HISTORY writes timestamps even with
-#     EXTENDED_HISTORY unset) and loses zsh's metafied encoding of non-ASCII.
-#     One record is one entry byte-for-byte -- optional ": <timestamp>:<elapsed>;"
-#     prefix plus the continuation lines of a multi-line command, which zsh marks
-#     with a trailing odd number of backslashes.
+#     replaying restamps every entry and loses zsh's metafied encoding. One
+#     record is one entry byte-for-byte, including the optional
+#     ": <timestamp>:<elapsed>;" prefix and backslash-marked continuation lines.
 #   - `print -s` also ignores the HIST_* discard options, so exact duplicates are
 #     resolved here rather than by HIST_IGNORE_ALL_DUPS.
 

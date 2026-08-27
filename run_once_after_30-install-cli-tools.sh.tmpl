@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Installs tooling that isn't packaged in apt: the Rust toolchain + cargo
-# crates, starship, zoxide, and Miniconda. Best-effort: a single failed
-# crate logs a warning and does not abort the rest of provisioning.
+# Installs tooling that isn't packaged in apt: the Rust toolchain + cargo crates,
+# starship, zoxide, and Miniconda. Best-effort: a single failed crate logs a
+# warning and does not abort the rest of provisioning.
 set -euo pipefail
 
 echo "==> CLI tools provisioning"
@@ -12,18 +12,16 @@ if ! command -v cargo >/dev/null 2>&1; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 fi
 # Must be an `if`, not `[ -f ... ] && . ...`: under `set -e` that one-liner
-# aborts the whole script when the file is absent, which happens whenever cargo
-# came from a distro package rather than from rustup. Everything below --
-# crates, starship, zoxide, Miniconda -- would then be skipped with no error
-# shown.
+# aborts the whole script when the file is absent -- which happens whenever cargo
+# came from a distro package rather than rustup -- skipping everything below.
 if [ -f "$HOME/.cargo/env" ]; then
     # shellcheck disable=SC1091
     . "$HOME/.cargo/env"
 fi
 
 # --- cargo crates from crates.io ---
-# Skipped when the crate's binary is already on PATH, so a tool the distro
-# packages is not rebuilt from source.
+# Skipped when the crate's binary is already on PATH, so a distro-packaged tool
+# is not rebuilt from source.
 {{- range .packages.cargo.registry }}
 if command -v {{ .bin }} >/dev/null 2>&1; then
     echo "  {{ .bin }} already present; skipping crate {{ .crate }}"

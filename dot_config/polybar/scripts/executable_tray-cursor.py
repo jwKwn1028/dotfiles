@@ -1,25 +1,17 @@
 #!/usr/bin/python3
 """Give Polybar's tray icons the click cursor Polybar's own modules get.
 
-A tray icon is a foreign client window reparented into the bar, so the pointer
-never enters Polybar's window while it is over one: X11 resolves the cursor from
-the window under the pointer, and Polybar's `cursor-click = pointer` only ever
-touches its own. Set the cursor on the embedded windows instead.
+A tray icon is a foreign client window reparented into the bar, so X11 resolves
+the cursor from that window and Polybar's `cursor-click = pointer` never applies.
+Set the cursor on the embedded windows instead.
 
-ctypes rather than python-xlib, which the other X11 helpers here use: only
-libXcursor can load the cursor from the active Xcursor theme, the same load
-Polybar does, and a core font cursor would be an unthemed bitmap hand. The theme
-name is declared char*, not c_char_p: ctypes turns c_char_p into bytes on return
-and the pointer XFree needs is gone with it.
+ctypes rather than python-xlib: only libXcursor loads the cursor from the active
+Xcursor theme (a core font cursor would be an unthemed bitmap hand). The theme
+name is declared char*, not c_char_p, or ctypes frees the pointer XFree needs.
 
-Long-running because the cursor is a resource of this X connection -- closing it
-reverts the icons to the arrow -- and because staying up repaints icons when an
-applet docks late. Events are selected on root to catch bars appearing later
-(Polybar restarts on every i3 reload and monitor hotplug); which event arrived
-does not matter, since a repaint is idempotent and cheap.
-
-A window can vanish between the walk that found it and the request that touches
-it, and Xlib's default handler exits the process on the resulting BadWindow.
+Long-running because the cursor belongs to this X connection, and to repaint when
+an applet docks late or Polybar restarts. Errors are ignored: a window can vanish
+between the walk and the request, and Xlib's default handler would exit.
 """
 
 from __future__ import annotations
@@ -28,7 +20,7 @@ import ctypes
 import ctypes.util
 
 SUBSTRUCTURE_NOTIFY_MASK = 1 << 19
-XEVENT_SIZE = 256  # XEvent is a union; oversized is fine, this is scratch space
+XEVENT_SIZE = 256  # XEvent is a union; oversized scratch space is fine
 
 Window = ctypes.c_ulong
 
@@ -96,11 +88,10 @@ def paint(display, window, cursor):
 
 
 def refresh(display, root, cursor):
-    """Repaint every docked tray icon, and watch the bars carrying them.
+    """Repaint docked tray icons and watch the bars carrying them.
 
-    The bar window itself is skipped -- Polybar drives its own cursor there --
-    and so is the tray module's padding, which is drawn by the bar. Only the
-    per-icon wrapper windows and their embedded clients are painted.
+    The bar window and the tray module's padding are Polybar's own; only the
+    per-icon wrappers and their embedded clients are painted.
     """
     for bar in children(display, root):
         if window_class(display, bar) != b"Polybar":

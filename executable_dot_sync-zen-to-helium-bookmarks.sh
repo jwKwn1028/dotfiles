@@ -1,26 +1,16 @@
 #!/usr/bin/env bash
 # Mirror bookmarks from Zen (Firefox-based, places.sqlite) into Helium
-# (Chromium-based, "Bookmarks" JSON).
+# (Chromium-based, "Bookmarks" JSON). Zen is the single source of truth: every
+# run rebuilds Helium's tree to match. Helium's bookmarks are backed up first,
+# so this is always reversible.
 #
-# Zen is the single source of truth: every run rebuilds Helium's tree to match
-# it exactly. Helium's current bookmarks are backed up first, so this is always
-# reversible.
+#   Zen toolbar -> "Bookmarks bar";  menu + unfiled -> "Other bookmarks";
+#   mobile -> "Mobile bookmarks"
 #
-#   Zen toolbar         -> Helium "Bookmarks bar"
-#   Zen menu + unfiled  -> Helium "Other bookmarks"
-#   Zen mobile          -> Helium "Mobile bookmarks"
-#
-# Usage:
-#   ./sync-zen-to-helium-bookmarks.sh [--dry-run] [--force]
-#
-#   --dry-run   Show what would be synced without writing anything.
-#   --force     Proceed even if Helium appears to be running (NOT recommended:
-#               Helium overwrites this file when it closes).
-#
-# Override defaults with environment variables:
-#   ZEN_PLACES=/path/to/places.sqlite
-#   HELIUM_BOOKMARKS=/path/to/Bookmarks
-#   KEEP_BACKUPS=5             How many timestamped backups to retain.
+# Usage: ./sync-zen-to-helium-bookmarks.sh [--dry-run] [--force]
+#   --force proceeds even if Helium is running (NOT recommended: Helium
+#   overwrites this file when it closes).
+# Env overrides: ZEN_PLACES, HELIUM_BOOKMARKS, KEEP_BACKUPS (default 5).
 #
 set -euo pipefail
 
@@ -101,10 +91,9 @@ log "Zen source : $ZEN"
 log "Helium dest: $HEL"
 
 # --- Refuse to run while Helium is open (it would clobber our write) --------
-# (A dry run writes nothing, so the check is only enforced for real syncs.)
-# Match the process name, not the command line: this script's own path contains
-# "helium", so -f would match any parent wrapper. -x covers the AppImage's
-# truncated comm ("helium-0.15.3.1") too.
+# (A dry run writes nothing, so this is only enforced for real syncs.) Match the
+# process name, not the command line: this script's own path contains "helium",
+# so -f would match any parent wrapper. -x covers the AppImage's truncated comm.
 if [ "$DRY_RUN" -eq 0 ] && pgrep -x 'helium(-.*)?' >/dev/null 2>&1; then
   if [ "$FORCE" -eq 1 ]; then
     err "Helium appears to be running -- continuing because --force was given."
@@ -120,8 +109,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
   cp -p "$HEL" "$BACKUP"
   log "Backup     : $BACKUP"
 
-  # Keep the newest KEEP_BACKUPS. Timestamped names sort oldest-first, and the
-  # hyphen in ".bak-" spares hand-made ".bak.pre-*" snapshots.
+  # Keep the newest KEEP_BACKUPS; the hyphen in ".bak-" spares hand-made snapshots.
   shopt -s nullglob
   BACKUPS=("${HEL}".bak-*)
   shopt -u nullglob
@@ -137,8 +125,7 @@ import sys, os, json, sqlite3, uuid, hashlib, shutil, tempfile, urllib.parse
 
 zen_path, hel_path, dry = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 
-# Firefox stores timestamps as microseconds since 1970-01-01.
-# Chromium stores microseconds since 1601-01-01. Difference in microseconds:
+# Firefox timestamps are microseconds since 1970, Chromium since 1601. Delta:
 EPOCH_DELTA = 11644473600000000
 
 def to_chrome_time(ff_micros):
@@ -146,9 +133,8 @@ def to_chrome_time(ff_micros):
         return "0"
     return str(int(ff_micros) + EPOCH_DELTA)
 
-# Use SQLite's online backup API to take one transactionally consistent snapshot.
-# Copying places.sqlite, -wal, and -shm as separate files can mix different
-# database moments while Zen is writing and either miss or corrupt recent rows.
+# SQLite's online backup API gives one transactionally consistent snapshot;
+# copying places.sqlite plus -wal/-shm separately can mix database moments.
 snapdir = tempfile.mkdtemp(prefix="zen-places-")
 source = snapshot = None
 try:

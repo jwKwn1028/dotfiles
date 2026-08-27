@@ -1,16 +1,10 @@
-# Shared helpers for the rc.d modules. Sourced by ~/.zshrc before the numbered
-# ones.
+# Shared helpers for the rc.d modules, sourced by ~/.zshrc before the numbered ones.
 #
-# _have <cmd> is the shared "is this optional tool on PATH" guard.
-#
-# Tool variants are resolved once so every module agrees on the same binary:
-#   _zsh_fd  -> fd | fdfind | ''    (Debian/Ubuntu package fd as fdfind)
-#   _zsh_bat -> bat | batcat | cat
-#
-# _zsh_ls_files [-d] [ext] prints candidate paths under $PWD, via fd or find(1):
-# hidden included, .git pruned, .gitignore NOT honored -- fd would otherwise hide
-# files the find(1) fallback lists, making the same call differ per machine. -d
-# lists directories; ext restricts by extension, case-insensitively.
+#   _have <cmd>   guard for optional tools on PATH
+#   _zsh_fd -> fd | fdfind | ''     _zsh_bat -> bat | batcat | cat
+#   _zsh_ls_files [-d] [ext]  candidate paths under $PWD via fd or find(1):
+#     hidden included, .git pruned, .gitignore NOT honored (else fd and the
+#     find(1) fallback differ per machine). -d lists directories; ext filters.
 
 _have() { whence -p -- "$1" >/dev/null 2>&1; }
 

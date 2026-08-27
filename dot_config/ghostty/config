@@ -8,7 +8,7 @@ font-style = Regular
 font-size = 15
 font-feature = -calt, -liga, -dlig
 
-# Delta, not a scale factor: +15% adds 15%. Lands the cell at ~1.35em.
+# Delta, not a scale factor. Lands the cell at ~1.35em.
 adjust-cell-height = 15%
 
 # Matches xfce default-geometry 120x36
@@ -36,21 +36,19 @@ shell-integration-features = cursor,sudo,title,ssh-terminfo
 
 # Matches xfce font-allow-bold = false
 font-style-bold = false
-# No synthesized slant on the CJK/Nerd fallbacks; JuliaMono's real italic stays.
+# No synthesized slant on the fallbacks; JuliaMono's real italic stays.
 font-synthetic-style = no-italic
 
 # No GTK header bar and no XFWM titlebar.
 window-decoration = none
 gtk-titlebar = false
 
-# Tab bar only with 2+ tabs. It is the only tab indicator here: one Ghostty
-# window reports a single title to i3/Polybar however many tabs it holds.
+# Tab bar only with 2+ tabs; i3/Polybar see one title per window regardless.
 window-show-tab-bar = auto
-# Alt+Shift+T (i3) rewrites this include and sends SIGUSR2 to toggle the bar off
-# and on; see toggle-tabbar.sh. Optional (`?`) so a missing file is not fatal --
-# it is local-only state, kept out of chezmoi.
+# Alt+Shift+T (i3) rewrites this include and sends SIGUSR2; see toggle-tabbar.sh.
+# Optional (`?`): local-only state, kept out of chezmoi.
 config-file = ?tabbar-state.conf
-# Equal-width tabs give each a fixed position, matching the Alt+N goto_tab binds.
+# Equal-width tabs give fixed positions, matching the Alt+N goto_tab binds.
 gtk-wide-tabs = true
 gtk-toolbar-style = flat
 # Thin title strip; see tabbar.css. Relative to this file's directory.
@@ -68,9 +66,8 @@ keybind = ctrl+shift+l=goto_split:right
 # Replaces Ghostty's default Ctrl+Tab next-tab.
 keybind = ctrl+tab=goto_split:next
 
-# Tabs on Alt-family, splits on Ctrl+Shift-family. Not plain Alt+H/L: zsh-helix-mode
-# binds ^[h / ^[l, and Ghostty consumes a keybind before the shell sees it. Not Super
-# either: i3 owns $mod+H/L for focus (i3/config:47,50). Alt+Shift+H/L is free in all three.
+# Tabs on Alt, splits on Ctrl+Shift. Not plain Alt+H/L (zsh-helix-mode binds
+# ^[h / ^[l) and not Super (i3 owns $mod+H/L for focus).
 keybind = alt+shift+h=previous_tab
 keybind = alt+shift+l=next_tab
 

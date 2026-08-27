@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Re-run display-setup.sh on monitor hotplug, so it no longer waits for a manual
-# Super+Shift+P. Source is i3's `output` event: Debian's xrandr has no
-# `--listen` and srandrd is not packaged for Mint 22.3.
-#
+# Re-run display-setup.sh on monitor hotplug. Source is i3's `output` event:
+# Debian's xrandr has no `--listen` and srandrd is not packaged for Mint 22.3.
 # Trigger is the connected-output set, not the raw event -- display-setup.sh
 # drives xrandr, so acting on events directly would loop.
 
@@ -18,14 +16,12 @@ command -v xrandr >/dev/null 2>&1 || exit 0
 command -v i3-msg >/dev/null 2>&1 || exit 0
 [ -x "$DISPLAY_SETUP" ] || exit 0
 
-# Wait, not `flock -n`: exec_always pkills the old watcher, and the new one
-# would otherwise exit before that fd was released.
+# Wait, not `flock -n`: exec_always pkills the old watcher, which must release it.
 mkdir -p "$RUNTIME_DIR" 2>/dev/null || true
 exec 200>"$RUNTIME_DIR/i3-randr-hotplug.lock"
 flock -w 5 200 || exit 0
 
-# `connected` covers a plugged-in-but-unconfigured monitor, which is the state
-# that needs display-setup.sh.
+# `connected` covers a plugged-in-but-unconfigured monitor, the state that needs it.
 connected_signature() {
     xrandr --query 2>/dev/null |
         awk '$2 == "connected" { print $1 }' |
@@ -60,7 +56,7 @@ while true; do
         drain_events
 
         # Looped, not checked once: a monitor plugged in during the run emits
-        # its events into the drain, so nothing would wake us for it later.
+        # its events into the drain.
         while :; do
             signature="$(connected_signature)"
             [ "$signature" = "$LAST_SIGNATURE" ] && break
@@ -72,7 +68,6 @@ while true; do
         done
     done 3< <(i3-msg -t subscribe -m '["output"]' 2>/dev/null)
 
-    # exec_always respawns us on an i3 restart, so this only covers a transient
-    # socket drop.
+    # exec_always respawns us on an i3 restart; this covers a transient socket drop.
     sleep 1
 done

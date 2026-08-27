@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Re-apply tile-snap.sh to every window marked `_snap_<region>`, after
-# toggle-titles.sh or `polybar-msg cmd toggle` changes the usable rect. Runs
-# concurrently since tile-snap targets disjoint windows.
-#
-# One entry per window, not per mark: a window with stale duplicate _snap_*
-# marks gets its largest picked, and tile-snap unmarks the rest.
+# Re-apply tile-snap.sh to every window marked `_snap_<region>` after the usable
+# rect changes. Runs concurrently since tile-snap targets disjoint windows. One
+# entry per window, not per mark: largest wins, and tile-snap unmarks the rest.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"

@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Polybar visibility for the Super+R window mode. Same contract as bar-nav.sh
-# and kill-workspace-mode.sh: a bar that was already up stays up on exit, one
-# that was hidden -- or up only for a transient peek -- hides again. Every exit
-# here restores; kill-workspace mode exempts only its number keys, which leave
-# the bar up to show the workspace they emptied.
+# Polybar visibility for the Super+R window mode. Same contract as bar-nav.sh and
+# kill-workspace-mode.sh: a bar already up stays up on exit, one that was hidden
+# -- or up only for a transient peek -- hides again.
 
 set -u
 

@@ -1,17 +1,12 @@
 # ~/.bashrc — ported to mirror ~/.zshrc behavior where bash allows.
 #
-# Deliberately ONE file, unlike zsh's ~/.zsh/rc.d/ modules: zsh is the login
-# shell and 3x this size, and its split also buys per-module zcompile, which
-# bash has no equivalent for. Section order here matches the rc.d numbering so
-# each block has an obvious zsh counterpart.
-#
-# No bash equivalent (intentionally omitted): zsh-helix-mode modal editing,
-# zsh-autosuggestions, zsh-syntax-highlighting, zcompile, the AUTO_PUSHD-based
-# `cd --`/`cd +N` multi-dash trick, the global alias `Y` (bash has no global
-# aliases), and 30-aliases.zsh's generated tt/tn Taskwarrior shortcuts.
+# Deliberately ONE file, unlike zsh's ~/.zsh/rc.d/ modules; section order matches
+# the rc.d numbering so each block has an obvious zsh counterpart. No bash
+# equivalent, intentionally omitted: zsh-helix-mode, autosuggestions, syntax
+# highlighting, zcompile, the AUTO_PUSHD `cd --`/`cd +N` trick, the global alias
+# `Y`, and 30-aliases.zsh's generated tt/tn shortcuts.
 
-# Bash-only file. If a different shell (e.g. zsh) sources it, bail out at once
-# so it doesn't choke on shopt/bind/complete/etc.
+# Bash-only file: bail out at once if another shell sources it.
 [ -n "$BASH_VERSION" ] || return 0 2>/dev/null
 
 # If not running interactively, don't do anything
@@ -20,9 +15,7 @@ case $- in
   *) return ;;
 esac
 
-# --------------------------------------------------------
-# Startup Banner (Random, Centered, Bold, Green)
-# --------------------------------------------------------
+# --- Startup Banner (Random, Centered, Bold, Green) ---
 __startup_banner() {
   local messages=(
     "Welcome Back"
@@ -54,9 +47,7 @@ if (( SHLVL <= 2 )); then
 fi
 unset -f __startup_banner
 
-# --------------------------------------------------------
-# Shell options
-# --------------------------------------------------------
+# --- Shell options ---
 shopt -s autocd 2>/dev/null      # AUTO_CD: bare `dir` => `cd dir`
 shopt -s extglob                 # EXTENDED_GLOB-ish extended patterns
 shopt -s globstar 2>/dev/null    # ** recursive glob
@@ -66,8 +57,7 @@ shopt -s histverify              # HIST_VERIFY: load expansion onto line, don't 
 shopt -s cmdhist                 # multiline command -> single history entry
 set -o noclobber                 # NO_CLOBBER: refuse to clobber existing files with >
 
-# readline tweaks (~ zsh menu/colored completion + NO_BEEP).
-# Ctrl-X Ctrl-E edits the current line in $EDITOR (bash default, like edit-command-line).
+# readline: menu/colored completion, no beep. Ctrl-X Ctrl-E edits in $EDITOR.
 bind 'set completion-ignore-case on'
 bind 'set completion-map-case on'        # treat - and _ as equivalent
 bind 'set show-all-if-ambiguous on'      # single Tab shows the menu
@@ -75,9 +65,7 @@ bind 'set colored-stats on'
 bind 'set colored-completion-prefix on'
 bind 'set bell-style none'
 
-# --------------------------------------------------------
-# History
-# --------------------------------------------------------
+# --- History ---
 HISTFILE="${XDG_STATE_HOME:-$HOME/.local/state}/bash/history"
 [ -d "${HISTFILE%/*}" ] || mkdir -p -- "${HISTFILE%/*}"
 # Seed the XDG history from the old ~/.bash_history once, if present.
@@ -94,9 +82,7 @@ case ";${PROMPT_COMMAND:-};" in
   *) PROMPT_COMMAND="__hist_sync${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;
 esac
 
-# --------------------------------------------------------
-# PATH
-# --------------------------------------------------------
+# --- PATH ---
 _path_prepend() {                 # move-to-front + dedup (~ zsh `typeset -U path`)
   PATH=":${PATH}:"
   PATH="${PATH//:$1:/:}"
@@ -122,27 +108,20 @@ unset _path_dirs _i
 unset -f _path_prepend
 export PATH
 
-# --------------------------------------------------------
-# Editor / env
-# --------------------------------------------------------
-# Collected here to mirror ~/.zshenv, which groups the same exports. Bash has
-# no ~/.zshenv equivalent (BASH_ENV only fires for non-interactive shells), so
-# they stay in this file behind the interactive guard.
+# --- Editor / env ---
+# Grouped like ~/.zshenv; bash has no equivalent (BASH_ENV is non-interactive only).
 export EDITOR=hx
 export VISUAL=hx
 export MICRO_TRUECOLOR=1
 export BAT_THEME="tokyonight_storm"
 export ZK_EDITOR="hx"
 
-# --------------------------------------------------------
-# Shared helpers (mirrors ~/.zsh/rc.d/_lib.zsh)
-# --------------------------------------------------------
+# --- Shared helpers (mirrors ~/.zsh/rc.d/_lib.zsh) ---
 # _have <cmd> -> succeeds if <cmd> is an external command on PATH.
 _have() { type -P -- "$1" >/dev/null 2>&1; }
 
-# Resolve tool variants once so every block below agrees on the same binary.
-#   $_bash_fd  -> fd | fdfind | ''   (Debian/Ubuntu package fd as fdfind)
-#   $_bash_bat -> bat | batcat | cat
+# Resolve tool variants once so every block agrees on the same binary.
+#   $_bash_fd -> fd|fdfind|''   $_bash_bat -> bat|batcat|cat
 if   _have fd;     then _bash_fd=fd
 elif _have fdfind; then _bash_fd=fdfind
 else                    _bash_fd=
@@ -152,12 +131,9 @@ elif _have batcat; then _bash_bat=batcat
 else                    _bash_bat='cat'
 fi
 
-# _bash_ls_files [-d] [ext]
-#   Print candidate paths under $PWD: hidden included, .git pruned,
-#   .gitignore NOT honored (fd would otherwise hide files the find(1)
-#   fallback lists, making the same call differ per machine).
-#   -d lists directories instead; ext restricts to files with that
-#   extension (case-insensitive).
+# _bash_ls_files [-d] [ext] -- candidate paths under $PWD: hidden included,
+# .git pruned, .gitignore NOT honored (else fd and the find(1) fallback differ
+# per machine). -d lists directories; ext filters by extension.
 _bash_ls_files() {
   local kind=file ext
   local -a cmd
@@ -185,9 +161,7 @@ _bash_ls_files() {
   fi
 }
 
-# --------------------------------------------------------
-# Aliases
-# --------------------------------------------------------
+# --- Aliases ---
 alias twt='taskwarrior-tui'
 alias v='vim .'
 alias c='code .'
@@ -212,16 +186,10 @@ if _have sinfo; then
   alias wsidle='watch -d -n 10 '\''sinfo -t idle -o "%.20P %.6D %N"'\'''
 fi
 
-# Auto-list on cd (bash chpwd equivalent; mirrors _auto_ls in
-# ~/.zsh/rc.d/35-navigation.zsh).
-#
-# Names only: the `ls` alias above adds --long --git, which costs a git status
-# per file. This runs on every directory change, so it stays a plain grid --
-# one fork, no git.
-#
-# Skipped past AUTO_LS_MAX entries so `cd /usr/bin` does not scroll the screen
-# away. Counted with a glob rather than `eza | wc -l` so the common case forks
-# once, not twice; dotfiles are excluded, matching eza's default.
+# Auto-list on cd (mirrors _auto_ls in ~/.zsh/rc.d/35-navigation.zsh). Names
+# only: the `ls` alias adds --long --git, a git status per file, too costly on
+# every cd. Skipped past AUTO_LS_MAX entries so `cd /usr/bin` does not scroll
+# the screen; counted with a glob so the common case forks once, not twice.
 if _have eza; then
   AUTO_LS_MAX=${AUTO_LS_MAX:-50}
   __chpwd_last=$PWD
@@ -245,9 +213,7 @@ alias .....='cd ../../../..'
 # Ripgrep
 alias rg='rg --smart-case'
 
-# --------------------------------------------------------
-# Completion
-# --------------------------------------------------------
+# --- Completion ---
 if ! shopt -oq posix; then
   if [ -f /usr/share/bash-completion/bash_completion ]; then
     . /usr/share/bash-completion/bash_completion
@@ -258,52 +224,77 @@ fi
 # Populate LS_COLORS so `colored-stats` completion is colorized.
 [ -x /usr/bin/dircolors ] && eval "$(dircolors -b)"
 
-# --------------------------------------------------------
-# zoxide  (note: zsh's multi-dash `cd --`/+N needs AUTO_PUSHD; not ported)
-# --------------------------------------------------------
+# --- zoxide  (note: zsh's multi-dash `cd --`/+N needs AUTO_PUSHD; not ported) ---
 if _have zoxide; then
   eval "$(zoxide init bash --cmd cd)"
 fi
 
-# --------------------------------------------------------
-# ranger
-# --------------------------------------------------------
+# --- nnn ---
+n() {
+  _have nnn || { echo "n: nnn not found" >&2; return 127; }
+
+  local NNN_TMPFILE rc
+  NNN_TMPFILE="$(mktemp "${TMPDIR:-/tmp}/nnn-cd.XXXXXX")" || return 1
+  export NNN_TMPFILE
+
+  command nnn "$@"
+  rc=$?
+  if (( rc == 0 )) && [ -s "$NNN_TMPFILE" ]; then
+    # shellcheck source=/dev/null
+    . "$NNN_TMPFILE" || rc=$?
+  fi
+  rm -f -- "$NNN_TMPFILE"
+  return "$rc"
+}
+alias np='n "$HOME/Documents/Workspace/Project"'
+
+# --- ranger ---
 r() {
   _have ranger || { echo "r: ranger not found" >&2; return 127; }
-  local start_dir="${1:-$PWD}" tempfile dest
-  tempfile="$(mktemp "${TMPDIR:-/tmp}/ranger-cd.XXXXXX")" || return 1
-  command ranger --choosedir="$tempfile" -- "$start_dir"
-  dest="$(<"$tempfile")"
-  rm -f -- "$tempfile"
-  [ -n "$dest" ] && [ "$dest" != "$PWD" ] && builtin cd -- "$dest"
+
+  local start_dir="${1:-$PWD}" tmp dest rc
+  tmp="$(mktemp "${TMPDIR:-/tmp}/ranger-cd.XXXXXX")" || return 1
+
+  command ranger --choosedir="$tmp" -- "$start_dir"
+  rc=$?
+  if (( rc == 0 )); then
+    dest="$(<"$tmp")"
+    if [ -n "$dest" ] && [ "$dest" != "$PWD" ]; then
+      builtin cd -- "$dest" || rc=$?
+    fi
+  fi
+  rm -f -- "$tmp"
+  return "$rc"
 }
 alias rp='r "$HOME/Documents/Workspace/Project"'
 
-# --------------------------------------------------------
-# Yazi
-# --------------------------------------------------------
+# --- Yazi ---
 y() {
   _have yazi || { echo "y: yazi not found" >&2; return 127; }
-  local tmp; tmp="$(mktemp -t yazi-cwd.XXXXXX)" || return 1
-  yazi "$@" --cwd-file="$tmp"
-  local cwd
-  if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
-    builtin cd -- "$cwd"
+
+  local tmp cwd rc
+  tmp="$(mktemp "${TMPDIR:-/tmp}/yazi-cwd.XXXXXX")" || return 1
+
+  command yazi "$@" --cwd-file="$tmp"
+  rc=$?
+  if (( rc == 0 )); then
+    cwd="$(<"$tmp")"
+    if [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+      builtin cd -- "$cwd" || rc=$?
+    fi
   fi
   rm -f -- "$tmp"
+  return "$rc"
 }
 alias yp='y "$HOME/Documents/Workspace/Project"'
 
-# --------------------------------------------------------
-# Universal Extract
-# --------------------------------------------------------
+# --- Universal Extract ---
 ex() {
   (( $# )) || { echo "usage: ex <archive>..." >&2; return 2; }
   local a
   for a in "$@"; do
     [ -f "$a" ] || { echo "ex: '$a' is not a valid file" >&2; return 1; }
-    # tar.* patterns must precede the bare-compressor ones so foo.tar.gz
-    # untars instead of merely gunzipping.
+    # tar.* patterns must precede the bare-compressor ones so foo.tar.gz untars.
     case "$a" in
       *.tar.bz2)        tar xjf "$a"        ;;
       *.tar.gz)         tar xzf "$a"        ;;
@@ -325,11 +316,8 @@ ex() {
   done
 }
 
-# --------------------------------------------------------
-# fzf integration
-# --------------------------------------------------------
-# Uses $_bash_fd / $_bash_bat (resolved once above) instead of the old
-# per-block fd -> fdfind -> rg -> find ladder. Mirrors ~/.zsh/rc.d/40-fzf.zsh.
+# --- fzf integration ---
+# Uses $_bash_fd / $_bash_bat, resolved once above. Mirrors ~/.zsh/rc.d/40-fzf.zsh.
 if _have fzf; then
   if [ -n "$_bash_fd" ]; then
     export FZF_DEFAULT_COMMAND="$_bash_fd --hidden --follow --exclude .git --type f"
@@ -349,8 +337,7 @@ if _have fzf; then
   fi
   export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 
-  # Scratch vars stay out of the session: plain `cat` takes none of bat's flags,
-  # so the highlighter line is built rather than interpolated blindly.
+  # Built, not interpolated: plain `cat` takes none of bat's flags.
   _fzf_preview_opts() {
     local highlight='cat -- {}'
     [ "$_bash_bat" != cat ] &&
@@ -389,23 +376,17 @@ if [[ $- == *i* ]]; then
   fi
 fi
 
-# --------------------------------------------------------
-# Helix + FZF
-# --------------------------------------------------------
+# --- Helix + FZF ---
 hf() {
   local file
   file="$(fzf --prompt='Open with Helix> ')" || return 1
   hx "$file"
 }
 
-# --------------------------------------------------------
-# PDF / EPUB openers (fzf)
-# --------------------------------------------------------
-# One implementation; so/zo just choose the preferred viewer:
-#   so -> sioyek first, zathura as fallback
-#   zo -> zathura first, sioyek as fallback
-# With a path argument the viewer opens it directly; bare, fzf picks.
-# Mirrors _zsh_open_pdf in ~/.zsh/rc.d/45-openers.zsh.
+# --- PDF / EPUB openers (fzf) ---
+# One implementation; so prefers sioyek, zo prefers zathura, each falling back to
+# the other. A path argument opens directly; bare, fzf picks. Mirrors
+# _zsh_open_pdf in ~/.zsh/rc.d/45-openers.zsh.
 _bash_open_pdf() {
   local caller="${FUNCNAME[1]:-open-pdf}"
   local prefer="$1" viewer='' v file
@@ -437,9 +418,7 @@ _bash_open_pdf() {
   fi
 
   case "$viewer" in
-    # --new-window overrides our hxp-tuned `should_launch_new_window 0` pref so
-    # ad-hoc browsing opens each PDF in its own window instead of replacing
-    # the hxp preview window.
+    # --new-window overrides the hxp-tuned pref so each PDF gets its own window.
     sioyek)  nohup sioyek --new-window "$file" >/dev/null 2>&1 & ;;
     zathura) nohup zathura "$file"             >/dev/null 2>&1 & ;;
   esac
@@ -464,21 +443,15 @@ bo() {
   nohup ebook-viewer "$file" >/dev/null 2>&1 &
 }
 
-# --------------------------------------------------------
-# File manager
-# --------------------------------------------------------
-# Mirrors thunar() in ~/.zsh/rc.d/45-openers.zsh: bare `thunar` opens $PWD
-# rather than $HOME, detached. `command` keeps ~/.local/bin/thunar (the
-# GTK_THEME wrapper) in play; .desktop and systemd launches never see this.
+# --- File manager ---
+# Mirrors thunar() in ~/.zsh/rc.d/45-openers.zsh: bare `thunar` opens $PWD,
+# detached. `command` keeps the ~/.local/bin/thunar GTK_THEME wrapper in play.
 thunar() {
   nohup command thunar "${@:-$PWD}" >/dev/null 2>&1 &
 }
 
-# --------------------------------------------------------
-# Zk
-# --------------------------------------------------------
-# Previews use $_bash_bat (resolved above); plain `cat` takes none of bat's
-# flags, so the preview command is built rather than interpolated blindly.
+# --- Zk ---
+# Built, not interpolated: plain `cat` takes none of bat's flags.
 zn() {
   local note preview='cat -- {}'
   [ "$_bash_bat" != cat ] &&
@@ -505,21 +478,16 @@ zs() {
   [ -n "$note" ] && hx "$note"
 }
 
-# hxp/wpdf (live editor + PDF preview) is implemented in zsh (~/.zsh/hxp-main.zsh)
-# and has no bash port, so it is intentionally not wired up here.
+# hxp/wpdf is zsh-only (~/.zsh/hxp-main.zsh); no bash port.
 
-# --------------------------------------------------------
-# Sensors watch
-# --------------------------------------------------------
+# --- Sensors watch ---
 tcheck () {
   local interval="${1:-2}"
   watch -n "$interval" --color \
     "sensors | egrep -i '(^core [0-9]+:|^package id [0-9]+:|^tctl:|^tdie:|^cpu temp|^fan[0-9]*:|fan.*rpm|rpm)'"
 }
 
-# --------------------------------------------------------
-# Clipboard helper: shared with tmux via ~/.local/bin/clipcopy
-# --------------------------------------------------------
+# --- Clipboard helper: shared with tmux via ~/.local/bin/clipcopy ---
 _clipcopy() {
   if _have clipcopy; then
     clipcopy
@@ -546,14 +514,11 @@ crpd() {
 # make less friendlier for non-text input
 [ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
 
-# --------------------------------------------------------
-# Env / package managers
-# --------------------------------------------------------
+# --- Env / package managers ---
 [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
 
-# Lazy conda, mirroring ~/.zsh/conda-lazy.zsh. The `conda init` block this
-# replaces ran `conda shell.bash hook` (a python start-up) on every interactive
-# shell; these stubs pay that cost only when one of the tools is first used.
+# Lazy conda, mirroring ~/.zsh/conda-lazy.zsh: these stubs pay the
+# `conda shell.bash hook` python start-up only on first use.
 lazy_conda_commands=(conda python pip jupyter mamba)
 
 _conda_init_lazy() {
@@ -571,11 +536,9 @@ _conda_init_lazy() {
   }
   eval "$("$conda_root/bin/conda" shell.bash hook 2>/dev/null)" || return 127
 
-  # auto_activate is off (~/.condarc); make sure the wrapped tools actually
-  # come from conda. Unless the command already resolves inside $conda_root,
-  # activate base first -- this covers both "not found" (python) and "shadowed
-  # by a system binary" (Ubuntu's /usr/bin/pip). `conda` itself is exempt: the
-  # hook defines it as a function.
+  # auto_activate is off (~/.condarc), so activate base unless the command
+  # already resolves inside $conda_root -- covers both "not found" and
+  # "shadowed by a system binary". `conda` is exempt: the hook makes it a function.
   if [ "$1" != conda ] && [[ "$(type -P -- "$1" 2>/dev/null)" != "$conda_root"/* ]]; then
     conda activate base 2>/dev/null
   fi
@@ -601,9 +564,7 @@ case ":$PATH:" in
 esac
 # <<< juliaup initialize <<<
 
-# --------------------------------------------------------
-# Starship Prompt (must come last)
-# --------------------------------------------------------
+# --- Starship Prompt (must come last) ---
 if _have starship; then
   eval "$(starship init bash)"
 fi

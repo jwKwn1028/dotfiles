@@ -1,9 +1,6 @@
-# --------------------------------------------------------
-# fzf integration
-# --------------------------------------------------------
-# Default/CTRL-T/ALT-C commands, preview, keybindings, hf.
-# Uses $_zsh_fd / $_zsh_bat (resolved once in _lib.zsh) instead of the
-# old per-block fd -> fdfind -> rg -> find ladder.
+# --- fzf integration ---
+# Default/CTRL-T/ALT-C commands, preview, keybindings, hf. Uses $_zsh_fd /
+# $_zsh_bat, resolved once in _lib.zsh.
 if _have fzf; then
 
   if [[ -n $_zsh_fd ]]; then
@@ -29,8 +26,7 @@ if _have fzf; then
     _fzf_compgen_dir()  { find "${1:-.}" -type d -not -path '*/.git/*'; }
   fi
 
-  # Preview command, built inside an anonymous function so the scratch
-  # variables stay local (the old top-level `local`s leaked into the session).
+  # Built inside an anonymous function so the scratch variables stay local.
   () {
     local highlight='cat -- {}'
     [[ $_zsh_bat != cat ]] && highlight="$_zsh_bat --color=always --style=numbers --line-range=:500 -- {}"
@@ -52,9 +48,7 @@ if _have fzf; then
   }
 fi
 
-# --------------------------------------------------------
-# Source fzf keybindings
-# --------------------------------------------------------
+# --- Source fzf keybindings ---
 if [[ -t 0 && -t 1 ]]; then
   if [[ -f "$HOME/.fzf.zsh" ]]; then
     source "$HOME/.fzf.zsh"
@@ -104,9 +98,7 @@ if (( $+functions[zhm_wrap_widget] && $+functions[fzf-completion] )); then
   bindkey '^I' zhm_fzf_completion
 fi
 
-# --------------------------------------------------------
-# Helix + FZF
-# --------------------------------------------------------
+# --- Helix + FZF ---
 hf() {
   local file
   file="$(fzf --prompt='Open with Helix> ')" || return

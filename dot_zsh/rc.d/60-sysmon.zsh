@@ -1,27 +1,17 @@
 # sysmon: live CPU/GPU load and temps, RAM load, and fan speeds.
 # Usage: sysmon [interval_seconds]
-#   CPU temp  -> k10temp / Tctl        (AMD die temp)
-#   GPU temp  -> amdgpu  / edge        (integrated Radeon)
-#   fans      -> thinkpad-isa fan1/fan2
+#   CPU temp -> k10temp/Tctl,  GPU temp -> amdgpu/edge,  fans -> thinkpad-isa
 #
-# Temperature colors match fastfetch (~/.config/fastfetch/config.jsonc): above
-# the yellow threshold is light_red (9), above the green one light_yellow (11).
-#
-# CPU load goes through the shared calculator so sysmon and polybar's module
-# agree on the method (iowait counted as idle); it takes the refresh interval
+# Temp colors match fastfetch: above the yellow threshold light_red (9), above
+# green light_yellow (11). CPU load goes through the shared cpu-load calculator
+# so sysmon and polybar agree (iowait counted as idle); it takes the interval
 # because cpu-load sizes its measurement window from it. RAM uses MemAvailable
 # so reclaimable cache is not counted as used. GPU busy comes from amdgpu sysfs.
 #
-# Drawing rules:
-#
-#   - print -P emits SGR sequences, so those bytes are ignored when measuring
-#     width and the visible frame centers rather than its escapes.
-#   - Every destination line is cleared before writing, so shorter values leave
-#     nothing trailing; a resize erases the old placement.
-#   - Signal handlers are local to the display loop.
-#   - The delay is a waited-on background timer, not a foreground sleep, which
-#     would hold WINCH traps until it exits. A resize can then reposition the
-#     cached frame without collecting sensors again.
+# Drawing: print -P emits SGR sequences, so those bytes are excluded when
+# measuring width; every destination line is cleared before writing; signal
+# handlers are local to the display loop; the delay is a waited-on background
+# timer, not a foreground sleep, so WINCH can reposition the cached frame.
 
 _sysmon_tcolor () {
   if   (( $1 > $3 )); then print -n 9

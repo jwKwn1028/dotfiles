@@ -1,9 +1,6 @@
-# --------------------------------------------------------
-# Plugins: autosuggestions + syntax highlighting
-# --------------------------------------------------------
-# Order matters: autosuggestions first, syntax highlighting last among
-# plugins; 95-prompt (starship) comes after. The zhm_* integration arrays
-# rely on 20-helix-mode having loaded first.
+# --- Plugins: autosuggestions + syntax highlighting ---
+# Order matters: autosuggestions first, syntax highlighting last; 95-prompt
+# (starship) follows. The zhm_* arrays need 20-helix-mode loaded first.
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
 
 if (( $+functions[zhm_prompt_accept] )); then
@@ -40,18 +37,13 @@ if (( $+functions[zhm-add-update-region-highlight-hook] )); then
   zhm-add-update-region-highlight-hook
 fi
 
-# --------------------------------------------------------
-# Autosuggestion Keybindings
-# --------------------------------------------------------
+# --- Autosuggestion Keybindings ---
 bindkey '^f' autosuggest-accept
 bindkey '^[f' forward-word
 
-# --------------------------------------------------------
-# Plugin updater
-# --------------------------------------------------------
-# The plugins under ~/.zsh/plugins are plain upstream git clones (not
-# submodules, since ~/.zsh itself is not a repo yet). `zpup` fast-forwards
-# each clone to its upstream; reload with `sz` afterwards.
+# --- Plugin updater ---
+# Plugins under ~/.zsh/plugins are plain upstream git clones. `zpup`
+# fast-forwards each to its upstream; reload with `sz`.
 zpup() {
   emulate -L zsh
   local d

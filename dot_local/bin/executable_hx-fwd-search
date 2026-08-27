@@ -4,12 +4,9 @@
 #
 # Usage: hx-fwd-search <source_file> <line> [col]
 #
-# Caveats:
-#   * .tex   — full forward search (latexmk produces .synctex.gz).
-#   * .md    — pandoc emits an intermediate .tex, so synctex maps to that file,
-#              not the markdown. The PDF will still focus, but the jump may
-#              land on the wrong line. Best-effort.
-#   * .typ   — typst doesn't emit synctex. We just raise/focus the viewer.
+# .tex gets full forward search. .md goes through pandoc's intermediate .tex, so
+# synctex maps to that file and the jump is best-effort. .typ has no synctex, so
+# the viewer is only raised.
 set -euo pipefail
 
 src="${1:?source file required}"
@@ -47,9 +44,8 @@ if [[ -z "$pdf" ]]; then
   exit 1
 fi
 
-# Detect which viewer is currently displaying this PDF, so we forward to the
-# right one. Without this, we'd spawn a fresh sioyek/zathura on every F5,
-# leaving an unused window behind.
+# Detect which viewer is showing this PDF, so F5 forwards to it rather than
+# spawning a fresh one and leaving an unused window behind.
 viewer=""
 if pgrep -af "zathura .*$pdf" >/dev/null 2>&1; then
   viewer=zathura
@@ -72,8 +68,7 @@ case "$viewer" in
     disown
     ;;
   zathura)
-    # If a zathura is already showing this PDF, --synctex-forward IPCs to it
-    # via dbus; otherwise it spawns a new instance.
+    # zathura --synctex-forward IPCs to an existing instance via dbus, else spawns.
     zathura --synctex-forward "$line:$col:$src" "$pdf" >/dev/null 2>&1 &
     disown
     ;;

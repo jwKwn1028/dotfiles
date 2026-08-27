@@ -1,21 +1,18 @@
 #!/usr/bin/python3
 """Peek Polybar while the pointer rests against the top edge of a screen.
 
-The standalone-Super hold gesture driven by the pointer instead of a key, so it
-inherits that contract from polybar-peek.sh: the helper refuses to take over a
-bar that was already visible, and hides the bar itself if the holder dies.
+The standalone-Super hold gesture driven by the pointer, so it inherits that
+contract from polybar-peek.sh: never take over a bar that was already visible,
+and hide the bar itself if the holder dies.
 
-Polling, not an input region at the edge. An InputOnly window there would
-swallow the clicks Polybar's modules need, and stacking it underneath flaps
-instead -- showing the bar puts it above the region, which reads as a leave.
+Polling, not an input region at the edge: an InputOnly window there would swallow
+the clicks Polybar's modules need, and stacking it underneath flaps instead.
 
-Raise and drop thresholds differ on purpose: the bar is tall and appears under
+Raise and drop thresholds differ on purpose -- the bar is tall and appears under
 the pointer, so one threshold would dismiss it the moment the pointer moved onto
-what it just revealed. Re-arming uses the release threshold, so a pointer parked
-at the top of a fullscreen screen asks i3 once rather than once per poll. A
-pointer off every known monitor (mid-hotplug) counts as away. On reconnect the
-hold is dropped first: this process is still alive, so the helper's worker would
-not release it.
+what it just revealed. A pointer off every known monitor (mid-hotplug) counts as
+away. On reconnect the hold is dropped first: this process is still alive, so the
+helper's worker would not release it.
 """
 
 from __future__ import annotations
@@ -114,12 +111,9 @@ def i3_tree():
 def shown_children(node):
     """Child nodes worth walking, minus the workspaces i3 is not showing.
 
-    A workspace i3 has switched away from keeps both its rect and its
-    fullscreen window in the tree, so an unfiltered walk goes on reporting a
-    monitor as covered by a window left fullscreen on a workspace nobody is
-    looking at -- suppressing that head's peek for the rest of the session,
-    since restarting i3 restores the same layout rather than clearing it.
-    Workspace nodes carry no `visible` flag of their own; the container holding
+    A workspace i3 switched away from keeps its rect and fullscreen window in the
+    tree, so an unfiltered walk reports that monitor as covered for the rest of
+    the session. Workspace nodes carry no `visible` flag; the container holding
     them names the one on screen as its first `focus` entry.
     """
     children = list(node.get("nodes") or [])
@@ -139,11 +133,8 @@ def shown_children(node):
 def fullscreen_rects(tree=None):
     """Rects i3 is currently *showing* a fullscreen window in.
 
-    Workspace containers report a `fullscreen_mode` of their own accord even
-    with nothing fullscreen under them, so only a node holding an X11 window
-    counts. Hidden workspaces are pruned by shown_children: a fullscreen window
-    covers a monitor only while its workspace is the one displayed there.
-
+    Workspace containers report a `fullscreen_mode` of their own accord, so only
+    a node holding an X11 window counts; shown_children prunes hidden workspaces.
     Takes an already-fetched tree so the walk can be tested without i3.
     """
     if tree is None:
@@ -174,11 +165,8 @@ def fullscreen_rects(tree=None):
 def monitor_is_fullscreen(monitors, x, y) -> bool:
     """True when a fullscreen window i3 is showing covers the pointer's monitor.
 
-    i3 unmaps that monitor's dock for as long as the fullscreen lasts and will
-    not map it back, so peeking there cannot reveal anything: the bar would come
-    up on the *other* screen instead, nowhere near the pointer that asked for
-    it. Leaving the two screens disagreeing about whether the bar is up is the
-    whole problem, so the gesture stays down.
+    i3 unmaps that monitor's dock for the duration, so peeking there would raise
+    the bar on the *other* screen instead, nowhere near the pointer that asked.
     """
     for mx, my, width, height in monitors:
         if mx <= x < mx + width and my <= y < my + height:

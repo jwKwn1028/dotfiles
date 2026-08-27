@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
-# Shared Polybar visibility, IPC, and transient-peek helpers. Caller must set
-# DIR to this configuration directory before sourcing; the paths defined here
-# are consumed by the sourcing scripts.
+# Shared Polybar visibility, IPC, and transient-peek helpers. Caller must set DIR
+# to this configuration directory before sourcing.
 #
-# polybar_wait_state's budget is wall clock and short on purpose: polybar
-# applies visibility on receipt, so a state that has not landed in a fraction of
-# a second is unreachable, not slow -- i3 unmaps a fullscreened output's dock
-# and polybar, which cannot restack itself, never gets it back. The caller
-# holds POLYBAR_CONTROL_LOCK across the wait while everything else gives up on
-# that lock after two seconds, so a longer budget only eats keypresses.
+# polybar_wait_state's budget is wall clock and short on purpose: polybar applies
+# visibility on receipt, so a state that has not landed within a fraction of a
+# second is unreachable, not slow, and a longer budget only eats keypresses.
 
 . "$DIR/_snap-common.sh"
 
@@ -64,17 +60,15 @@ polybar_raise() {
 
 # Drop any bar i3 still manages as a dock once the bar should be hidden.
 #
-# i3 unmaps a fullscreened output's dock itself, so polybar's hide finds it
-# already unmapped, emits no UnmapNotify, and i3 remaps the dock after
-# fullscreen -- while polybar, believing it hidden, no-ops every later hide
-# until reload. ICCCM's synthetic UnmapNotify is the withdraw i3 never saw.
-# Reparented means i3 holds it, so an ordinary hide never reaches python.
+# i3 unmaps a fullscreened output's dock itself, so polybar's hide emits no
+# UnmapNotify and polybar then no-ops every later hide until reload. ICCCM's
+# synthetic UnmapNotify is the withdraw i3 never saw.
 polybar_withdraw_orphan_docks() {
   local -a orphans=()
   local win info
 
   for win in $(polybar_windows); do
-    # Only the Parent line: -tree also names the root as every window's root.
+    # Only the Parent line: -tree also names the root.
     info=$(xwininfo -id "$win" -tree 2>/dev/null |
       sed -n 's/^ *Parent window id: *//p') || continue
     [ -z "$info" ] && continue
@@ -110,8 +104,7 @@ polybar_set_state() {
   local wanted="$2"
 
   if polybar-msg cmd "$cmd" >/dev/null 2>&1; then
-    # Let the hide land first: until polybar unmaps, a bar it is about to
-    # release still looks reparented.
+    # Let the hide land: until polybar unmaps, the bar still looks reparented.
     if [ "$wanted" = 0 ]; then
       polybar_wait_for_state 0 "$POLYBAR_SETTLE_MS" >/dev/null
       polybar_withdraw_orphan_docks

@@ -73,9 +73,8 @@ while [ "$#" -gt 0 ]; do
             select_day 2
             ;;
         *)
-            # A GPS coordinate pair (LAT,LON); anything else is an error.
-            # Negative latitudes/longitudes begin with '-', so this must be
-            # matched here rather than swallowed by an unknown-option case.
+            # A GPS coordinate pair (LAT,LON). Matched here because negative
+            # values begin with '-' and would hit the unknown-option case.
             if printf '%s' "$1" | grep -Eq '^[+-]?[0-9]+(\.[0-9]+)?,[+-]?[0-9]+(\.[0-9]+)?$'; then
                 set_location "$1"
             else
@@ -274,8 +273,7 @@ else
     jq_program=$compact_program
 fi
 
-# Fetch first so a network/HTTP failure cannot be hidden by jq successfully
-# consuming an empty pipeline. The feed is small and remains in memory.
+# Fetch first so a network failure is not hidden by jq consuming an empty pipe.
 weather_json=$(fetch_weather "${url}&format=j1")
 fetch_status=$?
 [ "$fetch_status" -eq 0 ] || exit "$fetch_status"
