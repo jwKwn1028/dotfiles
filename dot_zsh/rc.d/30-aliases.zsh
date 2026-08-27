@@ -7,7 +7,7 @@ alias c='code .'
 alias h='hx .'
 alias z='zed .'
 alias vi='vim'
-alias mu='micro'
+alias mo='micro'
 alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 (( $+commands[batcat] )) && alias bat='batcat'
 btop () {
@@ -29,7 +29,7 @@ if _have fdfind; then
   alias fd='fdfind'
 fi
 alias scpo='print "shutting down..." && systemctl poweroff'
-alias wtail='watch -n 10 tail -n 10'
+alias wtail='watch -d -n 10 tail -v -n 10'
 
 alias ..='cd ..'
 alias ...='cd ../..'
