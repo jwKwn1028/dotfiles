@@ -186,6 +186,14 @@ if _have sinfo; then
   alias wsidle='watch -d -n 10 '\''sinfo -t idle -o "%.20P %.6D %N"'\'''
 fi
 
+ssh-close() {
+  if (( $# != 1 )); then
+    printf '%s\n' 'usage: ssh-close HOST_ALIAS' >&2
+    return 2
+  fi
+  command ssh -O exit "$1"
+}
+
 # Auto-list on cd (mirrors _auto_ls in ~/.zsh/rc.d/35-navigation.zsh). Names
 # only: the `ls` alias adds --long --git, a git status per file, too costly on
 # every cd. Skipped past AUTO_LS_MAX entries so `cd /usr/bin` does not scroll

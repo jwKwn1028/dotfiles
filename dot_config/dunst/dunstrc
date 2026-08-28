@@ -1,0 +1,132 @@
+# Tokyo Night notification theme, palette shared with rofi/spotlight.rasi.
+#
+# This file REPLACES /etc/xdg/dunst/dunstrc rather than layering over it: dunst
+# applies only the last base config it finds plus its drop-ins, so anything
+# omitted here falls back to the compiled-in default, not to Mint's. That is why
+# settings Mint's file already carried are repeated below.
+
+[global]
+    ### Geometry ###
+    origin = top-right
+    # Clears Polybar's 28px top bar with a 10px gap.
+    offset = 10x38
+    # Wider than the 300 default: JuliaMono is wide and 300px wraps two words.
+    width = 400
+    height = 300
+    # Follow the focused window's monitor. This is what the old xfce4-notifyd
+    # config meant by "active-monitor"; `monitor = 0` would pin notifications to
+    # the laptop panel with an external display attached.
+    follow = keyboard
+    notification_limit = 20
+    indicate_hidden = yes
+
+    # picom is running, so gaps render. A non-zero gap_size overrides
+    # separator_height and frames each notification separately instead of
+    # drawing one divider through a merged stack.
+    gap_size = 8
+    corner_radius = 0
+    # Same edge i3 draws on the focused window: `default_border pixel 1` and
+    # client.focused's #86be43 in dot_config/i3/config. Keep the two in sync.
+    frame_width = 1
+    frame_color = "#86be43"
+    padding = 12
+    horizontal_padding = 14
+    text_icon_padding = 10
+    transparency = 0
+
+    ### Text ###
+    # 11, not spotlight.rasi's 13: this sits directly beneath Polybar, which is
+    # also JuliaMono 11. The launcher is a focal element, a toast is not.
+    font = JuliaMono Regular 11
+    line_height = 0
+    markup = full
+    format = "<b>%s</b>\n%b"
+    alignment = left
+    vertical_alignment = center
+    # Off by default, and blueman/power-manager bodies are long enough to be cut.
+    word_wrap = yes
+    ellipsize = middle
+    ignore_newline = no
+    show_age_threshold = 60
+    stack_duplicates = true
+    hide_duplicate_count = false
+    show_indicators = yes
+    sort = yes
+
+    ### Icons ###
+    # Papirus-Dark first for light-on-dark panel glyphs, plain Papirus behind it
+    # for the app icons Dark does not override. icon_theme is inert unless
+    # recursive lookup is on, and that defaults to false.
+    enable_recursive_icon_lookup = true
+    icon_theme = "Papirus-Dark, Papirus"
+    icon_position = left
+    min_icon_size = 32
+    # 48, not the stock 128: album art at 128 dwarfs a two-line notification.
+    max_icon_size = 48
+    icon_corner_radius = 0
+
+    ### Progress bar ###
+    # Volume and brightness keys route through here.
+    progress_bar = true
+    progress_bar_height = 8
+    progress_bar_frame_width = 1
+    progress_bar_min_width = 150
+    # width minus both horizontal_padding, so the bar aligns with the text.
+    progress_bar_max_width = 372
+    progress_bar_corner_radius = 0
+
+    ### History ###
+    sticky_history = yes
+    history_length = 20
+
+    ### Misc ###
+    browser = /usr/bin/xdg-open
+    title = Dunst
+    class = Dunst
+    ignore_dbusclose = false
+    mouse_left_click = close_current
+    mouse_middle_click = do_action, close_current
+    mouse_right_click = close_all
+
+# Low and normal inherit the global #86be43 frame; only critical overrides it.
+
+[urgency_low]
+    background = "#292d3e"
+    foreground = "#565f89"
+    highlight = "#7aa2f7"
+    timeout = 5
+
+[urgency_normal]
+    background = "#292d3e"
+    foreground = "#c0caf5"
+    highlight = "#7aa2f7"
+    timeout = 8
+
+[urgency_critical]
+    # Same ground as the rest, red text and frame carrying the signal. Mirrors
+    # `element urgent` in spotlight.rasi instead of inverting the whole popup.
+    background = "#292d3e"
+    foreground = "#f7768e"
+    frame_color = "#f7768e"
+    highlight = "#f7768e"
+    timeout = 0
+
+### Rules ###
+# Ported from the retired xfce4-notifyd.xml, whose muted_applications list never
+# took effect: dunst holds org.freedesktop.Notifications, so xfce4-notifyd never
+# ran to read it. skip_display is the dunst equivalent of an xfce mute — no
+# popup, still recorded in history (dunstctl history).
+#
+# The filter differs per app because xfce recorded whatever each one reported:
+# Spotify sends no desktop-entry hint, Ghostty does. `dunst -print` in a
+# terminal shows the fields a live notification actually carries.
+
+[mute-spotify]
+    appname = "Spotify"
+    skip_display = true
+
+[mute-ghostty]
+    desktop_entry = "com.mitchellh.ghostty"
+    skip_display = true
+
+# vim: ft=cfg

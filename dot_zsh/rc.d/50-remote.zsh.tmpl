@@ -3,6 +3,14 @@
 HPC_REMOTE_USER=${HPC_REMOTE_USER:-{{ .sshRemoteUser | quote }}}
 HPC_REMOTE_HOST=${HPC_REMOTE_HOST:-{{ .sshGpuHost | quote }}}
 
+ssh-close() {
+  if (( $# != 1 )); then
+    printf '%s\n' 'usage: ssh-close HOST_ALIAS' >&2
+    return 2
+  fi
+  command ssh -O exit "$1"
+}
+
 # 1. Quick SFTP connect -- type 'cdcluster' to browse server files
 cdcluster() {
   emulate -L zsh

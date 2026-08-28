@@ -85,6 +85,7 @@ snap/firefox/common/.mozilla/firefox/
 /.config/polybar/
 /.config/picom/
 /.config/rofi/
+/.config/dunst/
 /.config/fcitx5/
 /.x-unstick.sh
 /.toggle-touchpad.sh
