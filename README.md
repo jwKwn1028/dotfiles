@@ -40,6 +40,9 @@ export PATH="$HOME/.local/bin:$PATH"
 chezmoi init 'https://github.com/OWNER/REPOSITORY.git'
 ```
 
+The bootstrap prompts for Git identity and the optional `MM-DD` birthday banner
+value; those answers live only in `~/.config/chezmoi/chezmoi.toml`.
+
 ### 3. Review
 
 ```sh
@@ -56,7 +59,8 @@ Run `chezmoi apply -v` in an interactive terminal. In order:
    `.chezmoidata/packages.toml`, write and clone files from
    `.chezmoiexternal.toml`.
 2. `run_once_after_20`: install Flathub apps.
-3. `run_once_after_30`: install rustup, cargo crates/starship/zoxide/Miniconda.
+3. `run_once_after_30`: install profile-specific pipx apps, rustup, cargo
+   crates, Starship, zoxide, and Miniconda.
 4. `run_once_after_40`: add zsh to `/etc/shells` and run `chsh` (password
    prompt).
 5. `run_once_after_50`: install fonts in `~/.local/share/fonts`.
@@ -91,13 +95,11 @@ chezmoi apply -v
 
 Zen, Firefox, and Thunderbird retrigger on their `profiles.ini` hash, installing
 sanitized `user.js` and Zen/Thunderbird `chrome/` customizations. Helium has no
-`profiles.ini` and does not hash `Preferences`, so run it with Helium closed:
-
-```sh
-chezmoi execute-template --file \
-  "$(chezmoi source-path)/run_onchange_after_70-configure-helium-profile.sh.tmpl" |
-  bash
-```
+`profiles.ini`, so its script hashes the presence of `Preferences` without
+hashing the mutable profile itself. Creating the profile changes that marker
+from `missing` to `present` and automatically retriggers the merge. If Helium is
+running, the apply reports the deferred step as a failure; close Helium and run
+`chezmoi apply -v` again.
 
 ### 8. Restore private state
 

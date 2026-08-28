@@ -1,7 +1,7 @@
 {{- $credentialHelper := "/usr/share/doc/git/contrib/credential/libsecret/git-credential-libsecret" -}}
 [user]
-	email = {{ if hasKey . "email" }}{{ .email }}{{ else }}217174958+jwKwn1028@users.noreply.github.com{{ end }}
-	name = {{ if hasKey . "name" }}{{ .name }}{{ else }}jwKwn1028{{ end }}
+	email = {{ .email | quote }}
+	name = {{ .name | quote }}
 [url "https://github.com/"]
 	insteadOf = git://github.com/
 [credential]

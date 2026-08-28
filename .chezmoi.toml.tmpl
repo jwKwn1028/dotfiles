@@ -1,8 +1,9 @@
 {{- /* Bootstrap config template. Runs on `chezmoi init`; the answers are
        stored in ~/.config/chezmoi/chezmoi.toml (NOT in this git repo) and are
        available to every other template as .name / .email / .class / etc. */ -}}
-{{- $name    := promptStringOnce . "name"  "Full name (git author)"        "jwKwn1028" -}}
-{{- $email   := promptStringOnce . "email" "Email (git author)"            "217174958+jwKwn1028@users.noreply.github.com" -}}
+{{- $name    := promptStringOnce . "name"  "Full name (git author)"         "" -}}
+{{- $email   := promptStringOnce . "email" "Email (git author)"             "" -}}
+{{- $birthdayMonthDay := promptStringOnce . "birthdayMonthDay" "Birthday [MM-DD] (blank to disable banner)" "" -}}
 {{- $class   := promptStringOnce . "class" "Machine class [desktop|server]" "desktop" -}}
 {{- $desktopProfileDefault := "none" -}}
 {{- if eq .chezmoi.os "linux" -}}
@@ -24,6 +25,7 @@
 [data]
     name              = {{ $name | quote }}
     email             = {{ $email | quote }}
+    birthdayMonthDay  = {{ $birthdayMonthDay | quote }}
     class             = {{ $class | quote }}
     desktopProfile    = {{ $desktopProfile | quote }}
     sshRemoteUser     = {{ $sshRemoteUser | quote }}

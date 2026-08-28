@@ -42,6 +42,11 @@ laptop = [
 i3_x11 = [
     "i3", "i3status", "polybar", "picom", "rofi", "dunst",
     "feh", "flameshot", "xdotool", "wmctrl", "xclip", "xsel",
+# Direct i3/Polybar runtime dependencies.
+    "xfce4-terminal", "xfce4-settings", "xfce4-power-manager", "xfce4-taskmanager",
+    "gnome-keyring", "libnotify-bin", "policykit-1-gnome",
+    "x11-utils", "x11-xserver-utils", "xinput", "pulseaudio-utils",
+    "zenity", "xss-lock", "unclutter-xfixes",
     "zathura", "zathura-pdf-poppler",
     "thunar", "thunar-archive-plugin", "thunar-media-tags-plugin", "thunar-volman",
     # ~/.local/bin/thunar shadows the XSETTINGS icon name onto Papirus-Dark;
@@ -82,6 +87,12 @@ apps = [
     "com.github.jeromerobert.pdfarranger",
     "com.github.wwmm.easyeffects",
     "org.prismlauncher.PrismLauncher",
+]
+
+[packages.pipx]
+# linuxmint-i3-x11 apps; bin is the idempotency check.
+apps = [
+    { package = "autotiling", bin = "autotiling" },
 ]
 
 [packages.cargo]

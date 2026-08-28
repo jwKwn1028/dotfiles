@@ -1,3 +1,7 @@
+{{- $birthdayMonthDay := "" -}}
+{{- if hasKey . "birthdayMonthDay" -}}
+{{-   $birthdayMonthDay = .birthdayMonthDay -}}
+{{- end -}}
 # Startup banner: a centered, bold greeting drawn through the first live prompt.
 #
 # Optional configuration, set before this file is sourced:
@@ -101,6 +105,7 @@ if (( SHLVL <= 2 )); then
     local current_date="${current_time[1,10]}"
     local current_hour=$(( 10#${current_time[12,13]} ))
     local month_day="${current_time[6,10]}"
+    local birthday_month_day={{ $birthdayMonthDay | quote }}
     local banner_text banner_color="#86BE43"
 
     local banner_state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/zsh"
@@ -137,7 +142,7 @@ if (( SHLVL <= 2 )); then
 
     local special_roll=$(( (RANDOM * 32768 + RANDOM) % special_denominator ))
 
-    if [[ $month_day == "10-28" ]]; then
+    if [[ -n $birthday_month_day && $month_day == $birthday_month_day ]]; then
       banner_text="Happy Birthday!"
     elif (( ${#ZSH_BANNER_SPECIAL_MESSAGES[@]} > 0 &&
              special_roll < special_numerator )); then

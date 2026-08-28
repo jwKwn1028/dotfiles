@@ -70,12 +70,12 @@ snap/firefox/common/.mozilla/firefox/
 /.local/bin/restic-backup
 {{ end -}}
 
-# Codex mixes machine state (trust levels, hook hashes, plugin registration,
-# nux counters) into its own config.toml with no include directive. A modify_
-# script manages only the model and reasoning effort; the rest stays local.
-# ~/.codex/rules and statusline.toml are static and stay managed. ~/.claude.json
-# is the same story and has no source-state entry at all. See AGENTS.md,
-# "Agent tooling this repo does not manage".
+# Keep agent-owned state local; manage only the two stable settings targets.
+/.claude.json*
+/.claude/*
+!/.claude/settings.json
+/.codex/*
+!/.codex/config.toml
 
 # ─── Desktop profiles ─────────────────────────────────────────────────────
 # Mint's i3 tree is the X11 desktop; any other profile must not receive it.

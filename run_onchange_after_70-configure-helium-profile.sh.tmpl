@@ -2,6 +2,7 @@
 {{ $class := "desktop" -}}
 {{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
 {{ $ntpBg := joinPath .chezmoi.sourceDir "dot_local/share/helium-newtab/background.jpg" -}}
+{{ $prefsPath := joinPath .chezmoi.homeDir ".config/net.imput.helium/Default/Preferences" -}}
 # Merges the publishable subset of Helium's Chromium preferences into its
 # profile. Helium keeps settings, browsing data and identity in one JSON blob,
 # so the profile stays local (.chezmoiignore) and only UI chrome layout, theme,
@@ -16,6 +17,7 @@
 # resets it on next launch -- so homepage, session.restore_on_startup,
 # show_home_button, default_search_provider_data and extensions.settings are off
 # limits. run_onchange_ with the prefs inlined, so editing them re-triggers it.
+# Preferences profile state: {{ if lstat $prefsPath }}present{{ else }}missing{{ end }}
 # New-tab background state: {{ if lstat $ntpBg }}{{ include $ntpBg | sha256sum }}{{ else }}missing{{ end }}
 set -euo pipefail
 
@@ -30,7 +32,7 @@ case "${1:-}" in
     *) echo "Usage: $0 [--dry-run]" >&2; exit 2 ;;
 esac
 
-readonly prefs={{ joinPath .chezmoi.homeDir ".config/net.imput.helium/Default/Preferences" | quote }}
+readonly prefs={{ $prefsPath | quote }}
 readonly nmh_link={{ joinPath .chezmoi.homeDir ".config/net.imput.helium/NativeMessagingHosts/com.github.browserpass.native.json" | quote }}
 readonly nmh_target="/etc/chromium/native-messaging-hosts/com.github.browserpass.native.json"
 readonly ntp_bg_src={{ joinPath .chezmoi.homeDir ".local/share/helium-newtab/background.jpg" | quote }}
@@ -56,15 +58,15 @@ if (( dry_run == 0 )) && [[ -f "$ntp_bg_src" ]] && ! cmp -s "$ntp_bg_src" "$ntp_
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then
-    echo "python3 not found; skipping Helium preference configuration."
-    exit 0
+    echo "python3 not found; deferring Helium preference configuration." >&2
+    exit 1
 fi
 
 # Helium rewrites Preferences from memory on exit, so a merge applied while it
 # runs is silently discarded. Same guard as Applications/update-helium.sh.
 if (( dry_run == 0 )) && pgrep -f 'helium-.*\.AppImage|\.mount_[Hh]elium' >/dev/null 2>&1; then
-    echo "Helium is running; skipping preference configuration (applies on next apply after quit)."
-    exit 0
+    echo "Helium is running; close it and rerun chezmoi apply." >&2
+    exit 1
 fi
 
 python3 - "$prefs" "$dry_run" <<'HELIUM_PREFS_EOF'
@@ -189,8 +191,8 @@ try:
     with open(path, encoding="utf-8") as handle:
         prefs = json.load(handle)
 except (OSError, ValueError) as exc:
-    print(f"warning: could not read Helium preferences ({exc}); skipping")
-    sys.exit(0)
+    print(f"warning: could not read Helium preferences ({exc}); deferring", file=sys.stderr)
+    sys.exit(1)
 
 changed = merge(prefs, managed)
 if not changed:

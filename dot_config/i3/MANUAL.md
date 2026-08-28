@@ -1198,9 +1198,12 @@ Session restore:
 - Python module `lz4.block` (`python3-lz4`) for decoding browser session files
 - `xclip` for live browser URL capture
 
-Local helper programs expected outside this directory:
+Pipx tools provisioned through `.chezmoidata/packages.toml`:
 
 - `~/.local/bin/autotiling`
+
+Local helper programs managed elsewhere in this source state:
+
 - `~/.local/bin/disable-trackpoint-middle-click`
 - `~/.local/bin/touchpad`
 - `~/.config/polybar/launch.sh`
@@ -1314,8 +1317,8 @@ Runtime files outside this directory:
   `linuxmint-i3-x11` group. Browser state decoding is installed there as
   `python3-lz4`. The helpers deliberately use `/usr/bin/python3` so an activated
   Conda or other user environment cannot shadow those distro modules.
-  `~/.local/bin/autotiling` is not provisioned and is expected to be present
-  already.
+  `~/.local/bin/autotiling` is installed with pipx from the
+  `packages.pipx.apps` manifest.
 
 ## Quick Commands
 

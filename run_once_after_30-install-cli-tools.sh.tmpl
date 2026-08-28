@@ -1,10 +1,35 @@
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" -}}{{- $class = .class -}}{{- end -}}
+{{- $desktopProfile := "none" -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{-     $desktopProfile = "linuxmint-i3-x11" -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey . "desktopProfile" -}}{{- $desktopProfile = .desktopProfile -}}{{- end -}}
 #!/usr/bin/env bash
-# Installs tooling that isn't packaged in apt: the Rust toolchain + cargo crates,
-# starship, zoxide, and Miniconda. Best-effort: a single failed crate logs a
-# warning and does not abort the rest of provisioning.
+# Installs pipx apps, Rust tools, Starship, zoxide, and Miniconda.
+# Cargo installs are best-effort; required pipx installs are not.
 set -euo pipefail
 
 echo "==> CLI tools provisioning"
+
+{{ if and (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
+# --- pipx desktop apps ---
+if ! command -v pipx >/dev/null 2>&1; then
+    echo "pipx not found; cannot install desktop pipx apps." >&2
+    exit 1
+fi
+{{ range .packages.pipx.apps -}}
+if command -v {{ .bin | quote }} >/dev/null 2>&1; then
+    echo "  {{ .bin }} already present; skipping pipx package {{ .package }}"
+else
+    pipx install {{ .package | quote }}
+fi
+{{ end -}}
+{{ else -}}
+echo "  profile is not linuxmint-i3-x11; skipping desktop pipx apps"
+{{ end }}
 
 # --- Rust toolchain (rustup) ---
 if ! command -v cargo >/dev/null 2>&1; then

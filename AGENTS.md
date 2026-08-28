@@ -52,9 +52,10 @@ installer-wired hooks are **out of scope**. Don't add them, don't restore one
 you see in `$HOME` but not here, and don't investigate drift in them — each
 installer keeps its own registration current, so a copy in Git goes stale and
 downgrades the live one. The only exceptions are
-`private_dot_claude/private_settings.json.tmpl` and
+`private_dot_claude/modify_private_settings.json` (stable settings only) and
 `private_dot_codex/modify_private_config.toml` (`model` and
-`model_reasoning_effort` only).
+`model_reasoning_effort` only). Both modify scripts must preserve installer-owned
+keys already present in the live files.
 
 ## Provisioning
 

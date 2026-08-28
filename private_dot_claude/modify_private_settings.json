@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Merge stable Claude settings without replacing installer-owned keys."""
+
+from __future__ import annotations
+
+import json
+import sys
+
+
+raw = sys.stdin.read()
+try:
+    settings = json.loads(raw) if raw.strip() else {}
+except json.JSONDecodeError as exc:
+    print(
+        f"Claude settings are invalid JSON; refusing to overwrite them: {exc}",
+        file=sys.stderr,
+    )
+    raise SystemExit(1) from exc
+
+if not isinstance(settings, dict):
+    print(
+        "Claude settings are not a JSON object; refusing to overwrite them.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+env = settings.get("env")
+permissions = settings.get("permissions")
+matches = (
+    settings.get("model") == "opus"
+    and isinstance(env, dict)
+    and env.get("ENABLE_TOOL_SEARCH") == "auto:50"
+    and isinstance(permissions, dict)
+    and permissions.get("defaultMode") == "manual"
+    and settings.get("disableRemoteControl") is True
+    and settings.get("effortLevel") == "xhigh"
+    and settings.get("tui") == "fullscreen"
+)
+
+    # Avoid formatting-only rewrites when managed values already match.
+if matches:
+    sys.stdout.write(raw)
+    raise SystemExit(0)
+
+if not isinstance(env, dict):
+    env = {}
+    settings["env"] = env
+if not isinstance(permissions, dict):
+    permissions = {}
+    settings["permissions"] = permissions
+
+    # Preserve installer-owned and unrelated keys.
+settings["model"] = "opus"
+env["ENABLE_TOOL_SEARCH"] = "auto:50"
+permissions["defaultMode"] = "manual"
+settings["disableRemoteControl"] = True
+settings["effortLevel"] = "xhigh"
+settings["tui"] = "fullscreen"
+
+json.dump(settings, sys.stdout, ensure_ascii=False, indent=2)
+sys.stdout.write("\n")
