@@ -8,6 +8,7 @@ set -euo pipefail
 TESTS_DIR="$(dirname "$(readlink -f "$0")")"
 I3_ROOT="$(dirname "$TESTS_DIR")"
 POLYBAR_ROOT="$(dirname "$I3_ROOT")/polybar"
+DUNST_OVERRIDE="$(dirname "$I3_ROOT")/systemd/user/dunst.service.d/override.conf"
 PACKAGE_MANIFEST="$(dirname "$(dirname "$I3_ROOT")")/.chezmoidata/packages.toml"
 [ -r "$PACKAGE_MANIFEST" ] || PACKAGE_MANIFEST=""
 WORK_ROOT="$(mktemp -d)"
@@ -89,6 +90,11 @@ run 'Polybar peek tests' bash "$I3_ROOT/tests/test-polybar-peek.sh"
 run 'resurrect Polybar tests' \
     bash "$I3_ROOT/tests/test-i3-resurrect-polybar.sh"
 run 'RandR hotplug tests' bash "$I3_ROOT/tests/test-randr-hotplug.sh"
+run 'Dunst monitor selection tests' \
+    env DUNST_SYSTEMD_OVERRIDE="$DUNST_OVERRIDE" \
+    bash "$I3_ROOT/tests/test-dunst-start.sh"
+run 'validated i3 restart tests' bash "$I3_ROOT/tests/test-i3-restart.sh"
+run 'session reload tests' bash "$I3_ROOT/tests/test-session-reload.sh"
 run 'window-mode tests' bash "$I3_ROOT/tests/test-window-mode.sh"
 run 'resnap duplicate-mark tests' bash "$I3_ROOT/tests/test-resnap.sh"
 run 'Polybar launcher tests' bash "$POLYBAR_ROOT/tests/test-launch.sh"

@@ -76,7 +76,9 @@ Log out, select **i3** in LightDM, and log back in.
 - **Helium:** run `~/Applications/update-helium.sh` to download its AppImage
   and update `helium.desktop`.
 - **Taskwarrior:** install upstream `task` 3.x; apt's 2.6.2 flat-file binary
-  cannot read the sqlite data targeted by `dot_taskrc`.
+  cannot read the sqlite data targeted by `dot_taskrc`. Then switch on
+  reminders: `systemctl --user daemon-reload && systemctl --user enable --now
+  task-notify.timer`. See `~/.config/task/MANUAL.md`.
 - **i3-resurrect:** `pipx install i3-resurrect`; helpers expect
   `~/.local/bin/i3-resurrect`.
 - **Optional scientific software:** `.zshenv` adds it to PATH when present;

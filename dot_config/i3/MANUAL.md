@@ -68,7 +68,6 @@ Theme colors use a Tokyo Night style palette:
 | `XF86Display` | Open minimal XFCE display settings. |
 | `Super+Shift+P` | Apply the preferred display layout, wallpaper, and per-monitor Polybars. |
 | `Ctrl+Super+Z` | Launch Zed. |
-| `Ctrl+Alt+P` | Launch Super Productivity Flatpak. |
 | `Ctrl+Shift+Z` | Launch Zen Browser Flatpak. |
 | `Ctrl+Alt+Escape` on release | Run `xkill`. |
 | `Ctrl+Shift+Escape` | Launch `xfce4-taskmanager`. |
@@ -120,7 +119,7 @@ number keys.
 | Binding | Action |
 | --- | --- |
 | `Super+Shift+C` | Reload i3 config. |
-| `Super+Shift+I` | Restart i3. |
+| `Super+Shift+I` | Validate the config, then restart i3; refresh systemd user units, changed dunst config, Picom, displays, wallpaper, and Polybar; report one final result toast. |
 | `Super+Shift+E` | Show an `i3-nagbar` confirmation, then exit i3 if confirmed. |
 
 ### Workspaces
@@ -529,9 +528,12 @@ ShellCheck (when installed), and `i3 -C`.
 | `test-polybar-peek.sh` | `polybar-peek.sh` show/hide, ownership, and debounce behavior. |
 | `test-i3-resurrect-polybar.sh` | Successful, hidden-bar, and early-failure restore paths preserve the bar's prior visibility and raise it when restored. |
 | `test-randr-hotplug.sh` | Output-event coalescing, connected-set changes, mid-run hotplugs, and connection-status toast selection. |
+| `test-dunst-start.sh` | Dunst 1.9 runtime config generation, laptop/primary fallbacks, and restart-on-index-change behavior. |
+| `test-i3-restart.sh` | `Super+Shift+I` validates the candidate config before restart and reports validation/IPC failures once. |
 | `test-super-polybar-listener.py` | Standalone-Super tap/hold gesture detection. |
 | `test-top-edge-peek.py` | Top-edge pointer gesture: hysteresis and per-monitor tops. |
 | `test-window-mode.sh` | Window mode's show-on-entry and restore-prior-Polybar-state contract. |
+| `test-session-reload.sh` | Service refresh, changed-dunstrc handling, Picom `SIGUSR1`, and single success/partial-failure toast coordination. |
 | `../../polybar/tests/test-launch.sh` | Multi-monitor launch, tray ordering, lock-fd closure, hung-bar kill escalation, log defaults and filename safety, and rotation. |
 | `../../polybar/tests/test-confirm-poweroff.sh` | Explicit confirmation and safe cancellation/timeout behavior for every prompt backend, including the no-backend path. |
 
@@ -1104,6 +1106,15 @@ One-shot startup:
 
 Always on reload/restart:
 
+- Run `session-reload.sh`: `systemctl --user daemon-reload`, then `try-restart`
+  of `task-notify.timer` and — only when `dunstrc` is newer than the running
+  daemon — of `dunst.service`. dunst 1.9.2 has no reload command and a restart
+  discards on-screen notifications, so it is not restarted unnecessarily. See
+  `~/.config/task/MANUAL.md` for the reminders that ride on that timer. A
+  running Picom receives `SIGUSR1`; a stopped one is left for the guarded
+  autostart command to revive. The script then runs display setup and emits one
+  `Welcome`, `i3 reloaded`, or aggregated partial-failure toast after Polybar
+  returns.
 - Stop and restart `focus-tracker.sh`.
 - Stop and restart `snap-watcher.sh`.
 - Stop and restart `kakaotalk-float-watcher.sh`.
@@ -1121,8 +1132,9 @@ Always on reload/restart:
 - Run `~/.local/bin/disable-trackpoint-middle-click` under a
   `/tmp/disable-trackpoint-middle-click.lock` flock.
 - Run `~/.local/bin/touchpad apply`.
-- Run `display-setup.sh`, which arranges the outputs, refreshes the wallpaper,
-  and launches Polybar on every active monitor.
+- Run `display-setup.sh`, which arranges the outputs, asks `dunst-start.sh` to
+  restart dunst only if the laptop panel's dunst 1.9 monitor index changed,
+  refreshes the wallpaper, and launches Polybar on every active monitor.
 
 The long-running watchers also use their own runtime locks, so duplicate
 instances are avoided even during i3 reloads.
@@ -1146,7 +1158,6 @@ Launchers and apps:
 - `zed`
 - `flatpak`
 - Zen Browser Flatpak: `app.zen_browser.zen`
-- Super Productivity Flatpak: `com.super_productivity.SuperProductivity`
 - Helium AppImage under `~/Applications`
 
 Desktop integration:

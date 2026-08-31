@@ -1,0 +1,9 @@
+[Unit]
+Description=Notify before Taskwarrior scheduled times
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/task-notify
+# notify-send needs the session bus, not DISPLAY; its path is fixed under %t.
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
+Nice=10

@@ -10,7 +10,7 @@ window {
     y-offset:         0;
     background-color: @tn-bg;
     border:           1px;
-    border-color:     @tn-border;
+    border-color:     #86be43;
     padding:          20px 24px;
 }
 

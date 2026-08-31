@@ -21,6 +21,7 @@ path=(
   "$HOME/Applications/VESTA-gtk3"
   "$HOME/.juliaup/bin"
   "$HOME/Applications/qe-7.5/bin"
+  "$HOME/Applications/task-calendar"
   "$HOME/.cargo/bin"
   "${path[@]}"
 )

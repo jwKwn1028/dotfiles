@@ -1,0 +1,145 @@
+#!/bin/sh
+# Raise dunst reminders before scheduled and opted-in due times.
+# Run once a minute by ~/.config/systemd/user/task-notify.timer.
+# See ~/.config/task/MANUAL.md for the remind: grammar and the lead table.
+
+set -eu
+
+lead_default=${TASK_NOTIFY_LEAD_DEFAULT:-15m}
+lead_high=${TASK_NOTIFY_LEAD_HIGH:-30m}
+lead_medium=${TASK_NOTIFY_LEAD_MEDIUM:-15m}
+lead_low=${TASK_NOTIFY_LEAD_LOW:-10m}
+
+# <spec> -> seconds; empty when malformed. Bare numbers are hours.
+to_seconds() {
+    printf '%s' "$1" | awk '
+        /^[0-9]+(\.[0-9]+)?[mhd]?$/ {
+            unit = substr($0, length($0))
+            mult = (unit == "m") ? 60 : (unit == "d") ? 86400 : 3600
+            printf "%d", ($0 + 0) * mult
+        }'
+}
+
+resolve_lead() {
+    seconds=$(to_seconds "$2")
+    if [ -z "$seconds" ] || [ "$seconds" -le 0 ]; then
+        printf 'task-notify: %s must be an offset like 30m, 2, or 1d\n' "$1" >&2
+        exit 2
+    fi
+    printf '%s' "$seconds"
+}
+seconds_default=$(resolve_lead TASK_NOTIFY_LEAD_DEFAULT "$lead_default")
+seconds_high=$(resolve_lead TASK_NOTIFY_LEAD_HIGH "$lead_high")
+seconds_medium=$(resolve_lead TASK_NOTIFY_LEAD_MEDIUM "$lead_medium")
+seconds_low=$(resolve_lead TASK_NOTIFY_LEAD_LOW "$lead_low")
+
+for command_name in task jq notify-send; do
+    command -v "$command_name" >/dev/null 2>&1 || {
+        printf 'task-notify: %s is required\n' "$command_name" >&2
+        exit 1
+    }
+done
+
+umask 077
+if [ -n "${TASK_NOTIFY_STATE_DIR:-}" ]; then
+    state_dir=$TASK_NOTIFY_STATE_DIR
+elif [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    state_dir=$XDG_RUNTIME_DIR/task-notify
+else
+    printf 'task-notify: XDG_RUNTIME_DIR or TASK_NOTIFY_STATE_DIR is required\n' >&2
+    exit 1
+fi
+mkdir -p "$state_dir"
+state=$state_dir/notified
+[ -e "$state" ] || : >"$state"
+
+rows=$state_dir/rows.$$
+keep=$state_dir/keep.$$
+trap 'rm -f -- "$rows" "$keep"' EXIT HUP INT TERM
+
+tasks=$(
+    task rc.gc=0 rc.hooks=0 rc.verbose=nothing \
+        status:pending '(' scheduled.any: or due.any: ')' export
+) || {
+    printf 'task-notify: task export failed\n' >&2
+    exit 1
+}
+
+printf '%s' "$tasks" | jq -r \
+    --argjson now "$(date +%s)" \
+    --argjson default "$seconds_default" \
+    --argjson high "$seconds_high" \
+    --argjson medium "$seconds_medium" \
+    --argjson low "$seconds_low" '
+    def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+    def bucket: .priority // "-";
+
+    def offsets($spec):
+        ($spec | split(",")) as $parts
+        | ($parts
+           | map(capture("^ *(?<n>[0-9]+(\\.[0-9]+)?) *(?<u>[mhd]?) *$")?)
+           | map(((.n | tonumber) * {"m": 60, "h": 3600, "d": 86400, "": 3600}[.u]) | floor)
+           | map(select(. > 0))) as $valid
+        | if ($valid | length) < ($parts | length) and $spec != ""
+          then ("task-notify: ignoring malformed remind entry in \($spec)\n" | stderr | empty), $valid
+          else $valid
+          end;
+
+    # Appended, not replaced: remind: buys warnings, never trades one away.
+    def leads($explicit):
+        ([{H: $high, M: $medium, L: $low}[bucket] // $default] + $explicit) | unique;
+
+    def human($s):
+        ($s / 86400 | floor) as $d
+        | (($s % 86400) / 3600 | floor) as $h
+        | (($s % 3600) / 60 | floor) as $m
+        | if $d > 0 then "\($d)d" + (if $h > 0 then " \($h)h" else "" end)
+          elif $h > 0 then "\($h)h" + (if $m > 0 then " \($m)m" else "" end)
+          else "\($m)m" end;
+
+    .[]
+    # A supplied remind: opts in due-only tasks even if no offsets parse.
+    | (.remind // "") as $remind
+    | offsets($remind) as $explicit
+    # scheduled is armed on its own; due only when remind: was typed.
+    | (if .scheduled != null then {field: "scheduled", stamp: .scheduled}
+       elif .due != null and $remind != ""
+       then {field: "due", stamp: .due}
+       else empty end) as $target
+    | ($target.stamp | strptime("%Y%m%dT%H%M%SZ") | mktime) as $at
+    | select($at > $now)
+    # A date-only scheduled:/due: is stored as local midnight.
+    | select(($at | strflocaltime("%H%M%S")) != "000000")
+    | ($at - $now) as $left
+    # Fire the smallest open offset only, so several never pop at once.
+    | ([leads($explicit)[] | select(. >= $left)] | min) as $slot
+    | select($slot != null)
+    | [
+        "\(.uuid) \($target.field) \($target.stamp) \($slot)",
+        ({H: "task.h", M: "task.m", L: "task.l"}[bucket] // "task.none"),
+        ({H: "critical", M: "normal", L: "low"}[bucket] // "normal"),
+        (.description | esc),
+        (if $target.field == "due" then "due " else "" end)
+          + (if ($at | strflocaltime("%Y%m%d")) == ($now | strflocaltime("%Y%m%d"))
+             then ($at | strflocaltime("%H:%M")) else ($at | strflocaltime("%a %H:%M")) end)
+          + " · in \(human($left))"
+          + (if (.project // "") == "" then "" else " · " + (.project | esc) end)
+      ]
+    | @tsv
+' >"$rows"
+
+# Rebuilding the state from what is in window prunes it in place.
+tab=$(printf '\t')
+: >"$keep"
+while IFS="$tab" read -r key category urgency summary body; do
+    [ -n "$key" ] || continue
+    if grep -Fqx -- "$key" "$state"; then
+        printf '%s\n' "$key" >>"$keep"
+    elif notify-send --app-name=taskwarrior --urgency="$urgency" \
+        --category="$category" --icon=appointment-soon -- "$summary" "$body"; then
+        # Recorded only once shown, so a tick before dunst is up retries.
+        printf '%s\n' "$key" >>"$keep"
+    fi
+done <"$rows"
+
+mv -f "$keep" "$state"

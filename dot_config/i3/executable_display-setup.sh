@@ -52,6 +52,12 @@ fi
 
 sleep 0.2
 
+# Keep dunst 1.9's numeric monitor index in sync.
+DUNST_START="${I3_DUNST_START:-$DIR/dunst-start.sh}"
+if [ -x "$DUNST_START" ]; then
+    "$DUNST_START" --sync || true
+fi
+
 "$DIR/wallpaper.sh"
 
 POLYBAR_LAUNCHER="${I3_POLYBAR_LAUNCHER:-$DIR/../polybar/launch.sh}"

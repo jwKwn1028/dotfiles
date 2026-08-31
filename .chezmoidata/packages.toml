@@ -79,7 +79,6 @@ apps = [
     "app.zen_browser.zen",
     "md.obsidian.Obsidian",
     "com.logseq.Logseq",
-    "com.super_productivity.SuperProductivity",
     "org.inkscape.Inkscape",
     "org.kde.okular",
     "org.localsend.localsend_app",

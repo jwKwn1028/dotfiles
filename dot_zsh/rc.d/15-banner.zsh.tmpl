@@ -14,12 +14,14 @@
 # scrollback and ZLE re-expands the padding after a resize. Consequences: width
 # is measured in cells, so wide and combining characters still center; literal
 # percent signs must be doubled; a zero-width escape preserves the blank line
-# before Starship; raw ANSI bytes confuse ZLE's prompt-width accounting.
+# before Starship; ANSI colors must be marked as zero-width for ZLE.
 #
 # Selection: birthday beats normal and rare. The task list shows on the first
-# top-level terminal between 06:00 and 08:59, tracked by a state file. CHANCE
-# takes odds or a legacy percentage, falling back to 1/100; two RANDOM values
-# are combined so denominators above 32767 still work.
+# top-level terminal of the day from 06:00, tracked by a state file, and covers
+# tasks due or scheduled within 7 days. CHANCE takes odds or
+# a legacy percentage, falling back to 1/100; two RANDOM values are combined so
+# denominators above 32767 still work. Special messages are drawn without
+# replacement, tracked by a state file, and repeat only after a full cycle.
 
 if (( ! ${+ZSH_BANNER_SPECIAL_MESSAGES} )); then
   typeset -ga ZSH_BANNER_SPECIAL_MESSAGES=(
@@ -58,6 +60,15 @@ _zsh_banner_prompt() {
   banner_text=${banner_text//\%/%%}
   current_time=${current_time//\%/%%}
   tasklist=${tasklist//\%/%%}
+
+  local sgr=$'\e\\[[0-9;]*m'
+  local prompt_tasklist=
+  while [[ $tasklist =~ $sgr ]]; do
+    (( MBEGIN > 1 )) && prompt_tasklist+=${tasklist[1,MBEGIN-1]}
+    prompt_tasklist+="%{${MATCH}%}"
+    tasklist=${tasklist[MEND+1,-1]}
+  done
+  tasklist=$prompt_tasklist$tasklist
 
   print -nr -- $'\n'
   print -nr -- "%B%F{${ZSH_BANNER_COLOR}}${indent_banner}${banner_text}%f%b"$'\n'
@@ -112,7 +123,7 @@ if (( SHLVL <= 2 )); then
     local tasklist_date_file="$banner_state_dir/banner-terminal-date"
     local last_tasklist_date show_tasklist=0
 
-    if (( current_hour >= 6 && current_hour < 9 )) && (( $+commands[task] )); then
+    if (( current_hour >= 6 )) && (( $+commands[task] )); then
       [[ -r $tasklist_date_file ]] &&
         IFS= read -r last_tasklist_date < "$tasklist_date_file"
       [[ $last_tasklist_date != $current_date ]] && show_tasklist=1
@@ -146,8 +157,48 @@ if (( SHLVL <= 2 )); then
       banner_text="Happy Birthday!"
     elif (( ${#ZSH_BANNER_SPECIAL_MESSAGES[@]} > 0 &&
              special_roll < special_numerator )); then
-      local special_index=$(( RANDOM % ${#ZSH_BANNER_SPECIAL_MESSAGES[@]} + 1 ))
+      local special_state_file="$banner_state_dir/banner-special-shown"
+      # Sidecar lock: zsystem flock takes fcntl locks, which rewriting the
+      # locked file would drop.
+      local special_lock_file="$special_state_file.lock"
+      local -a special_shown=() special_pool=()
+      local shown_message
+      local -i candidate special_lock_fd=0
+
+      if [[ -d $banner_state_dir ]] || mkdir -p -- "$banner_state_dir" 2>/dev/null; then
+        [[ -e $special_lock_file ]] || : >>! "$special_lock_file" 2>/dev/null
+        if zmodload -F zsh/system b:zsystem 2>/dev/null; then
+          zsystem flock -i 0.01 -t 1 -f special_lock_fd "$special_lock_file" 2>/dev/null ||
+            special_lock_fd=0
+        fi
+      fi
+
+      if [[ -r $special_state_file ]]; then
+        while IFS= read -r shown_message; do
+          [[ -n $shown_message ]] || continue
+          (( ${ZSH_BANNER_SPECIAL_MESSAGES[(Ie)$shown_message]} )) &&
+            special_shown+=("$shown_message")
+        done < "$special_state_file"
+      fi
+
+      for (( candidate = 1;
+             candidate <= ${#ZSH_BANNER_SPECIAL_MESSAGES[@]};
+             candidate++ )); do
+        (( ${special_shown[(Ie)${ZSH_BANNER_SPECIAL_MESSAGES[$candidate]}]} )) ||
+          special_pool+=($candidate)
+      done
+
+      if (( ${#special_pool[@]} == 0 )); then
+        special_shown=()
+        special_pool=({1..${#ZSH_BANNER_SPECIAL_MESSAGES[@]}})
+      fi
+
+      local special_index=${special_pool[RANDOM % ${#special_pool[@]} + 1]}
       banner_text="${ZSH_BANNER_SPECIAL_MESSAGES[$special_index]}"
+
+      special_shown+=("$banner_text")
+      { print -rl -- "${special_shown[@]}" >! "$special_state_file" } 2>/dev/null
+      (( special_lock_fd )) && exec {special_lock_fd}>&-
 
       if (( ${#ZSH_BANNER_SPECIAL_COLORS[@]} > 0 )); then
         local color_index=$(( (special_index - 1) % ${#ZSH_BANNER_SPECIAL_COLORS[@]} + 1 ))
@@ -170,7 +221,11 @@ if (( SHLVL <= 2 )); then
       if [[ -d $banner_state_dir ]] || mkdir -p -- "$banner_state_dir" 2>/dev/null; then
         { print -r -- "$current_date" >! "$tasklist_date_file" } 2>/dev/null
       fi
-      ZSH_BANNER_TASKLIST=$(command task rc.verbose=nothing rc.color=off list)
+      local -a horizon=(
+        '(' due.before:now+7d or scheduled.before:now+7d ')'
+      )
+      ZSH_BANNER_TASKLIST=$(command task rc.verbose=blank,label,affected rc._forcecolor=on \
+        "rc.defaultwidth=${COLUMNS:-80}" "${horizon[@]}" list 2>&1)
     fi
   }
 fi

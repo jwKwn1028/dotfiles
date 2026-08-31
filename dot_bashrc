@@ -100,6 +100,7 @@ _path_dirs=(
   "$HOME/Applications/VESTA-gtk3"
   "$HOME/.juliaup/bin"
   "$HOME/Applications/qe-7.5/bin"
+  "$HOME/Applications/task-calendar"
 )
 for (( _i=${#_path_dirs[@]}-1; _i>=0; _i-- )); do
   _path_prepend "${_path_dirs[_i]}"

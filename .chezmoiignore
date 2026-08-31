@@ -86,11 +86,19 @@ snap/firefox/common/.mozilla/firefox/
 /.config/picom/
 /.config/rofi/
 /.config/dunst/
+/.config/systemd/user/dunst.service.d/
 /.config/fcitx5/
 /.x-unstick.sh
 /.toggle-touchpad.sh
 /.local/bin/touchpad
 /.local/bin/disable-trackpoint-middle-click
+
+# Taskwarrior reminders: dunst rules plus a systemd user timer. dot_taskrc is
+# ungated -- the `remind` UDA is inert without the notifier.
+/.local/bin/task-notify
+/.config/systemd/user/task-notify.service
+/.config/systemd/user/task-notify.timer
+/.config/task/MANUAL.md
 
 # Thunar's Ghostty-TokyoNight theme (~1M), the GTK_THEME wrapper that switches
 # it on, and both launch paths through it. Ship all or none.

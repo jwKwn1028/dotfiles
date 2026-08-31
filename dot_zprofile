@@ -12,6 +12,7 @@ path=(
   "$HOME/Applications/FullProf_Suite"
   "$HOME/.juliaup/bin"
   "$HOME/Applications/qe-7.5/bin"
+  "$HOME/Applications/task-calendar"
   "${path[@]}"
 )
 export PATH

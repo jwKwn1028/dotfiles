@@ -13,10 +13,9 @@
     # Wider than the 300 default: JuliaMono is wide and 300px wraps two words.
     width = 400
     height = 300
-    # Follow the focused window's monitor. This is what the old xfce4-notifyd
-    # config meant by "active-monitor"; `monitor = 0` would pin notifications to
-    # the laptop panel with an external display attached.
-    follow = keyboard
+    # dunst 1.9 needs an index; dunst-start.sh resolves it at runtime.
+    follow = none
+    monitor = 0
     notification_limit = 20
     indicate_hidden = yes
 
@@ -112,6 +111,33 @@
     timeout = 0
 
 ### Rules ###
+# Taskwarrior reminders; task-notify sets the appname and a task.<priority>
+# category. Frames read green -> none, blue -> L, yellow -> M, red -> H. The
+# base sets foreground so L is not drawn in urgency_low's dim #565f89.
+# See ~/.config/task/MANUAL.md.
+
+[taskwarrior-reminder]
+    appname = "taskwarrior"
+    timeout = 0
+    foreground = "#c0caf5"
+    frame_color = "#86be43"
+
+[taskwarrior-priority-low]
+    appname = "taskwarrior"
+    category = "task.l"
+    frame_color = "#7aa2f7"
+
+[taskwarrior-priority-medium]
+    appname = "taskwarrior"
+    category = "task.m"
+    frame_color = "#e0af68"
+
+[taskwarrior-priority-high]
+    appname = "taskwarrior"
+    category = "task.h"
+    foreground = "#f7768e"
+    frame_color = "#f7768e"
+
 # Ported from the retired xfce4-notifyd.xml, whose muted_applications list never
 # took effect: dunst holds org.freedesktop.Notifications, so xfce4-notifyd never
 # ran to read it. skip_display is the dunst equivalent of an xfce mute — no

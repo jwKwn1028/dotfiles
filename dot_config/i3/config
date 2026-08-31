@@ -30,7 +30,6 @@ bindsym XF86Display           exec --no-startup-id xfce4-display-settings --mini
 bindsym $mod+Shift+p          exec --no-startup-id ~/.config/i3/display-setup.sh
 bindsym Control+$mod+z        exec --no-startup-id zed
 # bindsym Control+$mod+l        exec --no-startup-id xflock4  # reserved for workspace nav
-bindsym Control+Mod1+p        exec --no-startup-id flatpak run com.super_productivity.SuperProductivity
 # Ghostty has no in-app tab-bar toggle; Mod1+Shift+t is free everywhere.
 bindsym Mod1+Shift+t          exec --no-startup-id ~/.config/ghostty/toggle-tabbar.sh
 # bindsym Control+$mod+h        exec --no-startup-id gtk-launch helium  # reserved for workspace nav
@@ -107,7 +106,7 @@ bindsym $mod+r exec --no-startup-id ~/.config/i3/window-mode.sh open, mode "$mod
 
 # i3 control
 bindsym $mod+Shift+c reload
-bindsym $mod+Shift+i restart
+bindsym $mod+Shift+i exec --no-startup-id ~/.config/i3/i3-restart.sh
 bindsym $mod+Shift+e exec --no-startup-id "i3-nagbar -t warning -m 'Exit i3?' -B 'Yes' 'i3-msg exit'"
 
 # i3-resurrect session save/restore
@@ -253,6 +252,8 @@ bindsym $mod+Shift+t exec --no-startup-id ~/.config/i3/toggle-titles-resnap.sh
 bindsym $mod+m exec --no-startup-id ~/.config/i3/show-desktop.sh
 bindsym $mod+Control+m move scratchpad
 # --- autostart ---
+# Refresh services, Picom, displays, and the reload toast.
+exec_always --no-startup-id ~/.config/i3/session-reload.sh
 exec --no-startup-id /usr/bin/gnome-keyring-daemon --start --components=secrets
 exec_always --no-startup-id sh -c 'pgrep -u "$USER" polkit-gnome >/dev/null || /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/focus-tracker\.sh$"; setsid ~/.config/i3/focus-tracker.sh </dev/null >/dev/null 2>&1 &'
@@ -279,8 +280,5 @@ exec_always --no-startup-id sh -c 'pgrep -x blueman-applet      >/dev/null || bl
 exec --no-startup-id sh -c 'sleep 2; pgrep -x blueman-tray >/dev/null || blueman-tray &'
 exec_always --no-startup-id sh -c 'pgrep -x unclutter-xfixes    >/dev/null || unclutter-xfixes --timeout 3 &'
 exec --no-startup-id dropbox start -i
-# Flashes a toast once Polybar is back. Only $mod+Shift+i reaches it -- i3 4.23
-# skips exec_always on $mod+Shift+c.
-exec_always --no-startup-id env I3_RELOAD_TOAST=1 ~/.config/i3/display-setup.sh
 # Guarded like the daemons above: a dead xss-lock silently stops idle locking.
 exec_always --no-startup-id sh -c 'pgrep -x xss-lock >/dev/null || xss-lock -- xflock4 &'

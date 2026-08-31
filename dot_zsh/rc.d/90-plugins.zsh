@@ -3,6 +3,10 @@
 # (starship) follows. The zhm_* arrays need 20-helix-mode loaded first.
 ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
 
+# Suggestions only; unlike HISTORY_IGNORE this removes nothing from the file.
+# The plugin's `~` operator needs EXTENDED_GLOB, set in 00-options.
+ZSH_AUTOSUGGEST_HISTORY_IGNORE=${HISTORY_IGNORE:-}
+
 if (( $+functions[zhm_prompt_accept] )); then
   ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(
     zhm_history_prev

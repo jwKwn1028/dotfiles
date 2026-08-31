@@ -18,6 +18,10 @@ setopt HIST_EXPIRE_DUPS_FIRST
 setopt HIST_SAVE_NO_DUPS
 setopt HIST_FCNTL_LOCK
 setopt HIST_VERIFY
+
+# Applied on every save, so it also drops matching entries already on disk.
+HISTORY_IGNORE='(ls|ls *|rm *|rmdir *|mv *|mkdir *|which *|type *|clear|exit|history)'
+
 setopt AUTO_PUSHD
 setopt HIST_FIND_NO_DUPS
 setopt PUSHD_IGNORE_DUPS

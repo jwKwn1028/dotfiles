@@ -32,6 +32,11 @@ include ~/.config/task/tokyonight-storm.theme
 # GLOBAL: prefix report dates with the weekday. Delete this line for plain ISO.
 dateformat.report=a Y-M-D
 
+# list — exact scheduled and due timestamps for both CLI and startup banner.
+report.list.columns=id,start.age,entry.age,depends.indicator,priority,project,tags,recur.indicator,scheduled,due,until.remaining,description.count,urgency
+report.list.labels=ID,Active,Age,D,P,Project,Tags,R,Sch,Due,Until,Description,Urg
+report.list.dateformat=a Y-M-D H:N
+
 # today   — fires now: overdue, due today, or scheduled for today. Urgency-ranked.
 report.today.description=Due/scheduled today + overdue
 report.today.columns=id,due.relative,scheduled.relative,priority,project,tags,description,urgency
@@ -67,3 +72,8 @@ report.stuck.labels=ID,Due,Deps,Wait,Proj,Desc
 report.stuck.filter=(+PENDING and +BLOCKED) or +WAITING
 report.stuck.sort=urgency-
 
+# --- Reminders ---
+# Reminder offsets for `scheduled`; setting one also opts in `due`.
+# Bare numbers are hours (remind:1d,2,30m). See ~/.config/task/MANUAL.md.
+uda.remind.type=string
+uda.remind.label=Remind
