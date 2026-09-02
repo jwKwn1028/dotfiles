@@ -8,8 +8,9 @@ TAILSCALE_LAB_EXIT_NODE=${TAILSCALE_LAB_EXIT_NODE:-{{ $tailscaleExitNode | quote
 
 ssh-close() {
   emulate -L zsh
-  local -a hosts names
-  local host all= found=0 label line sname sclients
+  local -a hosts tsessions zsessions
+  local host all= found=0 label line kind sname scount
+  local -a f
 
   if [[ $1 == -a ]]; then
     all=1
@@ -32,20 +33,24 @@ ssh-close() {
     command ssh -O check "$host" >/dev/null 2>&1 || continue
     found=1
 
-    label=$host
-    names=()
-    for line in ${(f)"$(command ssh "$host" '~/.local/bin/zmx list' 2>/dev/null)"}; do
-      [[ $line == *name=* ]] || continue
-      sname=${${line#*name=}%%[[:space:]]*}
-      sclients=${${line#*clients=}%%[[:space:]]*}
+    tsessions=()
+    zsessions=()
+
+    for line in ${(f)"$(_hpc_sessions "$host")"}; do
+      f=("${(@s:%|%:)line}")
+      kind=$f[1] sname=$f[2] scount=$f[4]
       [[ -n $sname ]] || continue
-      if [[ $sclients == <-> ]]; then
-        names+=("$sname($sclients)")
+      [[ $scount == <-> ]] || scount=
+      if [[ $kind == tmux ]]; then
+        tsessions+=("$sname${scount:+($scount)}")
       else
-        names+=("$sname")
+        zsessions+=("$sname${scount:+($scount)}")
       fi
     done
-    (( $#names )) && label="$host (zmx: ${(j:, :)names})"
+
+    label=$host
+    (( $#tsessions )) && label="$label (tmux: ${(j:, :)tsessions})"
+    (( $#zsessions )) && label="$label (zmx: ${(j:, :)zsessions})"
 
     if [[ -n $all ]]; then
       command ssh -O exit "$host" >/dev/null 2>&1 && print "closed: $label"
@@ -273,21 +278,92 @@ sftp-hpc() {
   cdcluster
 }
 
+_hpc_age() {
+  emulate -L zsh
+  zmodload -i zsh/datetime
+  local t=$1 d
+
+  if [[ $t != <-> ]] || (( t <= 0 )); then
+    print -r -- -
+    return
+  fi
+
+  (( d = EPOCHSECONDS - t ))
+  if (( d < 3600 )); then
+    print -r -- "$((d / 60))m"
+  elif (( d < 86400 )); then
+    print -r -- "$((d / 3600))h"
+  else
+    print -r -- "$((d / 86400))d"
+  fi
+}
+
+_hpc_sessions() {
+  emulate -L zsh
+  local host=$1 line sname scount screated spath listing rc probe
+  local -a f
+  local -A spaths
+
+  probe='tmux list-panes -a -F "P%|%#{session_name}%|%#{pane_active}#{window_active}%|%#{pane_current_path}" 2>/dev/null; tmux list-sessions -F "T%|%#{session_name}%|%#{session_windows}%|%#{session_attached}%|%#{session_created}%|%#{session_activity}%|%#{session_path}" 2>/dev/null; ~/.local/bin/zmx list 2>/dev/null'
+
+  listing=$(command ssh "$host" "$probe" 2>/dev/null)
+  rc=$?
+  (( rc == 255 )) && return $rc
+
+  for line in ${(f)listing}; do
+    if [[ $line == 'P%|%'* ]]; then
+      f=("${(@s:%|%:)line}")
+      [[ $f[3] == 11 && -n $f[2] ]] && spaths[$f[2]]=$f[4]
+    elif [[ $line == 'T%|%'* ]]; then
+      f=("${(@s:%|%:)line}")
+      print -r -- "tmux%|%$f[2]%|%$f[3]%|%$f[4]%|%$f[5]%|%$f[6]%|%${spaths[$f[2]]:-$f[7]}"
+    elif [[ $line == *name=* ]]; then
+      sname=${${line#*name=}%%[[:space:]]*}
+      scount=${${line#*clients=}%%[[:space:]]*}
+      screated=${${line#*created=}%%[[:space:]]*}
+      spath=
+      [[ $line == *start_dir=* ]] && spath=${line#*start_dir=}
+      [[ -n $sname ]] && print -r -- "zmx%|%$sname%|%-%|%$scount%|%$screated%|%-%|%$spath"
+    fi
+  done
+}
+
 hpc-list() {
   emulate -L zsh
-  local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
+  local base={{ .sshHpcHost | quote }}
+  local home={{ printf "/home/%s" .sshRemoteUser | quote }}
+  local out line kind name win clients dir age idle fmt
+  local -a f
 
   if (( $# )); then
     print -u2 'usage: hpc-list'
     return 2
   fi
 
-  ssh "$base" "$zmx list"
+  out=$(_hpc_sessions "$base") || return
+
+  if [[ -z $out ]]; then
+    print 'no sessions'
+    return
+  fi
+
+  fmt='%-5s %-18s %4s %8s %6s %6s  %s\n'
+  printf $fmt KIND NAME WIN CLIENTS AGE IDLE PATH
+
+  for line in ${(f)out}; do
+    f=("${(@s:%|%:)line}")
+    kind=$f[1] name=$f[2] win=$f[3] clients=$f[4] dir=$f[7]
+    age=$(_hpc_age $f[5])
+    idle=$(_hpc_age $f[6])
+
+    [[ -n $dir ]] && dir=${dir/#$home/\~}
+    printf $fmt "$kind" "$name" "${win:--}" "${clients:--}" "$age" "$idle" "${dir:--}"
+  done
 }
 
 hpc() {
   emulate -L zsh
-  local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
+  local base={{ .sshHpcHost | quote }}
 
   if (( $# == 0 )); then
     hpc-list
@@ -299,13 +375,13 @@ hpc() {
     return 2
   fi
 
-  ssh -t "$base" "$zmx attach $1"
+  ssh -t "$base" "tmux new-session -A -s $1"
 }
 
 hpc-kill() {
   emulate -L zsh
-  local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
-  local force= entry clients line listing
+  local base={{ .sshHpcHost | quote }}
+  local force= entry attached line listing rc
 
   if [[ $1 == -f ]]; then
     force=1
@@ -317,7 +393,81 @@ hpc-kill() {
     return 2
   fi
 
-  listing=$(hpc-list) || return
+  listing=$(command ssh "$base" 'tmux list-sessions -F "#{session_name} #{session_attached}" 2>/dev/null')
+  rc=$?
+  (( rc == 255 )) && return $rc
+
+  for line in ${(f)listing}; do
+    if [[ ${line%% *} == "$1" ]]; then
+      entry=$line
+      break
+    fi
+  done
+
+  if [[ -z $entry ]]; then
+    print -u2 "hpc-kill: no tmux session named $1"
+    return 1
+  fi
+
+  if [[ -z $force ]]; then
+    attached=${entry##* }
+    if [[ $attached != <-> ]]; then
+      print -u2 "hpc-kill: cannot read client count for $1; use -f to override"
+      return 1
+    fi
+    if (( attached > 0 )); then
+      print -u2 "hpc-kill: $1 has $attached client(s) attached; use -f to kill anyway"
+      return 1
+    fi
+  fi
+
+  ssh "$base" "tmux kill-session -t $1 && tmux list-sessions"
+}
+
+hpcz-list() {
+  emulate -L zsh
+
+  if (( $# )); then
+    print -u2 'usage: hpcz-list'
+    return 2
+  fi
+
+  hpc-list
+}
+
+hpcz() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
+
+  if (( $# == 0 )); then
+    hpcz-list
+    return
+  fi
+
+  if (( $# > 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpcz [session-name]'
+    return 2
+  fi
+
+  ssh -t "$base" "$zmx attach $1"
+}
+
+hpcz-kill() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
+  local force= entry clients line listing
+
+  if [[ $1 == -f ]]; then
+    force=1
+    shift
+  fi
+
+  if (( $# != 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpcz-kill [-f] <session-name>'
+    return 2
+  fi
+
+  listing=$(hpcz-list) || return
 
   for line in ${(f)listing}; do
     if [[ $line == *"name=$1"[[:space:]]* || $line == *"name=$1" ]]; then
@@ -327,18 +477,18 @@ hpc-kill() {
   done
 
   if [[ -z $entry ]]; then
-    print -u2 "hpc-kill: no session named $1"
+    print -u2 "hpcz-kill: no zmx session named $1"
     return 1
   fi
 
   if [[ -z $force ]]; then
     clients=${${entry#*clients=}%%[[:space:]]*}
     if [[ $clients != <-> ]]; then
-      print -u2 "hpc-kill: cannot read client count for $1; use -f to override"
+      print -u2 "hpcz-kill: cannot read client count for $1; use -f to override"
       return 1
     fi
     if (( clients > 0 )); then
-      print -u2 "hpc-kill: $1 has $clients client(s) attached; use -f to kill anyway"
+      print -u2 "hpcz-kill: $1 has $clients client(s) attached; use -f to kill anyway"
       return 1
     fi
   fi
