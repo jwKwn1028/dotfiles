@@ -90,9 +90,10 @@ printf '%s' "$tasks" | jq -r \
         ([{H: $high, M: $medium, L: $low}[bucket] // $default] + $explicit) | unique;
 
     def human($s):
-        ($s / 86400 | floor) as $d
-        | (($s % 86400) / 3600 | floor) as $h
-        | (($s % 3600) / 60 | floor) as $m
+        (($s + 59) / 60 | floor) as $total_m
+        | ($total_m / 1440 | floor) as $d
+        | (($total_m % 1440) / 60 | floor) as $h
+        | ($total_m % 60) as $m
         | if $d > 0 then "\($d)d" + (if $h > 0 then " \($h)h" else "" end)
           elif $h > 0 then "\($h)h" + (if $m > 0 then " \($m)m" else "" end)
           else "\($m)m" end;

@@ -25,6 +25,7 @@ EOF
 chmod +x "$MOCK_BIN/task" "$MOCK_BIN/notify-send"
 
 stamp() { date -u -d "@$(($(date +%s) + $1 * 60))" +%Y%m%dT%H%M%SZ; }
+stamp_seconds() { date -u -d "@$(($(date +%s) + $1))" +%Y%m%dT%H%M%SZ; }
 # What taskwarrior stores for a date-only `scheduled:` -- local midnight.
 midnight_stamp() { date -u -d "@$(date -d 'tomorrow 00:00' +%s)" +%Y%m%dT%H%M%SZ; }
 late_stamp() { date -u -d "@$(date -d 'tomorrow 23:30' +%s)" +%Y%m%dT%H%M%SZ; }
@@ -248,13 +249,15 @@ fixture <<EOF
 [
   {"uuid":"j1","description":"days","scheduled":"$(stamp 1666)","remind":"2d"},
   {"uuid":"j2","description":"hours","scheduled":"$(stamp 85)","remind":"2d"},
-  {"uuid":"j3","description":"minutes","scheduled":"$(stamp 20)","remind":"2d"}
+  {"uuid":"j3","description":"minutes","scheduled":"$(stamp 20)","remind":"2d"},
+  {"uuid":"j4","description":"partial minute","scheduled":"$(stamp_seconds 899)"}
 ]
 EOF
 run
 expect_match 'in 1d 3h' 'a multi-day lead did not render as days and hours'
 expect_match 'in 1h 25m' 'an hours lead did not render as hours and minutes'
 expect_match 'in 20m' 'a minutes lead did not render as minutes'
+expect_match 'in 15m' 'a partial minute was rounded down in the countdown'
 expect_no_match ' 0m' 'a zero minutes unit was rendered'
 expect_no_match ' 0h' 'a zero hours unit was rendered'
 

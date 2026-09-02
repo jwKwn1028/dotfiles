@@ -43,6 +43,8 @@ A deadline is not an appointment, so `due` raises nothing on its own — typing
 `remind:` is the opt-in. When a task carries both fields, `scheduled` wins, so
 one task never pops twice for the same offset. A due-based popup says
 `due 21:30 · in 2h`, making it obvious which date is being announced.
+The countdown rounds partial minutes up, so 14 minutes 31 seconds remaining is
+shown as `in 15m` rather than understating the configured lead.
 
 Two things are always skipped.
 

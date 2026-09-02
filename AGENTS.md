@@ -35,7 +35,8 @@ before creating files with a new prefix.
   address does, and a path can name an employer.
   - Per-machine values go through `promptStringOnce` in `.chezmoi.toml.tmpl`
     and live in `~/.config/chezmoi/chezmoi.toml`, outside this repo: currently
-    `sshRemoteUser`, `ssh{Gpu,Hpc}Host{,Name}`, `flameshotSavePath`.
+    `sshRemoteUser`, `ssh{Gpu,Hpc}Host{,Name}`, `tailscaleExitNode`,
+    `flameshotSavePath`.
   - Use `{{ .chezmoi.homeDir }}`, never a literal home path (see `750fd0a`).
   - `chezmoi add` copies a live file verbatim — read the result before
     committing. That is how a flameshot savePath naming a lab directory got in.

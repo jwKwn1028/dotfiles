@@ -19,6 +19,7 @@
 {{- $sshGpuHostName := promptStringOnce . "sshGpuHostName" "GPU hostname or IP (blank to skip)" "" -}}
 {{- $sshHpcHost := promptStringOnce . "sshHpcHost" "HPC SSH host alias" "" -}}
 {{- $sshHpcHostName := promptStringOnce . "sshHpcHostName" "HPC hostname or IP (blank to skip)" "" -}}
+{{- $tailscaleExitNode := promptStringOnce . "tailscaleExitNode" "Tailscale lab exit-node IP or name (blank to disable helper)" "" -}}
 {{- /* Prompted so a local working directory stays out of the repo. */ -}}
 {{- $flameshotSavePath := promptStringOnce . "flameshotSavePath" "Screenshot directory (blank for ~/Pictures)" "" -}}
 
@@ -33,4 +34,5 @@
     sshGpuHostName    = {{ $sshGpuHostName | quote }}
     sshHpcHost        = {{ $sshHpcHost | quote }}
     sshHpcHostName    = {{ $sshHpcHostName | quote }}
+    tailscaleExitNode = {{ $tailscaleExitNode | quote }}
     flameshotSavePath = {{ $flameshotSavePath | quote }}

@@ -1,14 +1,128 @@
+{{- $tailscaleExitNode := "" -}}
+{{- if hasKey . "tailscaleExitNode" }}{{ $tailscaleExitNode = .tailscaleExitNode }}{{ end -}}
 # --- Remote Access Tools ---
 # Values come from the local chezmoi config; env vars override per session.
 HPC_REMOTE_USER=${HPC_REMOTE_USER:-{{ .sshRemoteUser | quote }}}
 HPC_REMOTE_HOST=${HPC_REMOTE_HOST:-{{ .sshGpuHost | quote }}}
+TAILSCALE_LAB_EXIT_NODE=${TAILSCALE_LAB_EXIT_NODE:-{{ $tailscaleExitNode | quote }}}
 
 ssh-close() {
-  if (( $# != 1 )); then
-    printf '%s\n' 'usage: ssh-close HOST_ALIAS' >&2
+  emulate -L zsh
+  local -a hosts names
+  local host all= found=0 label line sname sclients
+
+  if [[ $1 == -a ]]; then
+    all=1
+    shift
+  fi
+
+  if (( $# > 1 )) || [[ -n $all && $# -eq 1 ]]; then
+    print -u2 'usage: ssh-close [-a | HOST_ALIAS]'
     return 2
   fi
-  command ssh -O exit "$1"
+
+  if (( $# == 1 )); then
+    command ssh -O exit "$1"
+    return
+  fi
+
+  hosts=({{ .sshHpcHost | quote }} {{ .sshGpuHost | quote }})
+
+  for host in $hosts; do
+    command ssh -O check "$host" >/dev/null 2>&1 || continue
+    found=1
+
+    label=$host
+    names=()
+    for line in ${(f)"$(command ssh "$host" '~/.local/bin/zmx list' 2>/dev/null)"}; do
+      [[ $line == *name=* ]] || continue
+      sname=${${line#*name=}%%[[:space:]]*}
+      sclients=${${line#*clients=}%%[[:space:]]*}
+      [[ -n $sname ]] || continue
+      if [[ $sclients == <-> ]]; then
+        names+=("$sname($sclients)")
+      else
+        names+=("$sname")
+      fi
+    done
+    (( $#names )) && label="$host (zmx: ${(j:, :)names})"
+
+    if [[ -n $all ]]; then
+      command ssh -O exit "$host" >/dev/null 2>&1 && print "closed: $label"
+    else
+      print "open: $label"
+    fi
+  done
+
+  (( found )) || print 'no shared connections open'
+}
+
+# Usage: labroute {on|off|status|toggle}
+labroute() {
+  emulate -L zsh
+
+  if (( $# > 1 )); then
+    print -u2 'usage: labroute {on|off|status|toggle}'
+    return 2
+  fi
+
+  local route_action=${1:-status}
+  local tailscale_snapshot selected_exit_node
+
+  case "$route_action" in
+    on|off|status|toggle) ;;
+    *)
+      print -u2 'usage: labroute {on|off|status|toggle}'
+      return 2
+      ;;
+  esac
+
+  if ! command -v tailscale >/dev/null 2>&1; then
+    print -u2 'labroute: tailscale is not installed'
+    return 127
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    print -u2 'labroute: jq is not installed'
+    return 127
+  fi
+
+  tailscale_snapshot=$(command tailscale status --json) || return
+  selected_exit_node=$(command jq -r '.ExitNodeStatus.ID // empty' \
+    <<<"$tailscale_snapshot") || return
+
+  if [[ "$route_action" == toggle ]]; then
+    if [[ -n "$selected_exit_node" ]]; then
+      route_action=off
+    else
+      route_action=on
+    fi
+  fi
+
+  case "$route_action" in
+    status)
+      if [[ -n "$selected_exit_node" ]]; then
+        print 'Lab exit route: ON'
+      else
+        print 'Lab exit route: OFF'
+      fi
+      ;;
+    off)
+      command sudo tailscale set --exit-node= &&
+        print 'Lab exit route: OFF'
+      ;;
+    on)
+      if [[ -n "$selected_exit_node" ]]; then
+        print 'Lab exit route is already ON'
+        return
+      fi
+      if [[ -z "$TAILSCALE_LAB_EXIT_NODE" ]]; then
+        print -u2 'labroute: tailscaleExitNode is not configured in chezmoi data'
+        return 1
+      fi
+      command sudo tailscale set --exit-node="$TAILSCALE_LAB_EXIT_NODE" &&
+        print 'Lab exit route: ON'
+      ;;
+  esac
 }
 
 # 1. Quick SFTP connect -- type 'cdcluster' to browse server files
@@ -157,4 +271,77 @@ sftp-hpc() {
   emulate -L zsh
   local HPC_REMOTE_HOST={{ .sshHpcHost | quote }}
   cdcluster
+}
+
+hpc-list() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
+
+  if (( $# )); then
+    print -u2 'usage: hpc-list'
+    return 2
+  fi
+
+  ssh "$base" "$zmx list"
+}
+
+hpc() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
+
+  if (( $# == 0 )); then
+    hpc-list
+    return
+  fi
+
+  if (( $# > 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpc [session-name]'
+    return 2
+  fi
+
+  ssh -t "$base" "$zmx attach $1"
+}
+
+hpc-kill() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
+  local force= entry clients line listing
+
+  if [[ $1 == -f ]]; then
+    force=1
+    shift
+  fi
+
+  if (( $# != 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpc-kill [-f] <session-name>'
+    return 2
+  fi
+
+  listing=$(hpc-list) || return
+
+  for line in ${(f)listing}; do
+    if [[ $line == *"name=$1"[[:space:]]* || $line == *"name=$1" ]]; then
+      entry=$line
+      break
+    fi
+  done
+
+  if [[ -z $entry ]]; then
+    print -u2 "hpc-kill: no session named $1"
+    return 1
+  fi
+
+  if [[ -z $force ]]; then
+    clients=${${entry#*clients=}%%[[:space:]]*}
+    if [[ $clients != <-> ]]; then
+      print -u2 "hpc-kill: cannot read client count for $1; use -f to override"
+      return 1
+    fi
+    if (( clients > 0 )); then
+      print -u2 "hpc-kill: $1 has $clients client(s) attached; use -f to kill anyway"
+      return 1
+    fi
+  fi
+
+  ssh "$base" "$zmx kill $1${force:+ --force} && $zmx list"
 }
