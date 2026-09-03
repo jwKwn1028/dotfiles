@@ -328,6 +328,21 @@ _hpc_sessions() {
   done
 }
 
+_hpc_session_exists() {
+  emulate -L zsh
+  local host=$1 wanted_kind=$2 wanted_name=$3 line listing
+  local -a f
+
+  listing=$(_hpc_sessions "$host") || return
+
+  for line in ${(f)listing}; do
+    f=("${(@s:%|%:)line}")
+    [[ $f[1] == "$wanted_kind" && $f[2] == "$wanted_name" ]] && return 0
+  done
+
+  return 1
+}
+
 hpc-list() {
   emulate -L zsh
   local base={{ .sshHpcHost | quote }}
@@ -364,6 +379,7 @@ hpc-list() {
 hpc() {
   emulate -L zsh
   local base={{ .sshHpcHost | quote }}
+  local rc
 
   if (( $# == 0 )); then
     hpc-list
@@ -375,7 +391,15 @@ hpc() {
     return 2
   fi
 
-  ssh -t "$base" "tmux new-session -A -s $1"
+  _hpc_session_exists "$base" tmux "$1"
+  rc=$?
+  if (( rc != 0 )); then
+    (( rc == 255 )) && return $rc
+    print -u2 "hpc: no tmux session named $1"
+    return 1
+  fi
+
+  ssh -t "$base" "tmux attach-session -t $1"
 }
 
 hpc-kill() {
@@ -438,6 +462,7 @@ hpcz-list() {
 hpcz() {
   emulate -L zsh
   local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
+  local rc
 
   if (( $# == 0 )); then
     hpcz-list
@@ -447,6 +472,14 @@ hpcz() {
   if (( $# > 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
     print -u2 'usage: hpcz [session-name]'
     return 2
+  fi
+
+  _hpc_session_exists "$base" zmx "$1"
+  rc=$?
+  if (( rc != 0 )); then
+    (( rc == 255 )) && return $rc
+    print -u2 "hpcz: no zmx session named $1"
+    return 1
   fi
 
   ssh -t "$base" "$zmx attach $1"
