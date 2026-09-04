@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Re-apply tile-snap.sh to every window marked `_snap_<region>` after the usable
-# rect changes. Runs concurrently since tile-snap targets disjoint windows. One
-# entry per window, not per mark: largest wins, and tile-snap unmarks the rest.
+# rect changes. One entry per window: the largest mark wins.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"

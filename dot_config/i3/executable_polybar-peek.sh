@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 # Briefly show Polybar after a workspace keybinding, or hold it open for a
 # standalone Super gesture, but only if the bar was hidden. No resnap: a
-# transient peek must not resize snapped windows. The caller holds
-# POLYBAR_CONTROL_LOCK where noted, serializing the final state/deadline check
-# and the hide against new peeks and the explicit toggle. A bar changed outside
-# this helper counts as a fresh peek; one already visible is not ours to hide.
+# transient peek must not resize snapped windows.
 
 set -u
 

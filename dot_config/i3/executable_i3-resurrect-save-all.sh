@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 # Save every i3 workspace layout, plus the extra state i3-resurrect misses.
-#
-# i3-resurrect saves whatever a running AppImage exposed in /proc/<pid>/cmdline,
-# often an ephemeral /tmp/.mount_helium*/... path that is gone after a reboot, so
-# every Helium entry is rewritten to a command resolved from the .desktop Exec
-# line (field codes stripped), falling back to the newest AppImage under
-# ~/Applications. Hardcoding a version would break on upgrade.
+# Helium's ephemeral AppImage mount path is rewritten to a stable command.
 
 set -euo pipefail
 

@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 # Shared Polybar visibility, IPC, and transient-peek helpers. Caller must set DIR
 # to this configuration directory before sourcing.
-#
-# polybar_wait_state's budget is wall clock and short on purpose: polybar applies
-# visibility on receipt, so a state that has not landed within a fraction of a
-# second is unreachable, not slow, and a longer budget only eats keypresses.
 
 . "$DIR/_snap-common.sh"
 
@@ -58,11 +54,9 @@ polybar_raise() {
   done
 }
 
-# Drop any bar i3 still manages as a dock once the bar should be hidden.
-#
-# i3 unmaps a fullscreened output's dock itself, so polybar's hide emits no
-# UnmapNotify and polybar then no-ops every later hide until reload. ICCCM's
-# synthetic UnmapNotify is the withdraw i3 never saw.
+# Drop any bar i3 still manages as a dock once the bar should be hidden: i3
+# unmaps a fullscreened output's dock itself, so polybar's own hide emits no
+# UnmapNotify and it no-ops every later hide until reload.
 polybar_withdraw_orphan_docks() {
   local -a orphans=()
   local win info

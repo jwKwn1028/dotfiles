@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Apply the monitor layout for the connected outputs, then recreate the
-# per-monitor Polybars. The leading sleep lets xfsettingsd and hotplug settle.
+# per-monitor Polybars.
 
 DIR="$(dirname "$(readlink -f "$0")")"
 LAPTOP_OUTPUT="${I3_LAPTOP_OUTPUT:-eDP}"
@@ -65,10 +65,8 @@ if [ -x "$POLYBAR_LAUNCHER" ]; then
     "$POLYBAR_LAUNCHER"
 fi
 
-# Confirm the completed setup once launch.sh has the bars back. randr-hotplug.sh
-# supplies I3_DISPLAY_TOAST; otherwise only i3's exec_always sets I3_RELOAD_TOAST
-# (Super+Shift+P leaves both unset). The stamp lives in XDG_RUNTIME_DIR, so its
-# absence marks a login's first parse.
+# Confirm the completed setup once launch.sh has the bars back. The stamp lives
+# in XDG_RUNTIME_DIR, so its absence marks a login's first parse.
 TOAST_STAMP="${XDG_RUNTIME_DIR:-/tmp}/i3-reload-toast"
 TOAST_TEXT="${I3_DISPLAY_TOAST:-}"
 if [ "${I3_RELOAD_TOAST:-0}" = 1 ]; then

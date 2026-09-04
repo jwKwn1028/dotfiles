@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Re-run display-setup.sh on monitor hotplug. Source is i3's `output` event:
-# Debian's xrandr has no `--listen` and srandrd is not packaged for Mint 22.3.
-# Trigger is the connected-output set, not the raw event -- display-setup.sh
-# drives xrandr, so acting on events directly would loop.
+# Re-run display-setup.sh on monitor hotplug, keyed on the connected-output set
+# rather than the raw i3 `output` event -- display-setup.sh drives xrandr itself.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"
@@ -21,7 +19,6 @@ mkdir -p "$RUNTIME_DIR" 2>/dev/null || true
 exec 200>"$RUNTIME_DIR/i3-randr-hotplug.lock"
 flock -w 5 200 || exit 0
 
-# `connected` covers a plugged-in-but-unconfigured monitor, the state that needs it.
 connected_signature() {
     xrandr --query 2>/dev/null |
         awk '$2 == "connected" { print $1 }' |
@@ -55,8 +52,7 @@ while true; do
     while IFS= read -r -u 3 _event; do
         drain_events
 
-        # Looped, not checked once: a monitor plugged in during the run emits
-        # its events into the drain.
+        # Looped: a monitor plugged in mid-run emits its events into the drain.
         while :; do
             signature="$(connected_signature)"
             [ "$signature" = "$LAST_SIGNATURE" ] && break

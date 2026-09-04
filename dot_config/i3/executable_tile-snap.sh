@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Snap a window to a region of its workspace (XFWM-style): float it in that rect
-# and add a `_snap_<region>` mark so snap-watcher.sh can see which quadrants are
-# occupied. The first snap records geometry in a `_presnap_` mark (format below);
-# tiled windows also get parent/sibling anchors so `unsnap` lands near the
-# original tree slot.
+# and add a `_snap_<region>` mark. The first snap records geometry in a
+# `_presnap_` mark (format below) so `unsnap` can restore it.
 #
 # Usage: tile-snap.sh <left|right|up|down|ul|ur|dl|dr|full|unsnap> [con_id]
 
@@ -108,7 +106,6 @@ if [ -n "$TARGET" ] && ! [[ "$TARGET" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-# Resolve the target con_id up front, needed for polling and pre-snap capture.
 if [ -z "$TARGET" ]; then
   TARGET=$(i3-msg -t get_tree | jq -r '
     [.. | objects | select(.focused? == true and .window? != null)][0].id // empty')
@@ -118,8 +115,7 @@ if [ -z "$TARGET" ]; then
   fi
 fi
 
-# Serialize per window: autorepeat fires this in bursts, and two unsnaps would
-# read the same _presnap_ mark. Non-blocking, so other windows run in parallel.
+# Serialize per window: two unsnaps would read the same _presnap_ mark.
 exec {LOCK_FD}>"$SNAP_RUNTIME_DIR/tile-snap-$TARGET.lock" 2>/dev/null
 if [ -n "${LOCK_FD:-}" ] && ! flock -n "$LOCK_FD"; then
   snap_log "skip $REGION $TARGET: another tile-snap holds the lock"
@@ -183,8 +179,7 @@ fi
 read -r OX OY OW OH <<<"$(i3-msg -t get_outputs | jq -r --arg o "$WS_OUTPUT" '
   .[] | select(.active and .name == $o) | "\(.rect.x) \(.rect.y) \(.rect.width) \(.rect.height)"')"
 
-# Mixed-height monitors can expose root-sized pseudo outputs and stale workspace
-# rects. Stay inside the real active output.
+# Mixed-height monitors can expose root-sized pseudo outputs and stale rects.
 if [[ "${OH:-}" =~ ^[0-9]+$ ]]; then
   if (( X < OX || Y < OY || X + W > OX + OW || Y + H > OY + OH )); then
     X=$OX; Y=$OY; W=$OW; H=$OH
@@ -335,8 +330,8 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   sleep 0.01
 done
 
-# Stage 2: place it, retrying while the rect does not fit -- terminals round to
-# size hints and i3 clamps back to y=0. Shrink by the reported overflow.
+# Stage 2: place it, shrinking by the reported overflow while the rect does not
+# fit -- terminals round to size hints and i3 clamps back to y=0.
 attempts=0
 req_w=$tw
 req_h=$th

@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
 # Keyboard cursor over Polybar's own modules: Super+B, then h/l to move, j/k to
-# adjust, Return to click, Shift+Return to right-click. Sticky -- only a stop
-# that opens a window leaves the mode.
+# adjust, Return to click, Shift+Return to right-click. See MANUAL.md, "Bar Mode".
 #
-# Polybar never takes keyboard focus, so the cursor lives in the calling i3 mode.
 # The highlight is a hidden twin module swapped in over IPC (see config.ini),
-# except the tray: its XEmbed windows are not polybar's, so bar-nav-marker.py
-# paints a block instead, matched on geometry rather than the window tree.
+# except the tray, where bar-nav-marker.py paints a block instead.
 #
-# Runtime state: .idx cursor position; .restore-hidden, written only when the bar
-# was not already persistent; .marker, "x y width height" for the tray block.
-#
-# The parallel arrays below are indexed by stop, left to right; empty action =
-# no-op, `*_opens = 1` takes the keyboard so the mode exits first. Easy to break:
-# power_menu must deselect its stop first, close() must clear .marker before .idx
-# and reset every pair, and a bar up only for a transient peek counts as hidden.
+# The arrays below are parallel, indexed by stop, left to right; empty action =
+# no-op, `*_opens = 1` takes the keyboard so the mode exits first.
 
 set -u
 

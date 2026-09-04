@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 # Toggle i3 title bars on every window, plus the default for future windows.
-#
-# `default_border` and `for_window` are config-only, so snap-watcher.sh reads
-# this state file per window event instead.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"
@@ -10,7 +7,7 @@ DIR="$(dirname "$(readlink -f "$0")")"
 
 mkdir -p "$SNAP_RUNTIME_DIR" 2>/dev/null
 
-# NOTE: keep "pixel 1" in sync with default_border in ~/.config/i3/config
+# Keep "pixel 1" in sync with default_border in ~/.config/i3/config.
 CURRENT="off"
 if [ -f "$SNAP_TITLES_STATE" ]; then
   CURRENT="$(cat "$SNAP_TITLES_STATE")"

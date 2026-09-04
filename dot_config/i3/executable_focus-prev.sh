@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Focus the previously focused window; pressing again toggles back. If that lands
-# on another workspace, request a transient Polybar peek like workspace-action.sh.
+# Focus the previously focused window; pressing again toggles back.
 set -u
 
 DIR="$(dirname "$(readlink -f "$0")")"

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Watches i3 window events. new: auto-snap into the largest free region if the
-# workspace already holds `_snap_*` windows. close: expand the remaining snapped
-# windows into the freed quadrants, largest region first.
+# workspace already holds `_snap_*` windows. close: expand the survivors.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"

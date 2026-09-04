@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 # Shared helpers for tile-snap / resnap / snap-watcher / toggle-titles.
 # Source from sibling scripts:  . "$DIR/_snap-common.sh"
-#
-# Provides SNAP_RUNTIME_DIR, SNAP_TITLES_STATE, SNAP_FOCUS_HISTORY, SNAP_LOG,
-# snap_log, mark_to_quads (region -> quadrants), region_size (area in quadrants),
-# regions_by_size (largest first), and apply_autotiling_split.
 
 SNAP_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 SNAP_TITLES_STATE="$SNAP_RUNTIME_DIR/i3-titles.state"
