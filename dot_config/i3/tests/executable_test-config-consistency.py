@@ -11,12 +11,16 @@ import unittest
 
 
 I3_ROOT = Path(__file__).resolve().parent.parent
+I3_CONFIG = I3_ROOT / "config"
 BAR_NAV = I3_ROOT / "bar-nav.sh"
 if not BAR_NAV.exists():
     BAR_NAV = I3_ROOT / "executable_bar-nav.sh"
 RESTORE = I3_ROOT / "i3-resurrect-restore-all.sh"
 if not RESTORE.exists():
     RESTORE = I3_ROOT / "executable_i3-resurrect-restore-all.sh"
+SNAP_COMMON = I3_ROOT / "_snap-common.sh"
+if not SNAP_COMMON.exists():
+    SNAP_COMMON = I3_ROOT / "executable__snap-common.sh"
 
 POLYBAR_CONFIG = Path(
     os.environ.get("I3_POLYBAR_CONFIG", I3_ROOT.parent / "polybar" / "config.ini")
@@ -38,9 +42,44 @@ def bash_array(source: str, name: str) -> list[str]:
 class ConfigConsistencyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        cls.i3_config = I3_CONFIG.read_text(encoding="utf-8")
         cls.bar_nav = BAR_NAV.read_text(encoding="utf-8")
         cls.polybar = POLYBAR_CONFIG.read_text(encoding="utf-8")
         cls.restore = RESTORE.read_text(encoding="utf-8")
+
+    def test_autotiling_restart_is_self_safe_and_unbounded(self) -> None:
+        startup = re.search(
+            r"(?m)^exec_always --no-startup-id sh -c '"
+            r'(?P<script>pkill -f "(?P<pattern>[^"]+)"; exec '
+            r"(?P<command>~/\.local/bin/autotiling(?: [^']*)?))'$",
+            self.i3_config,
+        )
+        self.assertIsNotNone(startup, "missing autotiling restart command")
+        assert startup is not None
+
+        kill_pattern = re.compile(startup["pattern"])
+        launcher = f"sh -c {startup['script']}"
+        self.assertIsNone(
+            kill_pattern.search(launcher),
+            "autotiling's pkill pattern also kills its launcher before exec",
+        )
+
+        workers = (
+            "/usr/bin/python3 /example/.local/bin/autotiling",
+            "/opt/pipx/venvs/autotiling/bin/python /example/.local/bin/autotiling",
+        )
+        for worker in workers:
+            with self.subTest(worker=worker):
+                self.assertIsNotNone(kill_pattern.search(worker))
+
+        self.assertEqual(
+            startup["command"],
+            "~/.local/bin/autotiling",
+            "workspace overflow handles capacity; autotiling should stay unbounded",
+        )
+
+        snap_common = SNAP_COMMON.read_text(encoding="utf-8")
+        self.assertIn('limit="${2:-0}"', snap_common)
 
     def test_parallel_navigation_arrays_have_the_same_length(self) -> None:
         names = (

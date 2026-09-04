@@ -119,7 +119,7 @@ def boot(dual: bool, workdir: Path) -> list[subprocess.Popen]:
     stub.chmod(0o755)
     env["I3_OVERFLOW_PEEK"] = str(stub)
     autotiling = shutil.which("autotiling") or os.path.expanduser("~/.local/bin/autotiling")
-    for argv in ([autotiling, "--limit", "6"], [sys.executable, str(WATCHER)]):
+    for argv in ([autotiling], [sys.executable, str(WATCHER)]):
         procs.append(subprocess.Popen(
             argv, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True,

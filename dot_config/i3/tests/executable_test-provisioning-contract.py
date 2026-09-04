@@ -117,8 +117,7 @@ class ProvisioningContractTests(unittest.TestCase):
         self.assertIn({"package": "autotiling", "bin": "autotiling"}, apps)
 
         config = source_file("config").read_text(encoding="utf-8")
-        self.assertIn("~/.local/bin/autotiling --limit 6", config)
-        self.assertIn('pkill -f "[/]autotiling( |$)"', config)
+        self.assertIn("~/.local/bin/autotiling", config)
 
         installer = manifest.parent.parent / "run_once_after_30-install-cli-tools.sh.tmpl"
         self.assertTrue(installer.is_file(), f"missing pipx installer: {installer}")

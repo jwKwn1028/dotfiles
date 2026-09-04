@@ -50,7 +50,7 @@ regions_by_size() {
 }
 
 apply_autotiling_split() {
-  local target="$1" limit="${2:-6}"
+  local target="$1" limit="${2:-0}"
   local fields floating fullscreen width height parent_layout parent_type
   local workspace_found depth_limit_reached desired cmd
   local attempts=10

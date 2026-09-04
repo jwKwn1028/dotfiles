@@ -445,8 +445,10 @@ ends.
 
 ## Autotiling Integration
 
-The external daemon `~/.local/bin/autotiling --limit 6` is started
-from i3 autostart on every reload/restart.
+The external daemon `~/.local/bin/autotiling` is started from i3 autostart on
+every reload/restart. It runs without a depth limit: the overflow watcher owns
+workspace capacity and cascades undersized arrivals onward, while autotiling
+keeps choosing the split direction at every nesting depth.
 
 `_snap-common.sh` also implements `apply_autotiling_split`, a local helper used
 after snap fallback operations and tiled unsnaps. It mirrors the daemon's
@@ -456,8 +458,7 @@ width/height rule:
 - Wider or square containers get horizontal splitting.
 - Floating and fullscreen windows are skipped.
 - Stacked and tabbed parents are skipped.
-- Containers at or beyond the depth limit are skipped.
-- The default depth limit is `6`.
+- No depth limit is applied by default.
 
 This keeps windows restored from the snap system aligned with the same split
 policy as normal new tiled windows.
@@ -522,7 +523,7 @@ ShellCheck (when installed), and `i3 -C`.
 | `run-fast.sh` | All fast checks, source-state mapping, syntax, lint, and i3 config parsing. |
 | `test-overflow-watcher.py` | Pure functions of `overflow-watcher.py`; runs in milliseconds. |
 | `test-overflow-live.py` | Drives a throwaway Xephyr i3 session through every overflow rule on one and two screens. Needs `Xephyr`, `xterm`, `autotiling`; takes minutes. |
-| `test-config-consistency.py` | Bar-nav arrays/twins, current and safe power commands, shared restore helpers, and system-Python entrypoints. |
+| `test-config-consistency.py` | Safe unbounded autotiling restarts, bar-nav arrays/twins, current and safe power commands, shared restore helpers, and system-Python entrypoints. |
 | `test-provisioning-contract.py` | System-Python runtime imports remain paired with `python3-i3ipc`, `python3-xlib`, and `python3-lz4` in the desktop apt profile. Skips from an applied tree when the chezmoi package manifest is unavailable. |
 | `test-bar-nav.sh` | Bar-mode navigation, selected-module actions, marker state, and prior-visibility restoration. |
 | `test-polybar-peek.sh` | `polybar-peek.sh` show/hide, ownership, and debounce behavior. |
@@ -1121,7 +1122,7 @@ Always on reload/restart:
 - Stop and restart `randr-hotplug.sh`; it records the current connected-output
   set and then drives later hotplugs through `display-setup.sh`.
 - Stop and restart `super-polybar-listener.py`.
-- Stop and restart `~/.local/bin/autotiling --limit 6`.
+- Stop and restart `~/.local/bin/autotiling`.
 - Stop and restart `overflow-watcher.py`.
 - Start `top-edge-peek.py`; its runtime lock rejects duplicate instances.
 - Start `xss-lock -- xflock4` if it is not already running, so an i3 restart

@@ -262,7 +262,8 @@ exec_always --no-startup-id sh -c 'pkill -f "bash .*/kakaotalk-float-watcher\.sh
 # Keyed on the connected-output set -- display-setup.sh's own xrandr calls would loop.
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/randr-hotplug\.sh$"; setsid ~/.config/i3/randr-hotplug.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/super-polybar-listener\.py$"; exec /usr/bin/python3 ~/.config/i3/super-polybar-listener.py'
-exec_always --no-startup-id sh -c 'pkill -f "[/]autotiling( |$)"; exec ~/.local/bin/autotiling --limit 6'
+# Match an interpreter-led worker, not this `sh -c` launcher itself.
+exec_always --no-startup-id sh -c 'pkill -f "^[^ ]*/python[^ ]* [^ ]*/autotiling( |$)"; exec ~/.local/bin/autotiling'
 # -d until the idle-tiling bug is caught; pkill pattern omits `$` to match args.
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/overflow-watcher\.py"; exec /usr/bin/python3 ~/.config/i3/overflow-watcher.py -d'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/top-edge-peek\.py$"; exec /usr/bin/python3 ~/.config/i3/top-edge-peek.py'
