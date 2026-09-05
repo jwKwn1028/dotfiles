@@ -7,17 +7,27 @@ CLAUDE_DIR="$HOME_DIR/.claude"
 PROJECTS_DIR="$CLAUDE_DIR/projects"
 
 DRY_RUN=1
+INCLUDE_PROJECTS=0
 
 # Claude transcript path -> "keep" | "delete".
 declare -A CHAT_DECISION=()
 # Codex thread id -> "keep" | "delete"; same idea for Codex session transcripts.
 declare -A CODEX_CHAT_DECISION=()
+# Session ids whose Claude transcript survived; their per-session state survives.
+declare -A CLAUDE_KEPT_SIDS=()
 
 usage() {
   cat <<'USAGE'
 Usage:
   ./.cleanup-agents.sh          Show what would be removed
   ./.cleanup-agents.sh --apply  Actually remove the files/directories
+
+Options:
+  --apply             Delete, instead of previewing.
+  --include-projects  Also review .claude/.codex directories belonging to other
+                      projects under $HOME. Off by default; they hold
+                      per-project agents and settings and are usually
+                      gitignored. Each is offered individually (default "no").
 
 This preserves:
   ~/.codex/auth.json
@@ -57,6 +67,9 @@ for arg in "$@"; do
   case "$arg" in
     --apply)
       DRY_RUN=0
+      ;;
+    --include-projects)
+      INCLUDE_PROJECTS=1
       ;;
     -h|--help)
       usage
@@ -121,9 +134,13 @@ is_protected() {
 # in the right bucket.
 codex_bucket() {
   case "$(basename "$1")" in
-    sessions|history.jsonl)
+    sessions|history.jsonl|session_index.jsonl)
       printf 'chat' ;;
     state_*.sqlite|state_*.sqlite-*|logs_*.sqlite|logs_*.sqlite-*)
+      printf 'chat' ;;
+    thread_history_*.sqlite|thread_history_*.sqlite-*)
+      printf 'chat' ;;
+    queue_*.sqlite|queue_*.sqlite-*)
       printf 'chat' ;;
     memories)
       printf 'memory' ;;
@@ -131,6 +148,33 @@ codex_bucket() {
       printf 'memory' ;;
     *)
       printf '' ;;
+  esac
+}
+
+# Same idea for ~/.claude: per-session state, owned by sweep_claude_session_state.
+claude_bucket() {
+  case "$(basename "$1")" in
+    history.jsonl|file-history|session-env)
+      printf 'chat' ;;
+    *)
+      printf '' ;;
+  esac
+}
+
+# Read a [y/N] answer from the terminal. True only on an explicit yes.
+confirm() {
+  local prompt="$1" absent_note="$2" reply=""
+
+  if [[ -r /dev/tty ]]; then
+    printf '%s' "$prompt"
+    read -r reply < /dev/tty || reply=""
+  else
+    printf '%s\n' "$absent_note"
+  fi
+
+  case "$reply" in
+    y|Y|yes|YES|Yes) return 0 ;;
+    *) return 1 ;;
   esac
 }
 
@@ -158,9 +202,11 @@ clean_directory_contents() {
   [[ -d "$dir" ]] || return 0
 
   while IFS= read -r -d '' child; do
-    # The Claude chat/memory functions own the projects tree and chat history.
+    # The Claude chat/memory functions own the projects tree and per-session state.
     [[ "$child" == "$PROJECTS_DIR" ]] && continue
-    [[ "$dir" == "$CLAUDE_DIR" && "$child" == "$CLAUDE_DIR/history.jsonl" ]] && continue
+    if [[ "$dir" == "$CLAUDE_DIR" && -n "$(claude_bucket "$child")" ]]; then
+      continue
+    fi
     # The Codex chat/memory buckets are owned by the Codex functions below.
     if [[ "$dir" == "$CODEX_DIR" && -n "$(codex_bucket "$child")" ]]; then
       continue
@@ -169,8 +215,31 @@ clean_directory_contents() {
   done < <(find "$dir" -mindepth 1 -maxdepth 1 -print0)
 }
 
+# Offer one project-local agent path for deletion; default keep, like chats.
+decide_marker_path() {
+  local path="$1"
+
+  [[ -e "$path" || -L "$path" ]] || return 0
+
+  if (( DRY_RUN )); then
+    printf 'Would review project-local agent path: %s\n' "$path"
+    printf '  -> --apply would ask whether to delete it (kept in dry run).\n'
+    return 0
+  fi
+
+  printf '\nProject-local agent path: %s\n' "$path"
+  if confirm '  Delete it? [y/N] ' '  (no terminal available; keeping it by default)'; then
+    rm -rf -- "$path"
+    printf '  Removed: %s\n' "$path"
+  else
+    printf '  Kept: %s\n' "$path"
+  fi
+}
+
+# Project-local .claude/.codex under $HOME; --include-projects only. Offered one
+# at a time because they are gitignored, so a wrong yes is unrecoverable.
 clean_other_marker_paths() {
-  local child
+  local child path found=0
 
   while IFS= read -r -d '' child; do
     case "$child" in
@@ -180,9 +249,55 @@ clean_other_marker_paths() {
     esac
 
     while IFS= read -r -d '' path; do
-      remove_path "$path"
-    done < <(find "$child" \( -name '.codex*' -o -name '.claude*' \) -print0)
-  done < <(find "$HOME_DIR" -mindepth 1 -maxdepth 1 -print0)
+      if is_protected "$path"; then
+        printf 'Keep: %s\n' "$path"
+        continue
+      fi
+      found=1
+      decide_marker_path "$path"
+    done < <(find "$child" -xdev \
+      \( -name .git -o -name node_modules \) -prune -o \
+      \( -name '.codex*' -o -name '.claude*' \) -prune -print0 2>/dev/null | sort -z)
+  done < <(find "$HOME_DIR" -mindepth 1 -maxdepth 1 -print0 | sort -z)
+
+  (( found )) || printf 'No project-local .claude/.codex directories found.\n'
+}
+
+# Keep only the records whose <key> is a kept session id, dropping malformed
+# lines; remove the file when nothing survives. Echoes the number kept.
+prune_jsonl_to_kept() {
+  local path="$1" key="$2"
+  shift 2
+  python3 - "$path" "$key" "$@" <<'PY'
+import json, os, sys
+path, key = sys.argv[1], sys.argv[2]
+kept = set(sys.argv[3:])
+out = []
+try:
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            s = line.strip()
+            if not s:
+                continue
+            try:
+                rec = json.loads(s)
+            except ValueError:
+                continue
+            if rec.get(key) in kept:
+                out.append(s)
+except OSError:
+    print(0)
+    raise SystemExit
+if out:
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(out) + "\n")
+else:
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+print(len(out))
+PY
 }
 
 # ---- Interactive chat + memory handling (Claude) ----------------------------
@@ -354,18 +469,24 @@ process_claude_chats() {
 
 # Reconcile Claude's history index with the per-chat decisions: prune it while
 # chats remain, or offer to remove it once every chat has been deleted.
+collect_claude_kept_sids() {
+  local jsonl
+
+  CLAUDE_KEPT_SIDS=()
+  (( ${#CHAT_DECISION[@]} )) || return 0
+  for jsonl in "${!CHAT_DECISION[@]}"; do
+    [[ "${CHAT_DECISION[$jsonl]}" == "keep" ]] || continue
+    CLAUDE_KEPT_SIDS["$(basename "$jsonl" .jsonl)"]=1
+  done
+}
+
 finalize_claude_chat_side() {
-  local any_kept=0 jsonl sid reply=""
+  local any_kept=0 reply=""
   local kept=()
 
-  if (( ${#CHAT_DECISION[@]} )); then
-    for jsonl in "${!CHAT_DECISION[@]}"; do
-      if [[ "${CHAT_DECISION[$jsonl]}" == "keep" ]]; then
-        any_kept=1
-        sid="$(basename "$jsonl" .jsonl)"
-        kept+=("$sid")
-      fi
-    done
+  if (( ${#CLAUDE_KEPT_SIDS[@]} )); then
+    any_kept=1
+    kept=("${!CLAUDE_KEPT_SIDS[@]}")
   fi
 
   local hist="$CLAUDE_DIR/history.jsonl"
@@ -377,37 +498,7 @@ finalize_claude_chat_side() {
     fi
 
     local n
-    n="$(python3 - "$hist" "${kept[@]}" <<'PY'
-import json, os, sys
-path = sys.argv[1]
-kept = set(sys.argv[2:])
-out = []
-try:
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            s = line.strip()
-            if not s:
-                continue
-            try:
-                rec = json.loads(s)
-            except ValueError:
-                continue
-            if rec.get("sessionId") in kept:
-                out.append(s)
-except OSError:
-    print(0)
-    raise SystemExit
-if out:
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(out) + "\n")
-else:
-    try:
-        os.remove(path)
-    except OSError:
-        pass
-print(len(out))
-PY
-)" || n="?"
+    n="$(prune_jsonl_to_kept "$hist" sessionId "${kept[@]}")" || n="?"
     printf '\nPruned Claude history.jsonl to %s kept entr%s.\n' \
       "$n" "$([[ "$n" == 1 ]] && printf y || printf ies)"
     return 0
@@ -441,25 +532,51 @@ PY
   esac
 }
 
-# Remove project files that are neither chat transcripts nor memory; the chat
-# and memory passes above own those stores.
+# Project files that are neither transcripts, memory, nor state belonging to a
+# chat that was kept. MEMORY.md is the memory index, so it follows the memory
+# prompt rather than being swept out from under the memories it lists.
 sweep_claude_projects_remainder() {
   [[ -d "$PROJECTS_DIR" ]] || return 0
 
-  local path
+  local path rest sid
   while IFS= read -r -d '' path; do
+    rest="${path#"$PROJECTS_DIR"/}"
+    rest="${rest#*/}"
+    sid="${rest%%/*}"
+    [[ -n "${CLAUDE_KEPT_SIDS[$sid]:-}" ]] && continue
+
     if (( DRY_RUN )); then
       printf 'Would remove project-state file: %s\n' "$path"
     else
       rm -f -- "$path"
       printf 'Removed project-state file: %s\n' "$path"
     fi
-  done < <(find "$PROJECTS_DIR" -type f ! -name '*.jsonl' ! -path '*/memory/*' -print0 2>/dev/null)
+  done < <(find "$PROJECTS_DIR" -type f \
+    ! -name '*.jsonl' ! -name 'MEMORY.md' ! -path '*/memory/*' -print0 2>/dev/null)
 
   if (( ! DRY_RUN )); then
     # Prune now-empty project directories bottom-up.
     find "$PROJECTS_DIR" -depth -type d -empty -delete 2>/dev/null || true
   fi
+}
+
+# ~/.claude/file-history and ~/.claude/session-env are keyed by session id; drop
+# only the entries whose transcript was deleted.
+sweep_claude_session_state() {
+  local base dir entry sid
+
+  for base in file-history session-env; do
+    dir="$CLAUDE_DIR/$base"
+    [[ -d "$dir" ]] || continue
+
+    while IFS= read -r -d '' entry; do
+      sid="$(basename "$entry")"
+      [[ -n "${CLAUDE_KEPT_SIDS[$sid]:-}" ]] && continue
+      remove_path "$entry"
+    done < <(find "$dir" -mindepth 1 -maxdepth 1 -print0)
+
+    (( DRY_RUN )) || rmdir "$dir" 2>/dev/null || true
+  done
 }
 
 # Preview the Claude memory store; with --apply, erase only after a separate yes.
@@ -469,9 +586,11 @@ process_claude_memory() {
     return 0
   fi
 
-  local memdirs=0 pfiles=0 memfile name desc typ origin reply="" memdir
+  local memdirs=0 indexes=0 pfiles=0 memfile name desc typ origin reply="" memdir
   memdirs="$(find "$PROJECTS_DIR" -type d -name memory -prune -print 2>/dev/null | wc -l | tr -d ' ')"
-  if [[ "$memdirs" -eq 0 ]]; then
+  # The index sits beside the store, not inside it, in the older layout.
+  indexes="$(find "$PROJECTS_DIR" -mindepth 2 -maxdepth 2 -type f -name MEMORY.md 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "$memdirs" -eq 0 && "$indexes" -eq 0 ]]; then
     printf 'No Claude memory stored (nothing to erase).\n'
     return 0
   fi
@@ -480,6 +599,9 @@ process_claude_memory() {
   printf 'Claude memory store:\n'
   printf '  Persistent store: %s file%s under ~/.claude/projects/*/memory/\n' \
     "$pfiles" "$([[ "$pfiles" == 1 ]] && printf '' || printf s)"
+  if [[ "$indexes" -gt 0 ]]; then
+    printf '  Memory indexes: %s MEMORY.md at project roots\n' "$indexes"
+  fi
 
   if [[ "$pfiles" -gt 0 ]]; then
     printf '  Sample memories:\n'
@@ -493,7 +615,7 @@ process_claude_memory() {
       printf '\n'
       (( ++shown >= 5 )) && break
     done < <(find "$PROJECTS_DIR" -type f -path '*/memory/*' -print0 2>/dev/null | sort -z)
-  else
+  elif [[ "$indexes" -eq 0 ]]; then
     printf '  (memory is empty; only store directories are present)\n'
   fi
 
@@ -515,6 +637,10 @@ process_claude_memory() {
         rm -rf -- "$memdir"
         printf '  Removed: %s\n' "$memdir"
       done < <(find "$PROJECTS_DIR" -type d -name memory -prune -print0 2>/dev/null)
+      while IFS= read -r -d '' memfile; do
+        rm -f -- "$memfile"
+        printf '  Removed: %s\n' "$memfile"
+      done < <(find "$PROJECTS_DIR" -mindepth 2 -maxdepth 2 -type f -name MEMORY.md -print0 2>/dev/null)
       ;;
     *)
       printf '  Kept the Claude memory store.\n'
@@ -646,15 +772,20 @@ PY
   fi
 }
 
-# Echo the base path of the first Codex bucket DB matching a prefix (e.g.
-# "memories_", "state_"), skipping -shm/-wal sidecars; nothing if none exist.
-codex_db_for() {
+# Echo every Codex bucket DB matching a prefix (e.g. "memories_", "state_"), one
+# per line, skipping -shm/-wal sidecars. A schema bump leaves the older
+# generation on disk, and it still holds real rows.
+codex_dbs_for() {
   local prefix="$1" f
   for f in "$CODEX_DIR/$prefix"*.sqlite; do
     [[ -f "$f" ]] || continue
-    printf '%s' "$f"
-    return 0
+    printf '%s\n' "$f"
   done
+}
+
+# One handle, for the read-only previews.
+codex_db_for() {
+  codex_dbs_for "$1" | head -n 1
 }
 
 # Remove a sqlite DB together with its -wal/-shm/-journal sidecars.
@@ -760,49 +891,31 @@ finalize_codex_chat_side() {
   fi
 
   local hist="$CODEX_DIR/history.jsonl"
+  local index="$CODEX_DIR/session_index.jsonl"
   local -a chat_dbs=()
-  local db
-  db="$(codex_db_for state_)" && [[ -n "$db" ]] && chat_dbs+=("$db")
-  db="$(codex_db_for logs_)" && [[ -n "$db" ]] && chat_dbs+=("$db")
+  local prefix db
+  for prefix in state_ logs_ thread_history_ queue_; do
+    while IFS= read -r db; do
+      chat_dbs+=("$db")
+    done < <(codex_dbs_for "$prefix")
+  done
 
   if (( any_kept )); then
+    local n
     if [[ -f "$hist" ]]; then
       if (( DRY_RUN )); then
         printf '\nWould prune history.jsonl to the kept chats.\n'
       else
-        local n
-        n="$(python3 - "$hist" "${kept[@]}" <<'PY'
-import json, os, sys
-path = sys.argv[1]
-kept = set(sys.argv[2:])
-out = []
-try:
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            s = line.strip()
-            if not s:
-                continue
-            try:
-                rec = json.loads(s)
-            except ValueError:
-                continue
-            if rec.get("session_id") in kept:
-                out.append(s)
-except OSError:
-    print(0)
-    raise SystemExit
-if out:
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(out) + "\n")
-else:
-    try:
-        os.remove(path)
-    except OSError:
-        pass
-print(len(out))
-PY
-)" || n="?"
+        n="$(prune_jsonl_to_kept "$hist" session_id "${kept[@]}")" || n="?"
         printf '\nPruned history.jsonl to %s kept entr%s.\n' "$n" "$([[ "$n" == 1 ]] && printf y || printf ies)"
+      fi
+    fi
+    if [[ -f "$index" ]]; then
+      if (( DRY_RUN )); then
+        printf 'Would prune session_index.jsonl to the kept chats.\n'
+      else
+        n="$(prune_jsonl_to_kept "$index" id "${kept[@]}")" || n="?"
+        printf 'Pruned session_index.jsonl to %s kept entr%s.\n' "$n" "$([[ "$n" == 1 ]] && printf y || printf ies)"
       fi
     fi
     if (( ${#chat_dbs[@]} )); then
@@ -814,9 +927,10 @@ PY
   # No chats kept: history.jsonl + the index/log DBs are now orphaned state.
   local -a orphans=()
   [[ -f "$hist" ]] && orphans+=("$hist")
+  [[ -f "$index" ]] && orphans+=("$index")
   local base
-  for base in "${chat_dbs[@]:-}"; do
-    [[ -n "$base" ]] && orphans+=("$base")
+  for base in "${chat_dbs[@]}"; do
+    orphans+=("$base")
   done
   (( ${#orphans[@]} )) || return 0
 
@@ -840,8 +954,9 @@ PY
   case "$reply" in
     y|Y|yes|YES|Yes)
       [[ -f "$hist" ]] && { rm -f -- "$hist"; printf '  Removed: %s\n' "$hist"; }
-      for base in "${chat_dbs[@]:-}"; do
-        [[ -n "$base" ]] && codex_remove_db "$base"
+      [[ -f "$index" ]] && { rm -f -- "$index"; printf '  Removed: %s\n' "$index"; }
+      for base in "${chat_dbs[@]}"; do
+        codex_remove_db "$base"
       done
       ;;
     *)
@@ -855,22 +970,28 @@ process_codex_memory() {
   [[ -d "$CODEX_DIR" ]] || return 0
 
   local memdir="$CODEX_DIR/memories"
-  local pfiles=0 mrows=0 grows=0 mdb gdb
-  mdb="$(codex_db_for memories_)" || mdb=""
-  gdb="$(codex_db_for goals_)" || gdb=""
+  local pfiles=0 mrows=0 grows=0 db rows mdb=""
+  local -a mdbs=() gdbs=()
+  while IFS= read -r db; do mdbs+=("$db"); done < <(codex_dbs_for memories_)
+  while IFS= read -r db; do gdbs+=("$db"); done < <(codex_dbs_for goals_)
+  mdb="${mdbs[0]:-}"
 
   if [[ -d "$memdir" ]]; then
     pfiles="$(find "$memdir" -type f -not -path '*/.git/*' 2>/dev/null | wc -l | tr -d ' ')"
   fi
   if command -v sqlite3 >/dev/null 2>&1; then
-    [[ -n "$mdb" ]] && mrows="$(sqlite3 "$mdb" 'SELECT COUNT(*) FROM stage1_outputs;' 2>/dev/null || printf 0)"
-    [[ -n "$gdb" ]] && grows="$(sqlite3 "$gdb" 'SELECT COUNT(*) FROM thread_goals;' 2>/dev/null || printf 0)"
+    for db in "${mdbs[@]}"; do
+      rows="$(sqlite3 "$db" 'SELECT COUNT(*) FROM stage1_outputs;' 2>/dev/null || printf 0)"
+      [[ "$rows" =~ ^[0-9]+$ ]] && mrows=$(( mrows + rows ))
+    done
+    for db in "${gdbs[@]}"; do
+      rows="$(sqlite3 "$db" 'SELECT COUNT(*) FROM thread_goals;' 2>/dev/null || printf 0)"
+      [[ "$rows" =~ ^[0-9]+$ ]] && grows=$(( grows + rows ))
+    done
   fi
-  [[ "$mrows" =~ ^[0-9]+$ ]] || mrows=0
-  [[ "$grows" =~ ^[0-9]+$ ]] || grows=0
 
   # Nothing that counts as memory exists at all.
-  if [[ ! -d "$memdir" && -z "$mdb" && -z "$gdb" ]]; then
+  if [[ ! -d "$memdir" ]] && (( ${#mdbs[@]} == 0 && ${#gdbs[@]} == 0 )); then
     printf 'No Codex memory stored (nothing to erase).\n'
     return 0
   fi
@@ -913,8 +1034,9 @@ process_codex_memory() {
         rm -rf -- "$memdir"
         printf '  Removed: %s\n' "$memdir"
       fi
-      [[ -n "$mdb" ]] && codex_remove_db "$mdb"
-      [[ -n "$gdb" ]] && codex_remove_db "$gdb"
+      for db in "${mdbs[@]}" "${gdbs[@]}"; do
+        codex_remove_db "$db"
+      done
       ;;
     *)
       printf '  Kept the Codex memory store.\n'
@@ -931,10 +1053,12 @@ fi
 if [[ -d "$CLAUDE_DIR" ]]; then
   printf '== Claude chat transcripts ==\n'
   process_claude_chats
+  collect_claude_kept_sids
   finalize_claude_chat_side
   printf '\n== Claude memory ==\n'
   process_claude_memory
   sweep_claude_projects_remainder
+  sweep_claude_session_state
   printf '\n'
 fi
 
@@ -949,7 +1073,13 @@ fi
 
 clean_directory_contents "$CODEX_DIR"
 clean_directory_contents "$CLAUDE_DIR"
-clean_other_marker_paths
+
+if (( INCLUDE_PROJECTS )); then
+  printf '\n== Project-local agent directories ==\n'
+  clean_other_marker_paths
+else
+  printf '\nSkipped project-local .claude/.codex directories (--include-projects to review them).\n'
+fi
 
 if (( DRY_RUN )); then
   printf '\nNo files were removed.\n'

@@ -54,6 +54,11 @@ usage() {
 }
 
 if [[ ${ZSH_HISTORY_CLEANER_INTERNAL:-0} != 1 ]]; then
+  # Answered before re-entry so a broken or slow zshrc cannot swallow --help.
+  if [[ $1 == (-h|--help) ]]; then
+    usage
+    return 0 2>/dev/null || exit 0
+  fi
   default_history=${HISTFILE:-${state_dir}/zsh/history}
   HISTFILE='' \
     ZSH_HISTORY_CLEANER_INTERNAL=1 \
@@ -94,10 +99,10 @@ while (( $# )); do
       ;;
     --)
       shift
-      if (( $# > 1 )); then
+      if (( $# > 1 )) || { (( $# )) && [[ -n $history_arg ]]; }; then
         fail "expected at most one history file" || return
       fi
-      (( $# == 1 )) && history_arg=$1
+      (( $# )) && history_arg=$1
       break
       ;;
     -*)
@@ -132,7 +137,7 @@ if (( ! dry_run )) && [[ ! -w $history_file || ! -w ${history_file:h} ]]; then
   fail "history file and its directory must be writable: $history_file" || return
 fi
 
-for required_command in cp mktemp mv chmod head tail; do
+for required_command in cp mktemp mv chmod head tail rm; do
   if ! command -v -- $required_command >/dev/null 2>&1; then
     fail "required command not found: $required_command" || return
   fi
@@ -156,7 +161,11 @@ file_size() {
 }
 
 # The name suffix must break on _ or -, or `tokenizers_parallelism=` matches.
+# The glob is a superset of every word the regexes can match, and keeps them
+# off the entries that cannot possibly match.
 is_sensitive() {
+  [[ $1 == (#i)*(key|token|secret|pass|credential|bearer|gh[pousr]_|github_pat_|sk-|hf_|xox|akia)* ]] ||
+    return 1
   local lower=${(L)1}
   [[ $lower =~ '(^|[[:space:];])(export[[:space:]]+|env[[:space:]]+)?[[:alnum:]_]*(api[_-]?key|token|secret|password|passwd|passphrase|credential)([_-][[:alnum:]_]*)?=' ||
      $lower =~ '--(api[_-]?key|token|password|passwd|passphrase|secret)(=|[[:space:]])[^[:space:]]+' ||
@@ -250,8 +259,9 @@ unsetopt \
 # Below $#records, fc -R silently drops the oldest events.
 HISTSIZE=$(( $#records + 1000 ))
 (( HISTSIZE < 200000 )) && HISTSIZE=200000
-SAVEHIST=$HISTSIZE
-fc -p "$context_file" $HISTSIZE $SAVEHIST
+# A savehist of 0: cleanup() pops this context before removing the file, so
+# anything else serialises the uncleaned history, credentials and all, to disk.
+fc -p "$context_file" $HISTSIZE 0
 (( ++history_contexts ))
 fc -R -- "$snapshot_file" ||
   { fail "zsh could not read the history snapshot" || return; }
@@ -414,7 +424,7 @@ chmod $(( [##8] history_mode[1] & 8#7777 )) -- "$cleaned_file" ||
 validate_cleaned() {
   local -i expected=$1
 
-  fc -p "$context_file" $HISTSIZE $SAVEHIST
+  fc -p "$context_file" $HISTSIZE 0
   (( ++history_contexts ))
   fc -R -- "$cleaned_file" ||
     { fail "generated history failed validation" || return; }

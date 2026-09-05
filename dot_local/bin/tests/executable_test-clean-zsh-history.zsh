@@ -60,6 +60,12 @@ assert_dropped() {
   return 0
 }
 
+assert_absent() {
+  local file=$1 needle=$2 label=$3
+  grep -qF -- "$needle" "$file" && fail "$label: found '$needle' in ${file:t}"
+  return 0
+}
+
 # --- Credential-carrying entries ------------------------------------------
 # The vendor-prefixed forms all passed the old alternation, which only matched
 # access_token / auth_token. HF_TOKEN sat in the live history for three weeks.
@@ -109,6 +115,62 @@ assert_kept "$hist" 'export HF_HOME=/tmp/hf' 'benign'
 assert_kept "$hist" 'export TOKENIZER_DIR=/tmp/tok' 'benign'
 assert_kept "$hist" 'git commit -m "add token parser"' 'benign'
 assert_kept "$hist" 'grep -r token src/' 'benign'
+
+# --- Words the sensitive-value glob gate must not miss --------------------
+# is_sensitive screens with a case-insensitive glob before running its regexes,
+# so the glob has to stay a superset of every word those regexes can match.
+# One missing alternative here is a silently disabled credential rule.
+
+hist=$TEST_TMP/gate
+write_history "$hist" \
+  'CREDENTIAL_FILE=/tmp/c' \
+  'MYSECRET=x' \
+  'curl --password hunter2 https://example.invalid' \
+  'echo AKIAIOSFODNN7EXAMPLE' \
+  'echo xoxb-1234567890-abcdefghij' \
+  'echo sk-abcdefghijklmnopqrstuvwxyz' \
+  'git status'
+run_cleaner "$hist" >/dev/null
+
+for gated in CREDENTIAL_FILE MYSECRET hunter2 AKIAIOSFODNN7EXAMPLE \
+             xoxb-1234567890-abcdefghij sk-abcdefghijklmnopqrstuvwxyz; do
+  grep -qF -- "$gated" "$hist" && fail "gate: '$gated' slipped past the glob"
+done
+assert_kept "$hist" 'git status' 'gate'
+
+# --- The pushed history context never reaches disk ------------------------
+# fc -p's savehist argument must stay 0. cleanup() pops the context before it
+# removes the file, so any other value writes the uncleaned history out first.
+# Shim rm rather than delete, and read back what cleanup was about to destroy.
+
+hist=$TEST_TMP/context-leak
+write_history "$hist" 'export HF_TOKEN=hf_abcdefghijklmnopqrstuvwxyz12' 'git status'
+LEAK_DIR=$TEST_TMP/leaked
+mkdir -p -- "$LEAK_DIR/context" "$LEAK_DIR/snapshot" "$TEST_TMP/rmshim"
+cat >| "$TEST_TMP/rmshim/rm" <<SHIM
+#!/bin/sh
+for arg in "\$@"; do
+  case \$arg in
+    *.context.*)  [ -f "\$arg" ] && cp -p -- "\$arg" "$LEAK_DIR/context/" ;;
+    *.snapshot.*) [ -f "\$arg" ] && cp -p -- "\$arg" "$LEAK_DIR/snapshot/" ;;
+  esac
+done
+exec $(command -v -- rm) "\$@"
+SHIM
+chmod +x -- "$TEST_TMP/rmshim/rm"
+(
+  export PATH=$TEST_TMP/rmshim:$PATH
+  run_cleaner "$hist" >/dev/null
+)
+# The snapshot is expected to hold the credential; catching it proves the shim
+# ran, so an empty context/ below means the context was never written, not that
+# the check quietly stopped looking. Both temp names begin with a dot.
+shim_ran=( $LEAK_DIR/snapshot/*(N.D) )
+(( $#shim_ran )) || fail "context: the rm shim never ran, so the check is vacuous"
+for leaked in $LEAK_DIR/context/*(N.D); do
+  assert_absent "$leaked" 'hf_abcdefghijklmnopqrstuvwxyz12' 'context'
+done
+assert_dropped "$hist" 'export HF_TOKEN=hf_abcdefghijklmnopqrstuvwxyz12' 'context'
 
 # --- Wrapper commands -----------------------------------------------------
 # Only words[1] used to be resolved, so `sudo renoot` outlived every pass.
@@ -318,6 +380,35 @@ refuse_status=0
 run_cleaner "$TEST_TMP/does-not-exist" >/dev/null 2>&1 || refuse_status=$?
 (( refuse_status != 0 )) || fail "cleaner accepted a missing history file"
 
+# A second file after `--` used to overwrite the one given before it.
+refuse_status=0
+refuse_output=$(run_cleaner "$TEST_TMP/dry" -- "$TEST_TMP/dry" 2>&1) || refuse_status=$?
+(( refuse_status != 0 )) || fail "cleaner accepted two history files"
+[[ $refuse_output == *'at most one history file'* ]] ||
+  fail "two files: unexpected message: $refuse_output"
+
+# cleanup() and backup pruning both shell out to rm, so the guard must list it.
+zsh_bin=$(command -v -- zsh) || fail "cannot locate zsh"
+stub_bin=$TEST_TMP/stub-bin
+mkdir -p -- "$stub_bin"
+for tool in cp mktemp mv chmod head tail sha256sum shasum; do
+  tool_path=$(command -v -- $tool) && ln -sf -- "$tool_path" "$stub_bin/$tool"
+done
+hist=$TEST_TMP/no-rm
+write_history "$hist" 'git status'
+refuse_status=0
+refuse_output=$(
+  ZSH_HISTORY_CLEANER_INTERNAL=1 \
+  ZSH_HISTORY_CLEANER_OUTPUT_FD=1 \
+  XDG_CONFIG_HOME=$TEST_TMP/config \
+  PATH=$stub_bin \
+    "$zsh_bin" -fi -c 'cleaner=$1; shift; source "$cleaner" "$@"' \
+      cleaner-test "$CLEANER" "$hist" 2>&1
+) || refuse_status=$?
+(( refuse_status != 0 )) || fail "cleaner ran with no rm on PATH"
+[[ $refuse_output == *'required command not found: rm'* ]] ||
+  fail "missing rm: unexpected message: $refuse_output"
+
 # --- The real entry point, once -------------------------------------------
 # Everything above bypasses the re-entry wrapper; this exercises it.
 
@@ -327,5 +418,15 @@ HISTFILE='' XDG_CONFIG_HOME=$TEST_TMP/config zsh "$CLEANER" "$hist" >/dev/null 2
   fail "end-to-end: cleaner exited non-zero through its own wrapper"
 assert_kept "$hist" 'git status' 'end-to-end'
 assert_dropped "$hist" 'export HF_TOKEN=hf_abcdefghijklmnopqrstuvwxyz12' 'end-to-end'
+
+# --help is answered before the re-entry, so a zshrc that dies cannot eat it.
+mkdir -p -- "$TEST_TMP/broken-zdotdir"
+print -r -- 'print -u2 "broken zshrc"; exit 3' >| "$TEST_TMP/broken-zdotdir/.zshrc"
+help_status=0
+help_output=$(
+  HISTFILE='' ZDOTDIR=$TEST_TMP/broken-zdotdir zsh "$CLEANER" --help 2>/dev/null
+) || help_status=$?
+(( help_status == 0 )) || fail "help: exited $help_status with a broken zshrc"
+[[ $help_output == *'Usage:'* ]] || fail "help: no usage text: $help_output"
 
 print 'PASS: clean-zsh-history drops credentials, resolves past wrappers, and preserves concurrent appends'

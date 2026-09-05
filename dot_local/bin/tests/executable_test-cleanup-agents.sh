@@ -50,6 +50,8 @@ assert_contains() {
 
 assert_same() {
   local expected="$1" actual="$2"
+  # Without this the diagnostic below dies on its own sed before it can report.
+  [[ -e "$actual" ]] || fail "expected to exist: $actual"
   cmp -s -- "$expected" "$actual" || {
     printf '%s\n' "--- expected: $expected" >&2
     sed -n '1,120p' "$expected" >&2
@@ -91,9 +93,12 @@ write_claude_chat() {
 }
 
 run_interactive() {
-  local home="$1" output="$2" replies="$3" command
+  local home="$1" output="$2" replies="$3"
+  shift 3
+  local command extra=""
   command -v script >/dev/null 2>&1 || fail 'script(1) is required for interactive cleanup tests'
-  printf -v command 'env HOME=%q bash %q --apply' "$home" "$CLEANUP"
+  (( $# )) && printf -v extra ' %q' "$@"
+  printf -v command 'env HOME=%q bash %q --apply%s' "$home" "$CLEANUP" "$extra"
   printf '%s' "$replies" | script -qefc "$command" /dev/null >"$output"
 }
 
@@ -258,6 +263,173 @@ test_claude_hooks_survive_apply() {
   pass 'Claude hooks directory survives --apply'
 }
 
+# The per-chat prompt is pointless if the sweep afterwards takes the state that
+# belongs to a chat you just kept.
+test_kept_chat_keeps_its_session_state() {
+  local home output kept dropped
+  home="$(new_home kept-session-state)"
+  output="$TEST_TMP/kept-session-state/output"
+  kept='77777777-7777-7777-7777-777777777777'
+  dropped='88888888-8888-8888-8888-888888888888'
+  write_claude_chat "$home" "$kept" >/dev/null
+  write_claude_chat "$home" "$dropped" >/dev/null
+
+  local sid
+  for sid in "$kept" "$dropped"; do
+    mkdir -p -- "$home/.claude/projects/fixture/$sid/tool-results" \
+                "$home/.claude/file-history/$sid" \
+                "$home/.claude/session-env/$sid"
+    printf 'artifact\n' >"$home/.claude/projects/fixture/$sid/tool-results/out.txt"
+    printf 'edit\n' >"$home/.claude/file-history/$sid/1.json"
+    printf 'env\n' >"$home/.claude/session-env/$sid/env"
+  done
+  printf 'junk\n' >"$home/.claude/projects/fixture/stats.json"
+  printf 'protected\n' >"$home/.claude/settings.json"
+
+  # Transcripts are visited in sorted order: keep 7…, delete 8….
+  run_interactive "$home" "$output" $'n\ny\n'
+
+  assert_exists "$home/.claude/projects/fixture/$kept/tool-results/out.txt"
+  assert_exists "$home/.claude/file-history/$kept/1.json"
+  assert_exists "$home/.claude/session-env/$kept/env"
+  assert_absent "$home/.claude/projects/fixture/$dropped/tool-results/out.txt"
+  assert_absent "$home/.claude/file-history/$dropped"
+  assert_absent "$home/.claude/session-env/$dropped"
+  assert_absent "$home/.claude/projects/fixture/stats.json"
+  pass 'a kept chat keeps its tool-results, file-history and session-env'
+}
+
+test_memory_index_survives_the_sweep() {
+  local home output sid
+  home="$(new_home memory-index)"
+  output="$TEST_TMP/memory-index/output"
+  sid='99999999-9999-9999-9999-999999999999'
+  write_claude_chat "$home" "$sid" >/dev/null
+  mkdir -p -- "$home/.claude/projects/fixture/memory"
+  printf -- '- [note](memory/note.md)\n' >"$home/.claude/projects/fixture/MEMORY.md"
+  printf 'a note\n' >"$home/.claude/projects/fixture/memory/note.md"
+  printf 'protected\n' >"$home/.claude/settings.json"
+
+  run_interactive "$home" "$output" $'n\nn\n'
+
+  assert_exists "$home/.claude/projects/fixture/MEMORY.md"
+  assert_exists "$home/.claude/projects/fixture/memory/note.md"
+  assert_contains "$output" 'Memory indexes: 1 MEMORY.md at project roots'
+  pass 'a project-root MEMORY.md follows the memory prompt, not the sweep'
+}
+
+test_memory_erase_takes_the_index() {
+  local home output sid
+  home="$(new_home memory-erase)"
+  output="$TEST_TMP/memory-erase/output"
+  sid='99999999-aaaa-aaaa-aaaa-999999999999'
+  write_claude_chat "$home" "$sid" >/dev/null
+  mkdir -p -- "$home/.claude/projects/fixture/memory"
+  printf -- '- [note](memory/note.md)\n' >"$home/.claude/projects/fixture/MEMORY.md"
+  printf 'a note\n' >"$home/.claude/projects/fixture/memory/note.md"
+  printf 'protected\n' >"$home/.claude/settings.json"
+
+  run_interactive "$home" "$output" $'n\ny\n'
+
+  assert_absent "$home/.claude/projects/fixture/MEMORY.md"
+  assert_absent "$home/.claude/projects/fixture/memory"
+  pass 'erasing Claude memory takes the index with the store'
+}
+
+test_codex_session_index_follows_chats() {
+  local home output sid transcript expected
+  home="$(new_home codex-index)"
+  output="$TEST_TMP/codex-index/output"
+  expected="$TEST_TMP/codex-index/expected-index"
+  sid='cccccccc-3333-3333-3333-333333333333'
+  transcript="$(write_codex_chat "$home" "$sid")"
+
+  printf '%s\n' "{\"session_id\":\"$sid\"}" >"$home/.codex/history.jsonl"
+  printf '%s\n' \
+    "{\"id\":\"$sid\",\"thread_name\":\"keep\"}" \
+    'this malformed index line must be dropped' \
+    '{"id":"stale","thread_name":"drop"}' \
+    >"$home/.codex/session_index.jsonl"
+  printf '%s\n' "{\"id\":\"$sid\",\"thread_name\":\"keep\"}" >"$expected"
+  printf 'protected\n' >"$home/.codex/config.toml"
+  : >"$home/.codex/thread_history_1.sqlite"
+  : >"$home/.codex/queue_1.sqlite"
+
+  run_interactive "$home" "$output" $'n\n'
+
+  assert_exists "$transcript"
+  assert_same "$expected" "$home/.codex/session_index.jsonl"
+  assert_exists "$home/.codex/thread_history_1.sqlite"
+  assert_exists "$home/.codex/queue_1.sqlite"
+  assert_contains "$output" 'Pruned session_index.jsonl to 1 kept entry.'
+  pass 'Codex session_index.jsonl and thread/queue DBs follow the chat decisions'
+}
+
+# A schema bump leaves the older generation on disk; codex_bucket hides it from
+# the blanket sweep, so only these functions can ever remove it.
+test_codex_removes_every_db_generation() {
+  local home output sid transcript
+  home="$(new_home codex-generations)"
+  output="$TEST_TMP/codex-generations/output"
+  sid='dddddddd-4444-4444-4444-444444444444'
+  transcript="$(write_codex_chat "$home" "$sid")"
+
+  printf '%s\n' "{\"session_id\":\"$sid\"}" >"$home/.codex/history.jsonl"
+  printf 'protected\n' >"$home/.codex/config.toml"
+  : >"$home/.codex/state_5.sqlite"
+  : >"$home/.codex/state_6.sqlite"
+  : >"$home/.codex/logs_1.sqlite"
+  : >"$home/.codex/memories_1.sqlite"
+  : >"$home/.codex/memories_2.sqlite"
+
+  run_interactive "$home" "$output" $'y\ny\ny\n'
+
+  assert_absent "$transcript"
+  assert_absent "$home/.codex/state_5.sqlite"
+  assert_absent "$home/.codex/state_6.sqlite"
+  assert_absent "$home/.codex/logs_1.sqlite"
+  assert_absent "$home/.codex/memories_1.sqlite"
+  assert_absent "$home/.codex/memories_2.sqlite"
+  assert_exists "$home/.codex/config.toml"
+  pass 'every schema generation of a Codex DB is removed, not just the first'
+}
+
+# These are gitignored per-project agents and settings; nothing here restores
+# them, so they must not go without an explicit flag and an explicit yes.
+test_project_local_agents_need_the_flag() {
+  local home output
+  home="$(new_home project-local)"
+  output="$TEST_TMP/project-local/output"
+  mkdir -p -- "$home/.claude" "$home/src/proj/.claude/agents" "$home/Documents/other/.codex"
+  printf 'protected\n' >"$home/.claude/settings.json"
+  printf 'agent\n' >"$home/src/proj/.claude/agents/reviewer.md"
+
+  HOME="$home" bash "$CLEANUP" --apply >"$output" 2>&1
+
+  assert_exists "$home/src/proj/.claude/agents/reviewer.md"
+  assert_exists "$home/Documents/other/.codex"
+  assert_contains "$output" 'Skipped project-local .claude/.codex directories'
+  pass 'project-local agent directories are untouched without --include-projects'
+}
+
+test_include_projects_prompts_per_path() {
+  local home output
+  home="$(new_home include-projects)"
+  output="$TEST_TMP/include-projects/output"
+  mkdir -p -- "$home/.claude" "$home/aaa-drop/.codex" "$home/zzz-keep/.claude/agents"
+  printf 'protected\n' >"$home/.claude/settings.json"
+  printf 'agent\n' >"$home/zzz-keep/.claude/agents/reviewer.md"
+
+  # Paths are offered in sorted order: delete aaa-drop, keep zzz-keep.
+  run_interactive "$home" "$output" $'y\nn\n' --include-projects
+
+  assert_absent "$home/aaa-drop/.codex"
+  assert_exists "$home/zzz-keep/.claude/agents/reviewer.md"
+  assert_exists "$home/.claude/settings.json"
+  assert_contains "$output" 'Project-local agent path:'
+  pass '--include-projects offers each path and honours the answer'
+}
+
 test_absent_codex_databases_are_a_noop() {
   local home output
   home="$(new_home absent-databases)"
@@ -280,6 +452,13 @@ test_codex_delete_removes_chat_state
 test_claude_keep_prunes_history
 test_claude_delete_removes_chat_state
 test_claude_hooks_survive_apply
+test_kept_chat_keeps_its_session_state
+test_memory_index_survives_the_sweep
+test_memory_erase_takes_the_index
+test_codex_session_index_follows_chats
+test_codex_removes_every_db_generation
+test_project_local_agents_need_the_flag
+test_include_projects_prompts_per_path
 test_absent_codex_databases_are_a_noop
 
 printf 'PASS: cleanup-agents safety fixtures (%d cases)\n' "$pass_count"
