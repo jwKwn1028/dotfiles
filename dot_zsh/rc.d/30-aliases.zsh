@@ -26,8 +26,44 @@ alias ':qa'='xdotool key --clearmodifiers alt+F4'
 if _have fdfind; then
   alias fd='fdfind'
 fi
-alias scpo='print "shutting down..." && systemctl poweroff'
-alias wtail='watch -d -n 10 tail -v -n 10'
+unalias scpo poweroff 2>/dev/null
+poweroff() {
+  local host reply
+
+  if [ "$#" -ne 0 ]; then
+    printf 'poweroff wrapper accepts no arguments\n' >&2
+    return 2
+  fi
+
+  host=$(command hostname -s) || return 1
+  printf 'Power off %s? [y/N] (10s timeout): ' "$host" >/dev/tty ||
+    return 1
+
+  IFS= read -r -t 10 reply </dev/tty || {
+    printf '\nNo confirmation received; cancelled.\n'
+    return 1
+  }
+
+  case "$reply" in
+    [yY] | [yY][eE][sS]) command systemctl poweroff ;;
+    *) printf 'Cancelled.\n'; return 1 ;;
+  esac
+}
+wtail() {   # absolutise args so tail -v headers name the full path
+  emulate -L zsh
+  local f
+  local -a files
+
+  if (( $# == 0 )); then
+    printf 'usage: wtail FILE...\n' >&2
+    return 2
+  fi
+
+  for f in "$@"; do
+    files+=("${f:a}")
+  done
+  watch -x -d -n 10 tail -v -n 10 "${files[@]}"
+}
 
 alias ..='cd ..'
 alias ...='cd ../..'

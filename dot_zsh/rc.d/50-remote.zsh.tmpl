@@ -306,7 +306,7 @@ _hpc_sessions() {
 
   probe='tmux list-panes -a -F "P%|%#{session_name}%|%#{pane_active}#{window_active}%|%#{pane_current_path}" 2>/dev/null; tmux list-sessions -F "T%|%#{session_name}%|%#{session_windows}%|%#{session_attached}%|%#{session_created}%|%#{session_activity}%|%#{session_path}" 2>/dev/null; ~/.local/bin/zmx list 2>/dev/null'
 
-  listing=$(command ssh "$host" "$probe" 2>/dev/null)
+  listing=$(command ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 "$host" "$probe")
   rc=$?
   (( rc == 255 )) && return $rc
 
@@ -347,7 +347,7 @@ hpc-list() {
   emulate -L zsh
   local base={{ .sshHpcHost | quote }}
   local home={{ printf "/home/%s" .sshRemoteUser | quote }}
-  local out line kind name win clients dir age idle fmt
+  local out line kind name win clients dir age idle fmt rc
   local -a f
 
   if (( $# )); then
@@ -355,7 +355,17 @@ hpc-list() {
     return 2
   fi
 
-  out=$(_hpc_sessions "$base") || return
+  print -u2 -- 'hpc: connecting to remote host to list sessions...'
+  out=$(_hpc_sessions "$base")
+  rc=$?
+  if (( rc != 0 )); then
+    if (( rc == 255 )); then
+      print -u2 -- 'hpc: SSH connection to the remote host failed'
+    else
+      print -u2 -- "hpc: remote session query failed (status $rc)"
+    fi
+    return $rc
+  fi
 
   if [[ -z $out ]]; then
     print 'no sessions'
@@ -379,7 +389,7 @@ hpc-list() {
 hpc() {
   emulate -L zsh
   local base={{ .sshHpcHost | quote }}
-  local rc
+  local rc remote_cmd
 
   if (( $# == 0 )); then
     hpc-list
@@ -391,15 +401,20 @@ hpc() {
     return 2
   fi
 
-  _hpc_session_exists "$base" tmux "$1"
-  rc=$?
-  if (( rc != 0 )); then
-    (( rc == 255 )) && return $rc
-    print -u2 "hpc: no tmux session named $1"
-    return 1
-  fi
+  remote_cmd="command -v tmux >/dev/null 2>&1 || { printf '%s\n' 'hpc: tmux is not installed on the remote host' >&2; exit 127; }; "
+  remote_cmd+="tmux has-session -t =$1 2>/dev/null || { printf '%s\n' 'hpc: no tmux session named $1' >&2; exit 1; }; "
+  remote_cmd+="printf '%s\n' \"hpc: connected; attaching to tmux session '$1'...\" >&2; "
+  remote_cmd+="exec tmux attach-session -t =$1"
 
-  ssh -t "$base" "tmux attach-session -t $1"
+  print -u2 -- "hpc: connecting to remote host for tmux session '$1'..."
+  ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 -t "$base" "$remote_cmd"
+  rc=$?
+  if (( rc == 255 )); then
+    print -u2 -- 'hpc: SSH connection to the remote host failed'
+  elif (( rc != 0 && rc != 1 && rc != 127 )); then
+    print -u2 -- "hpc: remote attach failed for tmux session '$1' (status $rc)"
+  fi
+  return $rc
 }
 
 hpc-kill() {

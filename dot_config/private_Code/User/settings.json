@@ -57,7 +57,7 @@
     "chat.viewWelcome.enabled": false,
     // JuliaMono, matching ghostty/rofi.
     "terminal.integrated.fontSize": 14,
-    "editor.fontSize": 14,
+    "editor.fontSize": 10,
     "editor.fontFamily": "'JuliaMono', monospace",
     "terminal.integrated.fontFamily": "'JuliaMono', 'Hack Nerd Font Mono'",
     "editor.fontLigatures": true,
