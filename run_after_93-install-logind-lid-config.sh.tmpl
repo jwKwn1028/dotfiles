@@ -1,0 +1,62 @@
+{{- if eq .chezmoi.os "linux" -}}
+#!/bin/sh
+set -eu
+
+# Drop-in rather than an edit to /etc/systemd/logind.conf: that file is a dpkg
+# conffile, so editing it prompts on every `apt upgrade` of systemd.
+
+if [ ! -e /proc/acpi/button/lid ]; then
+    echo "No lid switch; skipping logind lid configuration."
+    exit 0
+fi
+
+dropin=/etc/systemd/logind.conf.d/10-lid-switch.conf
+
+changed=0
+temporary=
+trap 'rm -f "${temporary:-}"' EXIT HUP INT TERM
+
+install_config() {
+    target=$1
+    temporary=$(mktemp)
+    cat >"$temporary"
+
+    metadata=$(stat -c '%u:%g:%a' "$target" 2>/dev/null || true)
+    if ! cmp -s "$temporary" "$target" || [ "$metadata" != "0:0:644" ]; then
+        echo "==> Installing $target (sudo may prompt for your password)"
+        sudo install -D -o root -g root -m 0644 "$temporary" "$target"
+        changed=1
+    fi
+
+    rm -f "$temporary"
+    temporary=
+}
+
+# logind picks the first rule that matches: docked, then on mains, then plain.
+install_config "$dropin" <<'EOF'
+[Login]
+# Docked or a second display attached: the lid is just one more screen.
+HandleLidSwitchDocked=ignore
+# On mains, lock instead of suspending so long jobs survive a closed lid.
+# xss-lock answers logind's Lock signal.
+HandleLidSwitchExternalPower=lock
+# On battery, suspend: an ignored lid drains the pack flat in a bag.
+HandleLidSwitch=suspend
+EOF
+
+if [ "$changed" -eq 1 ]; then
+    echo "==> Reloading systemd-logind"
+    sudo systemctl reload systemd-logind
+fi
+
+# A handle-lid-switch inhibitor always wins over this drop-in, and
+# xfce4-power-manager takes one the moment it stops deferring to logind. That
+# swap is silent, so surface it here.
+if command -v xfconf-query >/dev/null 2>&1 &&
+    defer=$(xfconf-query -c xfce4-power-manager \
+        -p /xfce4-power-manager/logind-handle-lid-switch 2>/dev/null) &&
+    [ "$defer" != "true" ]; then
+    echo "WARNING: xfce4-power-manager logind-handle-lid-switch=$defer;" >&2
+    echo "         xfpm now owns the lid and $dropin is inert." >&2
+fi
+{{- end }}
