@@ -53,10 +53,11 @@ parents = true
 [keys.normal]
 "ret" = ["open_below", "normal_mode"]
 # "C" = ":clipboard-yank"
-"V" = ":clipboard-paste-after"
+"V" = ":clipboard-paste-before"
 # SyncTeX forward-search: jumps the running zathura/sioyek to the cursor line.
-# Full for .tex, partial for .md, raise-only for typst (no synctex).
-"C-l" = ":sh ~/.local/bin/hx-fwd-search '%{buffer_name}' %{cursor_line} %{cursor_column}"
+# Full for .tex and .md (the md line is remapped onto pandoc's intermediate
+# .hxp.tex, which is the only file synctex records), raise-only for typst.
+"C-l" = ":sh ~/.local/bin/hxp-fwd '%{buffer_name}' %{cursor_line} %{cursor_column}"
 "C-y" = [
   ':insert-output HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi run "%{buffer_name}"',
   ':sh printf "\x1b[?1049h\x1b[?2004h\x1b[2 q" > /dev/tty',
@@ -66,6 +67,12 @@ parents = true
   ':redraw',
   ':echo " "',
 ]
+
+# Swap the default space-mode clipboard paste direction: lowercase pastes
+# before the selection, uppercase after.
+[keys.normal.space]
+p = "paste_clipboard_before"
+P = "paste_clipboard_after"
 
 # DAP / debug submenu (leader Alt-d): Helix ships no default debug keys. Drives
 # the debugpy adapter configured in languages.toml.
@@ -94,6 +101,10 @@ j = { k = "normal_mode" }
 "V" = ":clipboard-paste-replace"
 tab = "indent"
 S-tab = "unindent"
+
+[keys.select.space]
+p = "paste_clipboard_before"
+P = "paste_clipboard_after"
 
 [editor.indent-guides]
 render = true
