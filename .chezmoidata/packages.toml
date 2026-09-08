@@ -12,7 +12,7 @@ ppas = [
 # NOTE: Debian ships `fd-find`->`fdfind` and `bat`->`batcat`; the shell configs
 # already alias these, so no extra symlinks are needed.
 common = [
-    "git", "git-lfs", "curl", "wget",
+    "git", "git-lfs", "curl", "wget", "netcat-openbsd",
     "restic", "openssl",
     "build-essential", "gcc", "make", "cmake", "pkg-config",
     "software-properties-common",

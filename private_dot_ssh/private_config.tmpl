@@ -40,6 +40,9 @@ Host {{ $gpu }}
 Host {{ join " " $aliases }}
   IdentityFile ~/.ssh/id_ed25519
   IdentitiesOnly yes
+{{- if eq .chezmoi.os "linux" }}
+  ProxyCommand "{{ .chezmoi.homeDir }}/.local/bin/tailscale-remote-connect" "%h" "%p"
+{{- end }}
   ControlMaster auto
   ControlPath ~/.ssh/control-%C
   ControlPersist 10m

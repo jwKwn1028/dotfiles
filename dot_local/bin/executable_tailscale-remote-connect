@@ -1,0 +1,41 @@
+#!/bin/sh
+
+set -eu
+
+if [ "$#" -ne 2 ]; then
+    printf '%s\n' 'usage: tailscale-remote-connect HOST PORT' >&2
+    exit 2
+fi
+
+host=$1
+port=$2
+socket=${TAILSCALE_REMOTE_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tailscale-remote/tailscaled.sock}
+proxy=${TAILSCALE_REMOTE_PROXY:-127.0.0.1:1055}
+
+case $host in
+    ''|*[!A-Za-z0-9._:%-]*)
+        printf '%s\n' 'tailscale-remote-connect: invalid host' >&2
+        exit 2
+        ;;
+esac
+case $port in
+    ''|*[!0-9]*)
+        printf '%s\n' 'tailscale-remote-connect: invalid port' >&2
+        exit 2
+        ;;
+esac
+if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+    printf '%s\n' 'tailscale-remote-connect: invalid port' >&2
+    exit 2
+fi
+
+if [ ! -S "$socket" ]; then
+    printf '%s\n' 'tailscale-remote-connect: remote route is off; run: labroute on' >&2
+    exit 1
+fi
+if ! command -v nc >/dev/null 2>&1; then
+    printf '%s\n' 'tailscale-remote-connect: nc is not installed' >&2
+    exit 127
+fi
+
+exec nc -X 5 -x "$proxy" "$host" "$port"

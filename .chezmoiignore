@@ -68,6 +68,9 @@ snap/firefox/common/.mozilla/firefox/
 /.config/systemd/user/restic-maintenance.service
 /.config/systemd/user/restic-maintenance.timer
 /.local/bin/restic-backup
+
+/.config/systemd/user/tailscale-remote-proxy.service
+/.local/bin/tailscale-remote-connect
 {{ end -}}
 
 # Keep agent-owned state local; manage only the two stable settings targets.

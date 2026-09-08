@@ -29,11 +29,18 @@ ex() {
 
 # --- PDF / EPUB pickers ---
 # One implementation; so prefers sioyek, zo prefers zathura, each falling back
-# to the other. A path argument opens directly; bare, fzf picks.
+# to the other. A path argument opens directly; a successful bare picker exits
+# its interactive Zsh so the terminal closes only that tab/split.
+_zsh_close_after_open_pick() {
+  [[ -o interactive ]] && exit 0
+  return 0
+}
+
 _zsh_open_pdf() {
   emulate -L zsh
   local caller="${funcstack[2]:-open-pdf}"
   local prefer="$1" viewer v file
+  local -i picked=0
   local -a order
   shift
 
@@ -59,6 +66,7 @@ _zsh_open_pdf() {
     _have fzf || { print -u2 "$caller: fzf not found"; return 127; }
     file="$(_zsh_ls_files pdf | fzf --prompt='Open PDF> ')" || return
     [[ -n "$file" ]] || return 1
+    picked=1
   fi
 
   case "$viewer" in
@@ -66,6 +74,9 @@ _zsh_open_pdf() {
     sioyek)  sioyek --new-window "$file" >/dev/null 2>&1 &! ;;
     zathura) zathura "$file"             >/dev/null 2>&1 &! ;;
   esac
+  local launch_status=$?
+  (( launch_status == 0 && picked )) && _zsh_close_after_open_pick
+  return "$launch_status"
 }
 
 so() { _zsh_open_pdf sioyek "$@"; }
@@ -74,6 +85,7 @@ zo() { _zsh_open_pdf zathura "$@"; }
 bo() {
   emulate -L zsh
   local file
+  local -i picked=0
 
   _have ebook-viewer || { print -u2 "bo: ebook-viewer not found"; return 127; }
 
@@ -84,9 +96,13 @@ bo() {
     _have fzf || { print -u2 "bo: fzf not found"; return 127; }
     file="$(_zsh_ls_files epub | fzf --prompt='Open EPUB> ')" || return
     [[ -n "$file" ]] || return 1
+    picked=1
   fi
 
   ebook-viewer "$file" >/dev/null 2>&1 &!
+  local launch_status=$?
+  (( launch_status == 0 && picked )) && _zsh_close_after_open_pick
+  return "$launch_status"
 }
 
 # --- File manager ---

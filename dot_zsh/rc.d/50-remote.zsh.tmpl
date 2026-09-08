@@ -5,6 +5,8 @@
 HPC_REMOTE_USER=${HPC_REMOTE_USER:-{{ .sshRemoteUser | quote }}}
 HPC_REMOTE_HOST=${HPC_REMOTE_HOST:-{{ .sshGpuHost | quote }}}
 TAILSCALE_LAB_EXIT_NODE=${TAILSCALE_LAB_EXIT_NODE:-{{ $tailscaleExitNode | quote }}}
+TAILSCALE_REMOTE_SERVICE=${TAILSCALE_REMOTE_SERVICE:-tailscale-remote-proxy.service}
+TAILSCALE_REMOTE_SOCKET=${TAILSCALE_REMOTE_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$EUID}/tailscale-remote/tailscaled.sock}
 
 ssh-close() {
   emulate -L zsh
@@ -62,6 +64,93 @@ ssh-close() {
   (( found )) || print 'no shared connections open'
 }
 
+_labroute_cli() {
+  command tailscale --socket="$TAILSCALE_REMOTE_SOCKET" "$@"
+}
+
+_labroute_service_active() {
+  command systemctl --user is-active --quiet "$TAILSCALE_REMOTE_SERVICE"
+}
+
+_labroute_start_service() {
+  command systemctl --user daemon-reload &&
+  command systemctl --user start "$TAILSCALE_REMOTE_SERVICE"
+}
+
+_labroute_stop_service() {
+  command systemctl --user stop "$TAILSCALE_REMOTE_SERVICE"
+}
+
+_labroute_wait_for_socket() {
+  integer attempt
+
+  for attempt in {1..50}; do
+    [[ -S "$TAILSCALE_REMOTE_SOCKET" ]] && return 0
+    command sleep 0.1
+  done
+
+  print -u2 'labroute: the userspace Tailscale daemon did not become ready'
+  return 1
+}
+
+_labroute_proxy_enabled() {
+  local snapshot
+
+  _labroute_service_active || return 1
+  snapshot=$(_labroute_cli status --json 2>/dev/null) || return 1
+  command jq -e '
+    .BackendState == "Running" and
+    ((.ExitNodeStatus.ID // "") != "")
+  ' >/dev/null <<<"$snapshot"
+}
+
+_labroute_main_exit_enabled() {
+  local snapshot
+
+  snapshot=$(command tailscale status --json 2>/dev/null) || return 1
+  command jq -e '((.ExitNodeStatus.ID // "") != "")' >/dev/null \
+    <<<"$snapshot"
+}
+
+_labroute_require_commands() {
+  local dependency
+
+  for dependency in tailscale tailscaled jq systemctl; do
+    if ! command -v "$dependency" >/dev/null 2>&1; then
+      print -u2 -- "labroute: $dependency is not installed"
+      return 127
+    fi
+  done
+}
+
+_labroute_status() {
+  local backend snapshot
+
+  if _labroute_main_exit_enabled; then
+    print 'Lab SSH route: CONFLICT (the main Tailscale exit node is ON)'
+    return 1
+  fi
+
+  if ! _labroute_service_active; then
+    print 'Lab SSH route: OFF'
+    return 0
+  fi
+
+  snapshot=$(_labroute_cli status --json 2>/dev/null) || {
+    print 'Lab SSH route: ERROR (proxy service is running but unavailable)'
+    return 1
+  }
+  backend=$(command jq -r '.BackendState // "Unknown"' <<<"$snapshot") || return
+
+  if _labroute_proxy_enabled; then
+    print 'Lab SSH route: ON'
+  elif [[ "$backend" == NeedsLogin || "$backend" == NoState ]]; then
+    print 'Lab SSH route: AUTH REQUIRED'
+  else
+    print -- "Lab SSH route: OFF (proxy daemon: $backend)"
+  fi
+}
+
 # Usage: labroute {on|off|status|toggle}
 labroute() {
   emulate -L zsh
@@ -72,7 +161,7 @@ labroute() {
   fi
 
   local route_action=${1:-status}
-  local tailscale_snapshot selected_exit_node
+  local backend proxy_hostname tailscale_snapshot
 
   case "$route_action" in
     on|off|status|toggle) ;;
@@ -82,21 +171,10 @@ labroute() {
       ;;
   esac
 
-  if ! command -v tailscale >/dev/null 2>&1; then
-    print -u2 'labroute: tailscale is not installed'
-    return 127
-  fi
-  if ! command -v jq >/dev/null 2>&1; then
-    print -u2 'labroute: jq is not installed'
-    return 127
-  fi
-
-  tailscale_snapshot=$(command tailscale status --json) || return
-  selected_exit_node=$(command jq -r '.ExitNodeStatus.ID // empty' \
-    <<<"$tailscale_snapshot") || return
+  _labroute_require_commands || return
 
   if [[ "$route_action" == toggle ]]; then
-    if [[ -n "$selected_exit_node" ]]; then
+    if _labroute_proxy_enabled; then
       route_action=off
     else
       route_action=on
@@ -105,27 +183,57 @@ labroute() {
 
   case "$route_action" in
     status)
-      if [[ -n "$selected_exit_node" ]]; then
-        print 'Lab exit route: ON'
-      else
-        print 'Lab exit route: OFF'
-      fi
+      _labroute_status
       ;;
     off)
-      command sudo tailscale set --exit-node= &&
-        print 'Lab exit route: OFF'
+      if _labroute_service_active; then
+        if [[ -S "$TAILSCALE_REMOTE_SOCKET" ]]; then
+          _labroute_cli set --exit-node= >/dev/null 2>&1 ||
+            print -u2 'labroute: warning: could not clear the proxy exit-node preference'
+        fi
+        _labroute_stop_service || return
+      fi
+      print 'Lab SSH route: OFF'
       ;;
     on)
-      if [[ -n "$selected_exit_node" ]]; then
-        print 'Lab exit route is already ON'
-        return
-      fi
       if [[ -z "$TAILSCALE_LAB_EXIT_NODE" ]]; then
         print -u2 'labroute: tailscaleExitNode is not configured in chezmoi data'
         return 1
       fi
-      command sudo tailscale set --exit-node="$TAILSCALE_LAB_EXIT_NODE" &&
-        print 'Lab exit route: ON'
+      if _labroute_main_exit_enabled; then
+        print -u2 'labroute: the main Tailscale daemon is using an exit node'
+        print -u2 'labroute: disable it first with: sudo tailscale set --exit-node='
+        return 1
+      fi
+      if _labroute_proxy_enabled; then
+        print 'Lab SSH route is already ON'
+        return 0
+      fi
+
+      _labroute_start_service || return
+      _labroute_wait_for_socket || return
+
+      tailscale_snapshot=$(_labroute_cli status --json 2>/dev/null) ||
+        tailscale_snapshot='{}'
+      backend=$(command jq -r '.BackendState // "Unknown"' \
+        <<<"$tailscale_snapshot") || return
+
+      if [[ "$backend" != Running ]]; then
+        proxy_hostname="$(command hostname -s 2>/dev/null)-remote-proxy"
+        [[ "$proxy_hostname" == -remote-proxy ]] && proxy_hostname=remote-proxy
+        proxy_hostname=${proxy_hostname[1,63]}
+        print -u2 'labroute: complete the one-time Tailscale sign-in shown below'
+        _labroute_cli up \
+          --hostname="$proxy_hostname" \
+          --accept-dns=false \
+          --accept-routes=false || return
+      fi
+
+      _labroute_cli set \
+        --accept-dns=false \
+        --accept-routes=false \
+        --exit-node="$TAILSCALE_LAB_EXIT_NODE" || return
+      print 'Lab SSH route: ON'
       ;;
   esac
 }
@@ -417,6 +525,31 @@ hpc() {
   return $rc
 }
 
+hpc-detach() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }}
+  local rc remote_cmd
+
+  if (( $# != 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpc-detach <session-name>'
+    return 2
+  fi
+
+  remote_cmd="command -v tmux >/dev/null 2>&1 || { printf '%s\n' 'hpc-detach: tmux is not installed on the remote host' >&2; exit 127; }; "
+  remote_cmd+="tmux has-session -t '=$1' 2>/dev/null || { printf '%s\n' 'hpc-detach: no tmux session named $1' >&2; exit 1; }; "
+  remote_cmd+="tmux detach-client -s '=$1' && printf '%s\n' \"hpc-detach: detached clients from tmux session '$1'\""
+
+  print -u2 -- "hpc-detach: connecting to remote host for tmux session '$1'..."
+  ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 "$base" "$remote_cmd"
+  rc=$?
+  if (( rc == 255 )); then
+    print -u2 -- 'hpc-detach: SSH connection to the remote host failed'
+  elif (( rc != 0 && rc != 1 && rc != 127 )); then
+    print -u2 -- "hpc-detach: remote detach failed for tmux session '$1' (status $rc)"
+  fi
+  return $rc
+}
+
 hpc-kill() {
   emulate -L zsh
   local base={{ .sshHpcHost | quote }}
@@ -498,6 +631,31 @@ hpcz() {
   fi
 
   ssh -t "$base" "$zmx attach $1"
+}
+
+hpcz-detach() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }}
+  local rc remote_cmd
+
+  if (( $# != 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpcz-detach <session-name>'
+    return 2
+  fi
+
+  remote_cmd="test -x ~/.local/bin/zmx || { printf '%s\n' 'hpcz-detach: zmx is not installed on the remote host' >&2; exit 127; }; "
+  remote_cmd+="~/.local/bin/zmx list 2>/dev/null | command grep -Eq '(^|[[:space:]])name=$1([[:space:]]|$)' || { printf '%s\n' 'hpcz-detach: no zmx session named $1' >&2; exit 1; }; "
+  remote_cmd+="env ZMX_SESSION='$1' ~/.local/bin/zmx detach && printf '%s\n' \"hpcz-detach: detached clients from zmx session '$1'\""
+
+  print -u2 -- "hpcz-detach: connecting to remote host for zmx session '$1'..."
+  ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 "$base" "$remote_cmd"
+  rc=$?
+  if (( rc == 255 )); then
+    print -u2 -- 'hpcz-detach: SSH connection to the remote host failed'
+  elif (( rc != 0 && rc != 1 && rc != 127 )); then
+    print -u2 -- "hpcz-detach: remote detach failed for zmx session '$1' (status $rc)"
+  fi
+  return $rc
 }
 
 hpcz-kill() {

@@ -43,6 +43,68 @@ ssh() {
 
   SSH_COMMANDS+=("$remote_command")
 
+  if [[ $remote_command == *'tmux detach-client'* ]]; then
+    [[ $# == 8 && $1 == -S && $2 == none &&
+      $3 == -o && $4 == ConnectTimeout=8 &&
+      $5 == -o && $6 == ConnectionAttempts=1 ]] ||
+      fail "unexpected hpc-detach ssh arguments: ${(j: :)argv}"
+
+    case $SSH_MODE in
+      success)
+        return 0
+        ;;
+      missing)
+        print -u2 -- 'hpc-detach: no tmux session named dev'
+        return 1
+        ;;
+      no-tmux)
+        print -u2 -- 'hpc-detach: tmux is not installed on the remote host'
+        return 127
+        ;;
+      unreachable)
+        print -u2 -- 'ssh: connect to host test.invalid port 22: Connection timed out'
+        return 255
+        ;;
+      detach-failed)
+        return 23
+        ;;
+      *)
+        fail "unknown hpc-detach ssh test mode: $SSH_MODE"
+        ;;
+    esac
+  fi
+
+  if [[ $remote_command == *'zmx detach'* ]]; then
+    [[ $# == 8 && $1 == -S && $2 == none &&
+      $3 == -o && $4 == ConnectTimeout=8 &&
+      $5 == -o && $6 == ConnectionAttempts=1 ]] ||
+      fail "unexpected hpcz-detach ssh arguments: ${(j: :)argv}"
+
+    case $SSH_MODE in
+      success)
+        return 0
+        ;;
+      missing)
+        print -u2 -- 'hpcz-detach: no zmx session named shell'
+        return 1
+        ;;
+      no-zmx)
+        print -u2 -- 'hpcz-detach: zmx is not installed on the remote host'
+        return 127
+        ;;
+      unreachable)
+        print -u2 -- 'ssh: connect to host test.invalid port 22: Connection timed out'
+        return 255
+        ;;
+      detach-failed)
+        return 23
+        ;;
+      *)
+        fail "unknown hpcz-detach ssh test mode: $SSH_MODE"
+        ;;
+    esac
+  fi
+
   if [[ $remote_command == *'tmux has-session'* ]]; then
     [[ $# == 9 && $1 == -S && $2 == none &&
       $3 == -o && $4 == ConnectTimeout=8 &&
@@ -95,7 +157,7 @@ expect_failure() {
     fail "$label returned the wrong error: $output"
 }
 
-expect_attach() {
+expect_ssh_command() {
   local label=$1 expected=$2
   shift 2
   SSH_COMMANDS=()
@@ -131,7 +193,7 @@ expect_failure 'hpc missing name' 1 'hpc: no tmux session named list' hpc list
 expect_failure 'hpc wrong session kind' 1 'hpc: no tmux session named shell' hpc shell
 
 SSH_MODE=success
-expect_attach 'hpc existing session' 'exec tmux attach-session -t =dev' hpc dev
+expect_ssh_command 'hpc existing session' 'exec tmux attach-session -t =dev' hpc dev
 output=$(<"$TEST_TMP/output")
 [[ $output == *"hpc: connecting to remote host for tmux session 'dev'..."* ]] ||
   fail "hpc omitted its connecting message: $output"
@@ -155,8 +217,43 @@ SSH_MODE=attach-failed
 expect_failure 'hpc attach failure' 23 "hpc: remote attach failed for tmux session 'dev' (status 23)" hpc dev
 
 SSH_MODE=success
+expect_failure 'hpc-detach missing argument' 2 'usage: hpc-detach <session-name>' hpc-detach
+expect_failure 'hpc-detach invalid name' 2 'usage: hpc-detach <session-name>' hpc-detach 'bad/name'
+expect_ssh_command 'hpc-detach existing session' "tmux detach-client -s '=dev'" hpc-detach dev
+[[ $SSH_COMMANDS[1] == *"tmux has-session -t '=dev'"* ]] ||
+  fail "hpc-detach did not check the exact session: $SSH_COMMANDS[1]"
+sh -n -c "$SSH_COMMANDS[1]" ||
+  fail "hpc-detach generated invalid remote shell code: $SSH_COMMANDS[1]"
+
+SSH_MODE=missing
+expect_failure 'hpc-detach missing session' 1 'hpc-detach: no tmux session named dev' hpc-detach dev
+SSH_MODE=no-tmux
+expect_failure 'hpc-detach missing remote tmux' 127 'hpc-detach: tmux is not installed on the remote host' hpc-detach dev
+SSH_MODE=unreachable
+expect_failure 'hpc-detach unreachable host' 255 'hpc-detach: SSH connection to the remote host failed' hpc-detach dev
+SSH_MODE=detach-failed
+expect_failure 'hpc-detach remote failure' 23 "hpc-detach: remote detach failed for tmux session 'dev' (status 23)" hpc-detach dev
+
+SSH_MODE=success
 expect_failure 'hpcz missing name' 1 'hpcz: no zmx session named list' hpcz list
 expect_failure 'hpcz wrong session kind' 1 'hpcz: no zmx session named dev' hpcz dev
-expect_attach 'hpcz existing session' '~/.local/bin/zmx attach shell' hpcz shell
+expect_ssh_command 'hpcz existing session' '~/.local/bin/zmx attach shell' hpcz shell
 
-print 'PASS: remote helpers report connection failures and attach only to existing sessions'
+expect_failure 'hpcz-detach missing argument' 2 'usage: hpcz-detach <session-name>' hpcz-detach
+expect_failure 'hpcz-detach invalid name' 2 'usage: hpcz-detach <session-name>' hpcz-detach 'bad/name'
+expect_ssh_command 'hpcz-detach existing session' "env ZMX_SESSION='shell' ~/.local/bin/zmx detach" hpcz-detach shell
+[[ $SSH_COMMANDS[1] == *"name=shell([[:space:]]|$)"* ]] ||
+  fail "hpcz-detach did not check the exact session: $SSH_COMMANDS[1]"
+sh -n -c "$SSH_COMMANDS[1]" ||
+  fail "hpcz-detach generated invalid remote shell code: $SSH_COMMANDS[1]"
+
+SSH_MODE=missing
+expect_failure 'hpcz-detach missing session' 1 'hpcz-detach: no zmx session named shell' hpcz-detach shell
+SSH_MODE=no-zmx
+expect_failure 'hpcz-detach missing remote zmx' 127 'hpcz-detach: zmx is not installed on the remote host' hpcz-detach shell
+SSH_MODE=unreachable
+expect_failure 'hpcz-detach unreachable host' 255 'hpcz-detach: SSH connection to the remote host failed' hpcz-detach shell
+SSH_MODE=detach-failed
+expect_failure 'hpcz-detach remote failure' 23 "hpcz-detach: remote detach failed for zmx session 'shell' (status 23)" hpcz-detach shell
+
+print 'PASS: remote helpers report connection failures and attach or detach only existing sessions'

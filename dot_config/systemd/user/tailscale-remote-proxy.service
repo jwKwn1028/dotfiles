@@ -1,0 +1,15 @@
+[Unit]
+Description=Tailscale userspace proxy for remote SSH traffic
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+RuntimeDirectory=tailscale-remote
+RuntimeDirectoryMode=0700
+StateDirectory=tailscale-remote
+StateDirectoryMode=0700
+ExecStart=/usr/sbin/tailscaled --tun=userspace-networking --socket=%t/tailscale-remote/tailscaled.sock --state=%S/tailscale-remote/tailscaled.state --statedir=%S/tailscale-remote --socks5-server=127.0.0.1:1055
+Restart=on-failure
+RestartSec=3
+UMask=0077
