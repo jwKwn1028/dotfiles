@@ -11,9 +11,10 @@ host=$1
 port=$2
 socket=${TAILSCALE_REMOTE_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tailscale-remote/tailscaled.sock}
 proxy=${TAILSCALE_REMOTE_PROXY:-127.0.0.1:1055}
+mode_file=${TAILSCALE_REMOTE_MODE_FILE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tailscale-remote-proxy-required}
 
 case $host in
-    ''|*[!A-Za-z0-9._:%-]*)
+    ''|-*|*[!A-Za-z0-9._:%-]*)
         printf '%s\n' 'tailscale-remote-connect: invalid host' >&2
         exit 2
         ;;
@@ -29,13 +30,23 @@ if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
     exit 2
 fi
 
-if [ ! -S "$socket" ]; then
-    printf '%s\n' 'tailscale-remote-connect: remote route is off; run: labroute on' >&2
-    exit 1
-fi
 if ! command -v nc >/dev/null 2>&1; then
     printf '%s\n' 'tailscale-remote-connect: nc is not installed' >&2
     exit 127
 fi
 
-exec nc -X 5 -x "$proxy" "$host" "$port"
+if [ ! -f "$mode_file" ]; then
+    exec nc "$host" "$port"
+fi
+
+if [ -S "$socket" ] &&
+    command -v tailscale >/dev/null 2>&1 &&
+    command -v jq >/dev/null 2>&1 &&
+    tailscale --socket="$socket" status --json 2>/dev/null |
+        jq -e '.BackendState == "Running" and ((.ExitNodeStatus.ID // "") != "") and (.ExitNodeStatus.Online == true)' >/dev/null 2>&1
+then
+    exec nc -X 5 -x "$proxy" "$host" "$port"
+fi
+
+printf '%s\n' 'tailscale-remote-connect: remote proxy is unavailable; run: labroute off for direct access' >&2
+exit 1

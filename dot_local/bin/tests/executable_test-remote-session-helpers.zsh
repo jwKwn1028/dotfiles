@@ -26,6 +26,7 @@ fi
 source "$REMOTE_FILE"
 
 typeset -g HPC_SESSIONS_MODE=success
+typeset -g ZMX_CLIENTS=0
 _hpc_sessions() {
   if [[ $HPC_SESSIONS_MODE == unreachable ]]; then
     print -u2 -- 'ssh: connect to host test.invalid port 22: Connection timed out'
@@ -33,7 +34,7 @@ _hpc_sessions() {
   fi
 
   print -r -- 'tmux%|%dev%|%1%|%0%|%1%|%1%|%/tmp/dev'
-  print -r -- 'zmx%|%shell%|%-%|%0%|%1%|%-%|%/tmp/shell'
+  print -r -- "zmx%|%shell%|%-%|%$ZMX_CLIENTS%|%1%|%-%|%/tmp/shell"
 }
 
 typeset -ga SSH_COMMANDS
@@ -101,6 +102,27 @@ ssh() {
         ;;
       *)
         fail "unknown hpcz-detach ssh test mode: $SSH_MODE"
+        ;;
+    esac
+  fi
+
+  if [[ $remote_command == *'zmx kill'* ]]; then
+    [[ $# == 2 ]] || fail "unexpected hpcz-kill ssh arguments: ${(j: :)argv}"
+
+    case $SSH_MODE in
+      success)
+        return 0
+        ;;
+      unreachable)
+        print -u2 -- 'ssh: connect to host test.invalid port 22: Connection timed out'
+        return 255
+        ;;
+      kill-failed)
+        print -u2 -- 'hpcz-kill: remote kill failed'
+        return 23
+        ;;
+      *)
+        fail "unknown hpcz-kill ssh test mode: $SSH_MODE"
         ;;
     esac
   fi
@@ -256,4 +278,23 @@ expect_failure 'hpcz-detach unreachable host' 255 'hpcz-detach: SSH connection t
 SSH_MODE=detach-failed
 expect_failure 'hpcz-detach remote failure' 23 "hpcz-detach: remote detach failed for zmx session 'shell' (status 23)" hpcz-detach shell
 
-print 'PASS: remote helpers report connection failures and attach or detach only existing sessions'
+SSH_MODE=success
+expect_failure 'hpcz-kill missing argument' 2 'usage: hpcz-kill [-f] <session-name>' hpcz-kill
+expect_failure 'hpcz-kill invalid name' 2 'usage: hpcz-kill [-f] <session-name>' hpcz-kill 'bad/name'
+expect_failure 'hpcz-kill missing session' 1 'hpcz-kill: no zmx session named missing' hpcz-kill missing
+
+ZMX_CLIENTS=unknown
+expect_failure 'hpcz-kill invalid client count' 1 'cannot read client count for shell' hpcz-kill shell
+
+ZMX_CLIENTS=2
+expect_failure 'hpcz-kill attached clients' 1 'shell has 2 client(s) attached' hpcz-kill shell
+expect_ssh_command 'hpcz-kill forced session' '~/.local/bin/zmx kill shell --force' hpcz-kill -f shell
+
+ZMX_CLIENTS=0
+expect_ssh_command 'hpcz-kill idle session' '~/.local/bin/zmx kill shell && ~/.local/bin/zmx list' hpcz-kill shell
+
+HPC_SESSIONS_MODE=unreachable
+expect_failure 'hpcz-kill unreachable host' 255 'ssh: connect to host test.invalid' hpcz-kill shell
+HPC_SESSIONS_MODE=success
+
+print 'PASS: remote helpers report connection failures and act only on existing sessions'
