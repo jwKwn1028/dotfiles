@@ -226,6 +226,19 @@ output=$(<"$TEST_TMP/output")
 sh -n -c "$SSH_COMMANDS[1]" ||
   fail "hpc generated invalid remote shell code: $SSH_COMMANDS[1]"
 
+# The remote prelude prefers ~/.local/bin/tmux and falls back to PATH.
+mkdir -p "$TEST_TMP/home/.local/bin" "$TEST_TMP/global"
+print -rl -- '#!/bin/sh' 'echo "local $1"' >| "$TEST_TMP/home/.local/bin/tmux"
+print -rl -- '#!/bin/sh' 'echo "global $1"' >| "$TEST_TMP/global/tmux"
+chmod +x "$TEST_TMP/home/.local/bin/tmux" "$TEST_TMP/global/tmux"
+output=$(HOME=$TEST_TMP/home PATH=$TEST_TMP/global:/usr/bin:/bin sh -c "$SSH_COMMANDS[1]" 2>/dev/null)
+[[ $output == $'local has-session\nlocal attach-session' ]] ||
+  fail "hpc did not prefer ~/.local/bin/tmux: $output"
+rm -- "$TEST_TMP/home/.local/bin/tmux"
+output=$(HOME=$TEST_TMP/home PATH=$TEST_TMP/global:/usr/bin:/bin sh -c "$SSH_COMMANDS[1]" 2>/dev/null)
+[[ $output == $'global has-session\nglobal attach-session' ]] ||
+  fail "hpc did not fall back to the global tmux: $output"
+
 SSH_MODE=no-tmux
 expect_failure 'hpc missing remote tmux' 127 'hpc: tmux is not installed on the remote host' hpc dev
 

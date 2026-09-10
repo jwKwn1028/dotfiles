@@ -4,7 +4,6 @@
 
 deactivate      # virtualenv teardown function, only defined while a venv is active
 helix           # config lives in dot_config/helix; binary is `hx`, or not installed here
-obsidian        # AppImage / flatpak, not on PATH
 tio             # serial terminal, not currently installed
 tty-clock
 xfce4-panel

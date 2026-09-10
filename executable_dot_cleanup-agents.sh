@@ -9,6 +9,15 @@ PROJECTS_DIR="$CLAUDE_DIR/projects"
 DRY_RUN=1
 INCLUDE_PROJECTS=0
 
+# Raw --smaller-than/--ended-before/--path values, keyed by flag name; any key
+# switches to the filtered cleanup. Normalized once the helpers are defined.
+declare -A FILTER_RAW=()
+FILTER_MAX_BYTES=""
+FILTER_BEFORE=""
+FILTER_PATH=""
+FILTER_PATH_REAL=""
+FILTER_TMP=""
+
 # Claude transcript path -> "keep" | "delete".
 declare -A CHAT_DECISION=()
 # Codex thread id -> "keep" | "delete"; same idea for Codex session transcripts.
@@ -19,8 +28,8 @@ declare -A CLAUDE_KEPT_SIDS=()
 usage() {
   cat <<'USAGE'
 Usage:
-  ./.cleanup-agents.sh          Show what would be removed
-  ./.cleanup-agents.sh --apply  Actually remove the files/directories
+  ./.cleanup-agents.sh [filters]          Show what would be removed
+  ./.cleanup-agents.sh --apply [filters]  Actually remove the files/directories
 
 Options:
   --apply             Delete, instead of previewing.
@@ -28,6 +37,11 @@ Options:
                       projects under $HOME. Off by default; they hold
                       per-project agents and settings and are usually
                       gitignored. Each is offered individually (default "no").
+
+Filters (each one narrows the selection; an item must match all of them):
+  --smaller-than SIZE  Smaller than SIZE on disk, e.g. 500K, 1M, 2G (1M = 1024K).
+  --ended-before DATE  Last activity before DATE (YYYY-MM-DD, local midnight).
+  --path DIR           Started in DIR or any directory below it.
 
 This preserves:
   ~/.codex/auth.json
@@ -60,27 +74,51 @@ under ~/.claude/projects/*/memory/. Codex chats are
 state_*/logs_* DBs) follow the chat choices, while Codex memory includes
 ~/.codex/memories/, generated summaries in memories_*.sqlite, and goals in
 goals_*.sqlite.
+
+With a filter, only matching chats and memory stores are touched, Claude and
+Codex alike (archived Codex chats included): each section lists its matches
+and --apply asks once (default "no"). A deleted chat takes its tool results,
+file history and history/index lines with it; history lines whose chat is
+already gone match on their own date and project. Nothing else is swept. A
+Claude memory store is one project's memory/ and MEMORY.md; the Codex store is
+shared by every project, so --path never selects it.
 USAGE
 }
 
-for arg in "$@"; do
-  case "$arg" in
+usage_error() {
+  [[ -z "${1:-}" ]] || printf '%s\n' "$1" >&2
+  printf '\n' >&2
+  usage >&2
+  exit 2
+}
+
+while (( $# )); do
+  case "$1" in
     --apply)
       DRY_RUN=0
       ;;
     --include-projects)
       INCLUDE_PROJECTS=1
       ;;
+    --smaller-than=*|--ended-before=*|--path=*)
+      set -- "${1%%=*}" "${1#*=}" "${@:2}"
+      continue
+      ;;
+    --smaller-than|--ended-before|--path)
+      (( $# >= 2 )) || usage_error "Missing value for $1"
+      [[ -z "${FILTER_RAW[${1#--}]+set}" ]] || usage_error "$1 given more than once"
+      FILTER_RAW[${1#--}]="$2"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
       ;;
     *)
-      printf 'Unknown argument: %s\n\n' "$arg" >&2
-      usage >&2
-      exit 2
+      usage_error "Unknown argument: $1"
       ;;
   esac
+  shift
 done
 
 is_protected() {
@@ -1044,41 +1082,615 @@ process_codex_memory() {
   esac
 }
 
+# ---- Filtered cleanup (--smaller-than / --ended-before / --path) ------------
+
+# Subcommands: parse KIND VALUE | describe | scan OUTDIR | apply PLAN.
+agent_filter() {
+  CLAUDE_DIR="$CLAUDE_DIR" CODEX_DIR="$CODEX_DIR" \
+  FILTER_MAX_BYTES="$FILTER_MAX_BYTES" FILTER_BEFORE="$FILTER_BEFORE" \
+  FILTER_PATH="$FILTER_PATH" FILTER_PATH_REAL="$FILTER_PATH_REAL" \
+    python3 - "$@" <<'PY'
+import datetime, hashlib, json, os, re, shutil, stat, sys
+
+UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+# is_protected's ~/.claude directories, plus projects; never searched for session state.
+CLAUDE_KEEP = {"projects", "agents", "commands", "hooks", "skills", "plugins", "backups"}
+CODEX_MEMORY_DB = re.compile(r"(memories|goals)_[^/]*\.sqlite(-[a-z]+)?$")
+
+
+def norm(p):
+    return os.path.normpath(p) if p else ""
+
+
+env = os.environ.get
+CLAUDE, CODEX, HOME = norm(env("CLAUDE_DIR", "")), norm(env("CODEX_DIR", "")), norm(env("HOME", ""))
+PROJECTS = os.path.join(CLAUDE, "projects")
+MAX_BYTES = int(env("FILTER_MAX_BYTES")) if env("FILTER_MAX_BYTES") else None
+BEFORE = float(env("FILTER_BEFORE")) if env("FILTER_BEFORE") else None
+ROOTS = list(dict.fromkeys(r for r in (norm(env("FILTER_PATH", "")), norm(env("FILTER_PATH_REAL", ""))) if r))
+
+
+def fail(msg):
+    sys.stderr.write(msg + "\n")
+    sys.exit(2)
+
+
+def parse(kind, value):
+    if kind == "size":
+        m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(?:([kmgt])(?:i?b)?|b)?\s*", value, re.I)
+        n = int(float(m.group(1)) * 1024 ** " kmgt".index((m.group(2) or " ").lower())) if m else 0
+        if n <= 0:
+            fail("--smaller-than: not a size: %r (try 500K, 1M or 2G)" % value)
+        print(n)
+    elif kind == "date":
+        try:
+            dt = datetime.datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            fail("--ended-before: not a date: %r (use YYYY-MM-DD)" % value)
+        print(repr((dt if dt.tzinfo else dt.astimezone()).timestamp()))
+    elif kind == "path":
+        if not value.strip() or "\n" in value:
+            fail("--path: not a usable directory: %r" % value)
+        p = os.path.abspath(os.path.expanduser(value))
+        print(p)
+        print(os.path.realpath(p))
+
+
+def human(n):
+    size = float(n)
+    for unit in ("B", "K", "M", "G"):
+        if size < 1024:
+            return ("%d%s" % (size, unit)) if unit == "B" else ("%.1f%s" % (size, unit))
+        size /= 1024
+    return "%.1fT" % size
+
+
+def when(t):
+    return datetime.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M") if t else "????-??-?? ??:??"
+
+
+def tilde(p):
+    return "~" + p[len(HOME):] if HOME and (p == HOME or p.startswith(HOME + "/")) else p
+
+
+def quoted(text, n=70):
+    text = " ".join((text or "").split())
+    if not text:
+        return "(untitled)"
+    return "“%s”" % (text if len(text) <= n else text[:n - 1] + "…")
+
+
+def plural(n, word, many=None):
+    return "%d %s" % (n, word if n == 1 else (many or word + "s"))
+
+
+def epoch(ts):
+    if isinstance(ts, bool):
+        return None
+    if isinstance(ts, (int, float)):
+        return ts / 1000.0 if ts > 1e11 else float(ts)
+    if isinstance(ts, str) and ts:
+        try:
+            dt = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return (dt if dt.tzinfo else dt.astimezone()).timestamp()
+    return None
+
+
+def enc(path):
+    return re.sub(r"[^A-Za-z0-9]", "-", path)
+
+
+def matches(size, ended, paths, encoded=None):
+    if MAX_BYTES is not None and (size is None or size >= MAX_BYTES):
+        return False
+    if BEFORE is not None and (ended is None or ended >= BEFORE):
+        return False
+    if not ROOTS:
+        return True
+    for p in paths:
+        p = norm(p) if isinstance(p, str) and p.startswith("/") else ""
+        if p and any(r == "/" or p == r or p.startswith(r + "/") for r in ROOTS):
+            return True
+    return encoded is not None and any(enc(r) == encoded for r in ROOTS)
+
+
+def records(lines):
+    for raw in lines:
+        try:
+            rec = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(rec, dict):
+            yield rec
+
+
+def head(path, budget=4 << 20):
+    with open(path, "rb") as fh:
+        for raw in fh:
+            yield from records([raw])
+            budget -= len(raw)
+            if budget <= 0:
+                return
+
+
+def tail(path, budget=256 << 10):
+    with open(path, "rb") as fh:
+        fh.seek(0, os.SEEK_END)
+        start = max(0, fh.tell() - budget)
+        fh.seek(start)
+        lines = fh.read().split(b"\n")
+    return records(reversed(lines[1:] if start else lines))
+
+
+def jsonl(path):
+    try:
+        with open(path, "rb") as fh:
+            return list(records(fh))
+    except OSError:
+        return []
+
+
+def listdir(path):
+    try:
+        return sorted(os.listdir(path))
+    except OSError:
+        return []
+
+
+def real_dir(path):
+    return os.path.isdir(path) and not os.path.islink(path)
+
+
+def tree(path):
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return 0, None
+    if not stat.S_ISDIR(st.st_mode):
+        return st.st_size, st.st_mtime
+    size, newest = 0, st.st_mtime
+    for top, _, files in os.walk(path):
+        for name in files:
+            try:
+                st = os.lstat(os.path.join(top, name))
+            except OSError:
+                continue
+            size += st.st_size
+            newest = max(newest, st.st_mtime)
+    return size, newest
+
+
+def digest(line):
+    return hashlib.sha1(line).hexdigest()
+
+
+# History/index lines whose chat is gone, matched on their own fields.
+def orphans(path, key, live, ts_key, path_key=None):
+    hits = []
+    try:
+        with open(path, "rb") as fh:
+            lines = [raw.strip() for raw in fh]
+    except OSError:
+        return hits
+    for s in lines:
+        rec = next(records([s]), None) if s else None
+        if rec is None:
+            continue
+        sid = rec.get(key)
+        if isinstance(sid, str) and sid in live:
+            continue
+        if matches(0, epoch(rec.get(ts_key)), [rec.get(path_key)] if path_key else []):
+            hits.append(digest(s))
+    return hits
+
+
+def text_of(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                return block.get("text", "")
+    return ""
+
+
+def claude_chats():
+    for proj in listdir(PROJECTS):
+        pdir = os.path.join(PROJECTS, proj)
+        if not real_dir(pdir):
+            continue
+        for name in listdir(pdir):
+            path = os.path.join(pdir, name)
+            if not name.endswith(".jsonl") or os.path.islink(path) or not os.path.isfile(path):
+                continue
+            sid = name[:-len(".jsonl")]
+            cwd = first = title = ended = None
+            try:
+                for rec in head(path):
+                    cwd = cwd or rec.get("cwd")
+                    msg = rec.get("message")
+                    if first is None and rec.get("type") == "user" and isinstance(msg, dict):
+                        body = text_of(msg.get("content"))
+                        if body and not body.lstrip().startswith("<"):
+                            first = body
+                    if cwd and first:
+                        break
+                for rec in tail(path):
+                    ended = ended or epoch(rec.get("timestamp"))
+                    if title is None and rec.get("type") == "ai-title":
+                        title = rec.get("aiTitle")
+                    if ended and title:
+                        break
+                size, mtime = os.path.getsize(path), os.path.getmtime(path)
+            except OSError:
+                continue
+            side = os.path.join(pdir, sid)
+            yield {"id": sid, "proj": proj, "path": path, "side": side,
+                   "size": size + tree(side)[0], "ended": ended or mtime,
+                   "cwd": cwd if isinstance(cwd, str) else "", "title": title or first}
+
+
+# Encoded project dir -> real paths Claude recorded for it.
+def claude_known_paths(chats):
+    known = {}
+
+    def add(p):
+        if isinstance(p, str) and p.startswith("/"):
+            known.setdefault(enc(p), set()).add(norm(p))
+
+    for chat in chats:
+        add(chat["cwd"])
+    for rec in jsonl(os.path.join(CLAUDE, "history.jsonl")):
+        add(rec.get("project"))
+    try:
+        with open(os.path.join(os.path.dirname(CLAUDE), ".claude.json"), encoding="utf-8") as fh:
+            for p in json.load(fh).get("projects") or {}:
+                add(p)
+    except (OSError, ValueError, AttributeError):
+        pass
+    return known
+
+
+def claude_session_state(sids):
+    for child in listdir(CLAUDE):
+        d = os.path.join(CLAUDE, child)
+        if child in CLAUDE_KEEP or not real_dir(d):
+            continue
+        for name in listdir(d):
+            m = UUID.match(name)
+            if m and m.group(0) in sids and not name[36:37].isalnum():
+                yield os.path.join(d, name)
+
+
+# Older rollouts log user text as event_msg, newer ones as response_item.
+def codex_user_text(kind, payload):
+    if kind == "event_msg" and payload.get("type") == "user_message":
+        texts = [payload.get("message")]
+    elif kind == "response_item" and payload.get("type") == "message" and payload.get("role") == "user":
+        texts = [c.get("text") for c in payload.get("content") or [] if isinstance(c, dict)]
+    else:
+        return None
+    for text in texts:
+        if isinstance(text, str) and text.strip() and not text.lstrip().startswith(("<", "#")):
+            return text
+    return None
+
+
+def codex_chats():
+    names = {r["id"]: r.get("thread_name") for r in jsonl(os.path.join(CODEX, "session_index.jsonl"))
+             if isinstance(r.get("id"), str)}
+    for base in ("sessions", "archived_sessions"):
+        root = os.path.join(CODEX, base)
+        for top, dirs, files in os.walk(root):
+            dirs.sort()
+            for name in sorted(files):
+                path = os.path.join(top, name)
+                if not name.endswith(".jsonl") or os.path.islink(path):
+                    continue
+                sid = cwd = first = ended = None
+                try:
+                    for rec in head(path):
+                        payload = rec.get("payload") if isinstance(rec.get("payload"), dict) else {}
+                        if rec.get("type") == "session_meta":
+                            sid = sid or payload.get("session_id") or payload.get("id")
+                            cwd = cwd or payload.get("cwd")
+                        elif first is None:
+                            first = codex_user_text(rec.get("type"), payload)
+                        if sid and first:
+                            break
+                    for rec in tail(path):
+                        ended = epoch(rec.get("timestamp"))
+                        if ended:
+                            break
+                    size, mtime = os.path.getsize(path), os.path.getmtime(path)
+                except OSError:
+                    continue
+                if not isinstance(sid, str) or not sid:
+                    m = UUID.search(name)
+                    sid = m.group(0) if m else name[:-len(".jsonl")]
+                yield {"id": sid, "path": path, "root": root, "archived": base == "archived_sessions",
+                       "size": size, "ended": ended or mtime,
+                       "cwd": cwd if isinstance(cwd, str) else "", "title": names.get(sid) or first}
+
+
+def chat_line(chat, where):
+    return "  %s  %7s  %s  %s" % (when(chat["ended"]), human(chat["size"]), where or "?", quoted(chat["title"]))
+
+
+def save(out, name, lines, remove=(), prune=(), rmdirs=()):
+    with open(os.path.join(out, name + ".txt"), "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
+    if remove or any(ids or hashes for _, _, ids, hashes in prune):
+        with open(os.path.join(out, name + ".json"), "w", encoding="utf-8") as fh:
+            json.dump({"remove": list(remove), "prune": list(prune), "rmdirs": list(rmdirs)}, fh)
+
+
+def scan_chats(out, name, noun, chats, where_of, extra, indexes, rmdirs):
+    picked = sorted((c for c in chats if c["match"]), key=lambda c: c["ended"])
+    live = {c["id"] for c in chats}
+    lost = {path: orphans(path, key, live, ts_key, path_key) for path, key, ts_key, path_key in indexes}
+    lost_n = sum(len(v) for v in lost.values())
+    if not picked and not lost_n:
+        save(out, name, ["No %s chats match the filters." % noun])
+        return
+    lines = [chat_line(c, where_of(c)) for c in picked]
+    if picked:
+        lines.append("  = %s, %s" % (plural(len(picked), "chat"), human(sum(c["size"] for c in picked))))
+    if lost_n:
+        lines.append("  + %s whose chat is already gone" % plural(lost_n, "history/index line"))
+    sids = {c["id"] for c in picked}
+    remove = [p for c in picked for p in (c["path"], c.get("side")) if p] + list(extra(sids))
+    prune = [(path, key, sorted(sids), lost[path]) for path, key, _, _ in indexes]
+    save(out, name, lines, remove, prune, [(os.path.dirname(c["path"]), rmdirs(c)) for c in picked])
+
+
+def scan_claude(out):
+    chats = list(claude_chats())
+    known = claude_known_paths(chats)
+    for c in chats:
+        paths, encoded = ([c["cwd"]], None) if c["cwd"] else (sorted(known.get(c["proj"], ())), c["proj"])
+        c["match"] = matches(c["size"], c["ended"], paths, encoded)
+    scan_chats(out, "claude-chats", "Claude", chats, lambda c: tilde(c["cwd"]), claude_session_state,
+               [(os.path.join(CLAUDE, "history.jsonl"), "sessionId", "timestamp", "project")],
+               lambda c: PROJECTS)
+
+    lines, remove, rmdirs = [], [], []
+    for proj in listdir(PROJECTS):
+        pdir = os.path.join(PROJECTS, proj)
+        parts = [p for p in (os.path.join(pdir, "memory"), os.path.join(pdir, "MEMORY.md")) if os.path.lexists(p)]
+        if not real_dir(pdir) or not parts:
+            continue
+        sizes = [tree(p) for p in parts]
+        size, newest = sum(s for s, _ in sizes), max(t for _, t in sizes)
+        paths = sorted(known.get(proj, ()))
+        if not matches(size, newest, paths, proj):
+            continue
+        count = sum(1 for _, _, files in os.walk(parts[0]) for f in files if f != "MEMORY.md")
+        lines.append("  %s  %7s  %s  %s" % (when(newest), human(size), plural(count, "memory", "memories"),
+                                           tilde(paths[0]) if paths else "(project %s)" % proj))
+        remove += parts
+        rmdirs.append((pdir, PROJECTS))
+    if lines:
+        lines.append("  = %s" % plural(len(rmdirs), "memory store"))
+    save(out, "claude-memory", lines or ["No Claude memory stores match the filters."], remove, (), rmdirs)
+
+
+def scan_codex(out):
+    chats = list(codex_chats())
+    for c in chats:
+        c["match"] = matches(c["size"], c["ended"], [c["cwd"]])
+    scan_chats(out, "codex-chats", "Codex", chats,
+               lambda c: tilde(c["cwd"]) + ("  [archived]" if c["archived"] else ""), lambda sids: (),
+               [(os.path.join(CODEX, "history.jsonl"), "session_id", "ts", None),
+                (os.path.join(CODEX, "session_index.jsonl"), "id", "updated_at", None)],
+               lambda c: c["root"])
+
+    memdir = os.path.join(CODEX, "memories")
+    parts = ([memdir] if os.path.lexists(memdir) else []) + \
+        [os.path.join(CODEX, n) for n in listdir(CODEX) if CODEX_MEMORY_DB.match(n)]
+    if not parts:
+        save(out, "codex-memory", ["No Codex memory stored."])
+        return
+    sizes = [tree(p) for p in parts]
+    size, newest = sum(s for s, _ in sizes), max(t for _, t in sizes)
+    summary = "Codex memory store: %s, last changed %s" % (human(size), when(newest))
+    if ROOTS:
+        save(out, "codex-memory", [summary, "Shared by every project, so --path never selects it."])
+    elif not matches(size, newest, []):
+        save(out, "codex-memory", [summary, "It does not match the filters."])
+    else:
+        save(out, "codex-memory", ["  " + summary] + ["    %s" % tilde(p) for p in parts], parts)
+
+
+def allowed(p):
+    p = norm(p)
+    parent, name = os.path.split(p)
+    memdir = os.path.join(CODEX, "memories")
+
+    def inside(root):
+        return p.startswith(root + "/")
+
+    return (inside(PROJECTS) or inside(os.path.join(CODEX, "sessions"))
+            or inside(os.path.join(CODEX, "archived_sessions")) or p == memdir or inside(memdir)
+            or (parent == CODEX and bool(CODEX_MEMORY_DB.match(name)))
+            or (os.path.dirname(parent) == CLAUDE and os.path.basename(parent) not in CLAUDE_KEEP
+                and bool(UUID.match(name))))
+
+
+def prune(path, key, ids, hashes):
+    try:
+        with open(path, "rb") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return 0
+    keep = []
+    for raw in lines:
+        s = raw.strip()
+        rec = next(records([s]), None) if s else None
+        sid = rec.get(key) if rec else None
+        if not ((isinstance(sid, str) and sid in ids) or (s and digest(s) in hashes)):
+            keep.append(raw)
+    dropped = len(lines) - len(keep)
+    if dropped and not any(raw.strip() for raw in keep):
+        os.remove(path)
+    elif dropped:
+        tmp = path + ".cleanup-tmp"
+        with open(tmp, "wb") as fh:
+            fh.writelines(keep)
+        os.chmod(tmp, stat.S_IMODE(os.stat(path).st_mode))
+        os.replace(tmp, path)
+    return dropped
+
+
+def apply(plan_path):
+    with open(plan_path, encoding="utf-8") as fh:
+        plan = json.load(fh)
+    for p in plan["remove"]:
+        if not os.path.lexists(p):
+            continue
+        if not allowed(p):
+            print("  Refused (outside the chat/memory stores): %s" % p)
+            continue
+        if os.path.isdir(p) and not os.path.islink(p):
+            shutil.rmtree(p)
+        else:
+            os.unlink(p)
+        print("  Removed: %s" % p)
+    indexes = {os.path.join(CLAUDE, "history.jsonl"), os.path.join(CODEX, "history.jsonl"),
+               os.path.join(CODEX, "session_index.jsonl")}
+    for path, key, ids, hashes in plan["prune"]:
+        n = prune(path, key, set(ids), set(hashes)) if path in indexes else 0
+        if n:
+            print("  Removed %s from %s" % (plural(n, "line"), path))
+    for d, stop in plan["rmdirs"]:
+        while d.startswith(stop + "/"):
+            try:
+                os.rmdir(d)
+            except OSError:
+                break
+            d = os.path.dirname(d)
+
+
+cmd = sys.argv[1]
+if cmd == "parse":
+    parse(sys.argv[2], sys.argv[3])
+elif cmd == "describe":
+    bits = []
+    if MAX_BYTES is not None:
+        bits.append("smaller than %s" % human(MAX_BYTES))
+    if BEFORE is not None:
+        bits.append("ended before %s" % when(BEFORE))
+    if ROOTS:
+        bits.append("started in %s or below" % tilde(ROOTS[0]))
+    print("Filters: %s. Only matching chats and memory are touched." % "; ".join(bits))
+elif cmd == "scan":
+    if os.path.isdir(CLAUDE):
+        scan_claude(sys.argv[2])
+    if os.path.isdir(CODEX):
+        scan_codex(sys.argv[2])
+elif cmd == "apply":
+    apply(sys.argv[2])
+PY
+}
+
+# Print one scanned section; with --apply, delete its matches after one yes.
+filter_section() {
+  local name="$1" prompt="$2"
+
+  [[ -f "$FILTER_TMP/$name.txt" ]] && cat -- "$FILTER_TMP/$name.txt"
+  [[ -s "$FILTER_TMP/$name.json" ]] || return 0
+
+  if (( DRY_RUN )); then
+    printf '  -> --apply would ask once whether to delete these (kept in dry run).\n'
+  elif confirm "  $prompt [y/N] " '  (no terminal available; keeping them by default)'; then
+    agent_filter apply "$FILTER_TMP/$name.json"
+  else
+    printf '  Kept them.\n'
+  fi
+}
+
+run_filtered_cleanup() {
+  FILTER_TMP="$(mktemp -d)"
+  trap 'rm -rf -- "$FILTER_TMP"' EXIT
+
+  agent_filter describe
+  agent_filter scan "$FILTER_TMP"
+
+  if [[ -d "$CLAUDE_DIR" ]]; then
+    printf '\n== Claude chat transcripts ==\n'
+    filter_section claude-chats 'Delete the Claude chats above?'
+    printf '\n== Claude memory ==\n'
+    filter_section claude-memory 'Erase the Claude memory stores above?'
+  fi
+
+  if [[ -d "$CODEX_DIR" ]]; then
+    printf '\n== Codex chat transcripts ==\n'
+    filter_section codex-chats 'Delete the Codex chats above?'
+    printf '\n== Codex memory ==\n'
+    filter_section codex-memory 'Erase the Codex memory store above?'
+  fi
+}
+
+run_full_cleanup() {
+  if [[ -d "$CLAUDE_DIR" ]]; then
+    printf '== Claude chat transcripts ==\n'
+    process_claude_chats
+    collect_claude_kept_sids
+    finalize_claude_chat_side
+    printf '\n== Claude memory ==\n'
+    process_claude_memory
+    sweep_claude_projects_remainder
+    sweep_claude_session_state
+    printf '\n'
+  fi
+
+  if [[ -d "$CODEX_DIR" ]]; then
+    printf '== Codex chat transcripts ==\n'
+    process_codex_chats
+    finalize_codex_chat_side
+    printf '\n== Codex memory ==\n'
+    process_codex_memory
+    printf '\n'
+  fi
+
+  clean_directory_contents "$CODEX_DIR"
+  clean_directory_contents "$CLAUDE_DIR"
+
+  if (( INCLUDE_PROJECTS )); then
+    printf '\n== Project-local agent directories ==\n'
+    clean_other_marker_paths
+  else
+    printf '\nSkipped project-local .claude/.codex directories (--include-projects to review them).\n'
+  fi
+}
+
+if (( ${#FILTER_RAW[@]} )); then
+  (( ! INCLUDE_PROJECTS )) || usage_error '--include-projects cannot be combined with filters'
+  if [[ -n "${FILTER_RAW[smaller-than]+set}" ]]; then
+    FILTER_MAX_BYTES="$(agent_filter parse size "${FILTER_RAW[smaller-than]}")" || usage_error
+  fi
+  if [[ -n "${FILTER_RAW[ended-before]+set}" ]]; then
+    FILTER_BEFORE="$(agent_filter parse date "${FILTER_RAW[ended-before]}")" || usage_error
+  fi
+  if [[ -n "${FILTER_RAW[path]+set}" ]]; then
+    FILTER_PATH="$(agent_filter parse path "${FILTER_RAW[path]}")" || usage_error
+    FILTER_PATH_REAL="${FILTER_PATH#*$'\n'}"
+    FILTER_PATH="${FILTER_PATH%%$'\n'*}"
+  fi
+fi
+
 if (( DRY_RUN )); then
   printf 'Dry run. Re-run with --apply to delete.\n\n'
 else
   printf 'Deleting Claude/Codex cleanup targets.\n\n'
 fi
 
-if [[ -d "$CLAUDE_DIR" ]]; then
-  printf '== Claude chat transcripts ==\n'
-  process_claude_chats
-  collect_claude_kept_sids
-  finalize_claude_chat_side
-  printf '\n== Claude memory ==\n'
-  process_claude_memory
-  sweep_claude_projects_remainder
-  sweep_claude_session_state
-  printf '\n'
-fi
-
-if [[ -d "$CODEX_DIR" ]]; then
-  printf '== Codex chat transcripts ==\n'
-  process_codex_chats
-  finalize_codex_chat_side
-  printf '\n== Codex memory ==\n'
-  process_codex_memory
-  printf '\n'
-fi
-
-clean_directory_contents "$CODEX_DIR"
-clean_directory_contents "$CLAUDE_DIR"
-
-if (( INCLUDE_PROJECTS )); then
-  printf '\n== Project-local agent directories ==\n'
-  clean_other_marker_paths
+if (( ${#FILTER_RAW[@]} )); then
+  run_filtered_cleanup
 else
-  printf '\nSkipped project-local .claude/.codex directories (--include-projects to review them).\n'
+  run_full_cleanup
 fi
 
 if (( DRY_RUN )); then

@@ -446,6 +446,258 @@ test_absent_codex_databases_are_a_noop() {
   pass 'absent Codex databases and stores are harmless'
 }
 
+# ---- Filters -----------------------------------------------------------------
+
+assert_not_contains() {
+  local file="$1" text="$2"
+  ! grep -Fq -- "$text" "$file" || {
+    sed -n '1,240p' "$file" >&2
+    fail "expected output not to contain: $text"
+  }
+}
+
+filler() {
+  local pad="${1:-0}"
+  (( pad )) || return 0
+  printf "%${pad}s" '' | tr ' ' x
+}
+
+# Claude chat started in <cwd>, last active at <ts>, padded by <pad> bytes.
+write_claude_chat_in() {
+  local home="$1" sid="$2" cwd="$3" ts="$4" pad="${5:-0}"
+  local transcript="$home/.claude/projects/${cwd//[^A-Za-z0-9]/-}/$sid.jsonl"
+  mkdir -p -- "${transcript%/*}"
+  printf '%s\n' \
+    "{\"timestamp\":\"2026-01-01T00:00:00Z\",\"type\":\"user\",\"cwd\":\"$cwd\",\"message\":{\"content\":\"request in $cwd $(filler "$pad")\"}}" \
+    "{\"timestamp\":\"$ts\",\"type\":\"assistant\",\"cwd\":\"$cwd\",\"message\":{\"content\":\"fixture response\"}}" \
+    >"$transcript"
+  printf '%s\n' "$transcript"
+}
+
+write_codex_chat_in() {
+  local home="$1" sid="$2" cwd="$3" ts="$4" pad="${5:-0}"
+  local transcript="$home/.codex/sessions/2026/01/01/rollout-2026-01-01T00-00-00-$sid.jsonl"
+  mkdir -p -- "${transcript%/*}"
+  printf '%s\n' \
+    "{\"timestamp\":\"2026-01-01T00:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"session_id\":\"$sid\",\"cwd\":\"$cwd\"}}" \
+    "{\"timestamp\":\"$ts\",\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\",\"message\":\"request in $cwd $(filler "$pad")\"}}" \
+    >"$transcript"
+  printf '%s\n' "$transcript"
+}
+
+test_filter_dry_run_lists_only_matches() {
+  local home output small big
+  home="$(new_home filter-dry-run)"
+  output="$TEST_TMP/filter-dry-run/output"
+  small="$(write_claude_chat_in "$home" a1111111-1111-1111-1111-111111111111 /work/small 2026-08-01T00:00:00Z)"
+  big="$(write_claude_chat_in "$home" a2222222-2222-2222-2222-222222222222 /work/big 2026-08-01T00:00:00Z 4096)"
+  write_codex_chat_in "$home" a3333333-3333-3333-3333-333333333333 /work/codex-small 2026-08-01T00:00:00Z >/dev/null
+  printf 'remove me\n' >"$home/.claude/cache.tmp"
+
+  HOME="$home" bash "$CLEANUP" --smaller-than 2K >"$output" 2>&1
+
+  assert_exists "$small"
+  assert_exists "$big"
+  assert_exists "$home/.claude/cache.tmp"
+  assert_contains "$output" '/work/small'
+  assert_contains "$output" '/work/codex-small'
+  assert_not_contains "$output" '/work/big'
+  assert_not_contains "$output" 'Would remove:'
+  assert_contains "$output" '--apply would ask once'
+  assert_contains "$output" 'No files were removed.'
+  pass 'a filtered dry run lists only the matches and skips the general sweep'
+}
+
+test_filter_apply_takes_matching_chats_with_their_state() {
+  local home output small big csmall cbig sid
+  local s=b1111111-1111-1111-1111-111111111111 b=b2222222-2222-2222-2222-222222222222
+  local cs=b3333333-3333-3333-3333-333333333333 cb=b4444444-4444-4444-4444-444444444444
+  home="$(new_home filter-apply)"
+  output="$TEST_TMP/filter-apply/output"
+  small="$(write_claude_chat_in "$home" "$s" /work/p 2026-08-01T00:00:00Z)"
+  big="$(write_claude_chat_in "$home" "$b" /work/p 2026-08-01T00:00:00Z 4096)"
+  csmall="$(write_codex_chat_in "$home" "$cs" /work/p 2026-08-01T00:00:00Z)"
+  cbig="$(write_codex_chat_in "$home" "$cb" /work/p 2026-08-01T00:00:00Z 4096)"
+  for sid in "$s" "$b"; do
+    mkdir -p -- "$home/.claude/projects/-work-p/$sid/tool-results" \
+                "$home/.claude/file-history/$sid" "$home/.claude/session-env/$sid"
+    printf 'x\n' >"$home/.claude/projects/-work-p/$sid/tool-results/out.txt"
+    printf 'x\n' >"$home/.claude/file-history/$sid/1.json"
+    printf 'x\n' >"$home/.claude/session-env/$sid/env"
+  done
+  printf '%s\n' "{\"sessionId\":\"$s\",\"timestamp\":1785542400000}" 'malformed line stays' \
+    "{\"sessionId\":\"$b\",\"timestamp\":1785542400000}" >"$home/.claude/history.jsonl"
+  printf '%s\n' 'malformed line stays' "{\"sessionId\":\"$b\",\"timestamp\":1785542400000}" \
+    >"$TEST_TMP/filter-apply/claude-history"
+  printf '%s\n' "{\"session_id\":\"$cs\",\"ts\":1785542400}" "{\"session_id\":\"$cb\",\"ts\":1785542400}" \
+    >"$home/.codex/history.jsonl"
+  printf '%s\n' "{\"session_id\":\"$cb\",\"ts\":1785542400}" >"$TEST_TMP/filter-apply/codex-history"
+  printf '%s\n' "{\"id\":\"$cs\",\"updated_at\":\"2026-08-01T00:00:00.000000000Z\"}" \
+    "{\"id\":\"$cb\",\"updated_at\":\"2026-08-01T00:00:00.000000000Z\"}" >"$home/.codex/session_index.jsonl"
+  printf '%s\n' "{\"id\":\"$cb\",\"updated_at\":\"2026-08-01T00:00:00.000000000Z\"}" \
+    >"$TEST_TMP/filter-apply/codex-index"
+  mkdir -p -- "$home/.claude/projects/-work-p/memory"
+  printf 'a note\n' >"$home/.claude/projects/-work-p/memory/note.md"
+  printf 'protected\n' >"$home/.claude/settings.json"
+  printf 'remove me\n' >"$home/.claude/cache.tmp"
+  : >"$home/.codex/state_5.sqlite"
+
+  # Claude chats: yes; Claude memory: no; Codex chats: yes.
+  run_interactive "$home" "$output" $'y\nn\ny\n' --smaller-than 2K
+
+  assert_absent "$small"
+  assert_absent "$home/.claude/projects/-work-p/$s"
+  assert_absent "$home/.claude/file-history/$s"
+  assert_absent "$home/.claude/session-env/$s"
+  assert_exists "$big"
+  assert_exists "$home/.claude/projects/-work-p/$b/tool-results/out.txt"
+  assert_exists "$home/.claude/file-history/$b/1.json"
+  assert_exists "$home/.claude/session-env/$b/env"
+  assert_same "$TEST_TMP/filter-apply/claude-history" "$home/.claude/history.jsonl"
+  assert_exists "$home/.claude/projects/-work-p/memory/note.md"
+  assert_absent "$csmall"
+  assert_exists "$cbig"
+  assert_same "$TEST_TMP/filter-apply/codex-history" "$home/.codex/history.jsonl"
+  assert_same "$TEST_TMP/filter-apply/codex-index" "$home/.codex/session_index.jsonl"
+  assert_exists "$home/.claude/settings.json"
+  assert_exists "$home/.claude/cache.tmp"
+  assert_exists "$home/.codex/state_5.sqlite"
+  pass '--smaller-than deletes small chats with their state and history lines, nothing else'
+}
+
+test_filter_ended_before_takes_old_orphan_history() {
+  local home output old new
+  local o=c1111111-1111-1111-1111-111111111111 n=c2222222-2222-2222-2222-222222222222
+  home="$(new_home filter-date)"
+  output="$TEST_TMP/filter-date/output"
+  old="$(write_claude_chat_in "$home" "$o" /work/p 2026-06-01T00:00:00Z)"
+  new="$(write_claude_chat_in "$home" "$n" /work/p 2026-08-01T00:00:00Z)"
+  # Transcript-less lines: 2026-05-01 goes, 2026-08-15 stays.
+  printf '%s\n' \
+    "{\"sessionId\":\"$o\",\"timestamp\":1780272000000}" \
+    "{\"sessionId\":\"$n\",\"timestamp\":1785542400000}" \
+    '{"sessionId":"c3333333-3333-3333-3333-333333333333","timestamp":1777593600000}' \
+    '{"sessionId":"c4444444-4444-4444-4444-444444444444","timestamp":1786752000000}' \
+    >"$home/.claude/history.jsonl"
+  printf '%s\n' \
+    "{\"sessionId\":\"$n\",\"timestamp\":1785542400000}" \
+    '{"sessionId":"c4444444-4444-4444-4444-444444444444","timestamp":1786752000000}' \
+    >"$TEST_TMP/filter-date/expected"
+
+  run_interactive "$home" "$output" $'y\n' --ended-before 2026-07-01
+
+  assert_absent "$old"
+  assert_exists "$new"
+  assert_same "$TEST_TMP/filter-date/expected" "$home/.claude/history.jsonl"
+  assert_contains "$output" '1 history/index line whose chat is already gone'
+  pass '--ended-before takes old chats and old orphaned history lines only'
+}
+
+test_filter_path_takes_the_tree_not_its_siblings() {
+  local home output a sub ab ca cab
+  home="$(new_home filter-path)"
+  output="$TEST_TMP/filter-path/output"
+  a="$(write_claude_chat_in "$home" d1111111-1111-1111-1111-111111111111 /work/a 2026-08-01T00:00:00Z)"
+  sub="$(write_claude_chat_in "$home" d2222222-2222-2222-2222-222222222222 /work/a/sub 2026-08-01T00:00:00Z)"
+  ab="$(write_claude_chat_in "$home" d3333333-3333-3333-3333-333333333333 /work/ab 2026-08-01T00:00:00Z)"
+  ca="$(write_codex_chat_in "$home" d4444444-4444-4444-4444-444444444444 /work/a 2026-08-01T00:00:00Z)"
+  cab="$(write_codex_chat_in "$home" d5555555-5555-5555-5555-555555555555 /work/ab 2026-08-01T00:00:00Z)"
+  mkdir -p -- "$home/.claude/projects/-work-a/memory" "$home/.claude/projects/-work-ab/memory" \
+              "$home/.claude/projects/-work-a-old/memory" "$home/.codex/memories"
+  printf 'note\n' >"$home/.claude/projects/-work-a/memory/note.md"
+  printf 'note\n' >"$home/.claude/projects/-work-ab/memory/note.md"
+  # No transcript left: only history says -work-a-old is /work/a/old.
+  printf 'note\n' >"$home/.claude/projects/-work-a-old/memory/note.md"
+  printf '%s\n' '{"sessionId":"d6666666-6666-6666-6666-666666666666","project":"/work/a/old"}' \
+    >"$home/.claude/history.jsonl"
+  printf 'shared\n' >"$home/.codex/memories/m.md"
+
+  # Claude chats: yes; Claude memory: yes; Codex chats: yes.
+  run_interactive "$home" "$output" $'y\ny\ny\n' --path /work/a
+
+  assert_absent "$a"
+  assert_absent "$sub"
+  assert_exists "$ab"
+  assert_absent "$home/.claude/projects/-work-a"
+  assert_absent "$home/.claude/projects/-work-a-old"
+  assert_exists "$home/.claude/projects/-work-ab/memory/note.md"
+  assert_absent "$ca"
+  assert_exists "$cab"
+  assert_exists "$home/.codex/memories/m.md"
+  assert_contains "$output" 'Shared by every project, so --path never selects it.'
+  pass '--path takes the directory tree and its memory, never a same-prefix sibling'
+}
+
+test_filter_decline_keeps_everything() {
+  local home output claude codex
+  home="$(new_home filter-decline)"
+  output="$TEST_TMP/filter-decline/output"
+  claude="$(write_claude_chat_in "$home" e1111111-1111-1111-1111-111111111111 /work/p 2026-08-01T00:00:00Z)"
+  codex="$(write_codex_chat_in "$home" e2222222-2222-2222-2222-222222222222 /work/p 2026-08-01T00:00:00Z)"
+
+  run_interactive "$home" "$output" $'n\nn\n' --smaller-than 1G
+
+  assert_exists "$claude"
+  assert_exists "$codex"
+  assert_contains "$output" 'Kept them.'
+  pass 'declining a filtered section keeps every match'
+}
+
+test_filter_codex_memory_store_by_date() {
+  local home output
+  home="$(new_home filter-codex-memory)"
+  output="$TEST_TMP/filter-codex-memory/output"
+  mkdir -p -- "$home/.codex/memories"
+  printf 'memory\n' >"$home/.codex/memories/m.md"
+  : >"$home/.codex/memories_1.sqlite"
+  : >"$home/.codex/memories_1.sqlite-wal"
+  : >"$home/.codex/goals_1.sqlite"
+  printf 'protected\n' >"$home/.codex/config.toml"
+
+  run_interactive "$home" "$output" $'y\n' --ended-before 2999-01-01
+
+  assert_absent "$home/.codex/memories"
+  assert_absent "$home/.codex/memories_1.sqlite"
+  assert_absent "$home/.codex/memories_1.sqlite-wal"
+  assert_absent "$home/.codex/goals_1.sqlite"
+  assert_exists "$home/.codex/config.toml"
+  assert_contains "$output" 'No Codex chats match the filters.'
+  pass 'a filter selects the Codex memory store as one unit, sidecars included'
+}
+
+test_filters_combine_as_and() {
+  local home output small_old small_new big_old
+  home="$(new_home filter-and)"
+  output="$TEST_TMP/filter-and/output"
+  small_old="$(write_claude_chat_in "$home" f1111111-1111-1111-1111-111111111111 /work/p 2026-06-01T00:00:00Z)"
+  small_new="$(write_claude_chat_in "$home" f2222222-2222-2222-2222-222222222222 /work/p 2026-08-01T00:00:00Z)"
+  big_old="$(write_claude_chat_in "$home" f3333333-3333-3333-3333-333333333333 /work/p 2026-06-01T00:00:00Z 4096)"
+
+  run_interactive "$home" "$output" $'y\n' --smaller-than 2K --ended-before=2026-07-01
+
+  assert_absent "$small_old"
+  assert_exists "$small_new"
+  assert_exists "$big_old"
+  pass 'filters combine: only chats matching every filter go'
+}
+
+test_filter_rejects_bad_values() {
+  local home output chat args status
+  home="$(new_home filter-bad)"
+  output="$TEST_TMP/filter-bad/output"
+  chat="$(write_claude_chat_in "$home" 99999999-0000-0000-0000-000000000000 /work/p 2026-08-01T00:00:00Z)"
+
+  for args in '--smaller-than lots' '--smaller-than 0' '--ended-before 2026-13-45' '--path=' \
+              '--path /a --path /b' '--path /a --include-projects' '--smaller-than'; do
+    status=0
+    # shellcheck disable=SC2086  # split on purpose
+    HOME="$home" bash "$CLEANUP" --apply $args >"$output" 2>&1 </dev/null || status=$?
+    (( status == 2 )) || fail "expected exit 2 for: $args (got $status)"
+  done
+  assert_exists "$chat"
+  pass 'bad filter values exit 2 before touching anything'
+}
+
 test_dry_run_preserves_everything
 test_codex_keep_prunes_history
 test_codex_delete_removes_chat_state
@@ -460,5 +712,13 @@ test_codex_removes_every_db_generation
 test_project_local_agents_need_the_flag
 test_include_projects_prompts_per_path
 test_absent_codex_databases_are_a_noop
+test_filter_dry_run_lists_only_matches
+test_filter_apply_takes_matching_chats_with_their_state
+test_filter_ended_before_takes_old_orphan_history
+test_filter_path_takes_the_tree_not_its_siblings
+test_filter_decline_keeps_everything
+test_filter_codex_memory_store_by_date
+test_filters_combine_as_and
+test_filter_rejects_bad_values
 
 printf 'PASS: cleanup-agents safety fixtures (%d cases)\n' "$pass_count"

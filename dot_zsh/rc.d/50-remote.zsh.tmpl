@@ -8,6 +8,8 @@ TAILSCALE_LAB_EXIT_NODE=${TAILSCALE_LAB_EXIT_NODE:-{{ $tailscaleExitNode | quote
 TAILSCALE_REMOTE_SERVICE=${TAILSCALE_REMOTE_SERVICE:-tailscale-remote-proxy.service}
 TAILSCALE_REMOTE_SOCKET=${TAILSCALE_REMOTE_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$EUID}/tailscale-remote/tailscaled.sock}
 TAILSCALE_REMOTE_MODE_FILE=${TAILSCALE_REMOTE_MODE_FILE:-${XDG_RUNTIME_DIR:-/run/user/$EUID}/tailscale-remote-proxy-required}
+# Remote prelude: prefer ~/.local/bin/tmux, fall back to the global tmux.
+_HPC_TMUX_PRELUDE='PATH="$HOME/.local/bin:$PATH"; '
 
 ssh-close() {
   emulate -L zsh
@@ -509,7 +511,7 @@ _hpc_sessions() {
   local -a f
   local -A spaths
 
-  probe='tmux list-panes -a -F "P%|%#{session_name}%|%#{pane_active}#{window_active}%|%#{pane_current_path}" 2>/dev/null; tmux list-sessions -F "T%|%#{session_name}%|%#{session_windows}%|%#{session_attached}%|%#{session_created}%|%#{session_activity}%|%#{session_path}" 2>/dev/null; ~/.local/bin/zmx list 2>/dev/null'
+  probe=$_HPC_TMUX_PRELUDE'tmux list-panes -a -F "P%|%#{session_name}%|%#{pane_active}#{window_active}%|%#{pane_current_path}" 2>/dev/null; tmux list-sessions -F "T%|%#{session_name}%|%#{session_windows}%|%#{session_attached}%|%#{session_created}%|%#{session_activity}%|%#{session_path}" 2>/dev/null; ~/.local/bin/zmx list 2>/dev/null'
 
   listing=$(command ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 "$host" "$probe")
   rc=$?
@@ -606,7 +608,7 @@ hpc() {
     return 2
   fi
 
-  remote_cmd="command -v tmux >/dev/null 2>&1 || { printf '%s\n' 'hpc: tmux is not installed on the remote host' >&2; exit 127; }; "
+  remote_cmd="${_HPC_TMUX_PRELUDE}command -v tmux >/dev/null 2>&1 || { printf '%s\n' 'hpc: tmux is not installed on the remote host' >&2; exit 127; }; "
   remote_cmd+="tmux has-session -t =$1 2>/dev/null || { printf '%s\n' 'hpc: no tmux session named $1' >&2; exit 1; }; "
   remote_cmd+="printf '%s\n' \"hpc: connected; attaching to tmux session '$1'...\" >&2; "
   remote_cmd+="exec tmux attach-session -t =$1"
@@ -632,7 +634,7 @@ hpc-detach() {
     return 2
   fi
 
-  remote_cmd="command -v tmux >/dev/null 2>&1 || { printf '%s\n' 'hpc-detach: tmux is not installed on the remote host' >&2; exit 127; }; "
+  remote_cmd="${_HPC_TMUX_PRELUDE}command -v tmux >/dev/null 2>&1 || { printf '%s\n' 'hpc-detach: tmux is not installed on the remote host' >&2; exit 127; }; "
   remote_cmd+="tmux has-session -t '=$1' 2>/dev/null || { printf '%s\n' 'hpc-detach: no tmux session named $1' >&2; exit 1; }; "
   remote_cmd+="tmux detach-client -s '=$1' && printf '%s\n' \"hpc-detach: detached clients from tmux session '$1'\""
 
@@ -662,7 +664,7 @@ hpc-kill() {
     return 2
   fi
 
-  listing=$(command ssh "$base" 'tmux list-sessions -F "#{session_name} #{session_attached}" 2>/dev/null')
+  listing=$(command ssh "$base" "$_HPC_TMUX_PRELUDE"'tmux list-sessions -F "#{session_name} #{session_attached}" 2>/dev/null')
   rc=$?
   (( rc == 255 )) && return $rc
 
@@ -690,7 +692,7 @@ hpc-kill() {
     fi
   fi
 
-  ssh "$base" "tmux kill-session -t $1 && tmux list-sessions"
+  ssh "$base" "${_HPC_TMUX_PRELUDE}tmux kill-session -t $1 && tmux list-sessions"
 }
 
 hpcz-list() {
