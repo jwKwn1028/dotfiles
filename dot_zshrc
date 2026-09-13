@@ -8,17 +8,25 @@
 # with non-interactive shells (PATH, EDITOR, ...) lives in ~/.zshenv;
 # login-shell extras (miniconda, conda-lazy) in ~/.zprofile.
 # Each module is byte-compiled to .zwc when it changes, like ~/.zshrc.
+# Every file is snapshotted as loaded; `sz` diffs against it before reloading.
 
-_zshrc_dir="$HOME/.zsh/rc.d"
+_zshrc_modules() { reply=("$HOME/.zsh/rc.d/_lib.zsh" "$HOME/.zsh/rc.d"/[0-9]*.zsh(N)) }
 
-for _zshrc_mod in "$_zshrc_dir/_lib.zsh" "$_zshrc_dir"/[0-9]*.zsh(N); do
+typeset -gA _zshrc_snap
+for _zshrc_mod in "$HOME/.zshenv" "$HOME/.zsh/macos/compat.zsh" "$HOME/.zshrc"; do
+  [[ -r "$_zshrc_mod" ]] && _zshrc_snap[$_zshrc_mod]=$(<"$_zshrc_mod")
+done
+
+_zshrc_modules
+for _zshrc_mod in "${reply[@]}"; do
   [[ -r "$_zshrc_mod" ]] || continue
   if [[ ! -f "${_zshrc_mod}.zwc" || "$_zshrc_mod" -nt "${_zshrc_mod}.zwc" ]]; then
     zcompile -R "${_zshrc_mod}.zwc" "$_zshrc_mod" 2>/dev/null
   fi
+  _zshrc_snap[$_zshrc_mod]=$(<"$_zshrc_mod")
   source "$_zshrc_mod"
 done
-unset _zshrc_dir _zshrc_mod
+unset _zshrc_mod
 
 # Compile .zshrc itself into bytecode for faster startup
 if [[ ! -f "$HOME/.zshrc.zwc" || "$HOME/.zshrc" -nt "$HOME/.zshrc.zwc" ]]; then

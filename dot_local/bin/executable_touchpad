@@ -6,8 +6,8 @@
 # alive. External mice and the TrackPoint are left alone.
 #
 # Usage: touchpad [disable|enable|toggle|status|apply]   (default: disable)
-#   apply re-asserts the desired state from the state file, for ~/.x-unstick.sh
-#   and i3 autostart. State persists in $XDG_STATE_HOME/touchpad.state.
+#   apply re-asserts the desired state from the state file, for i3 autostart.
+#   State persists in $XDG_STATE_HOME/touchpad.state.
 
 set -u
 

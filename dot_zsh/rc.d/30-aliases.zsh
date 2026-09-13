@@ -19,8 +19,74 @@ btop () {
   command btop "$@"
   xdotool key --clearmodifiers ctrl+0
 }
-alias hz='${EDITOR:-hx} ~/.zsh/rc.d'   # config now lives in modules (was ~/.zshrc)
-alias sz='print "reloading zsh..." && exec zsh'   # full restart: re-reads .zshenv + rc.d without double-wrapping ZLE widgets
+unalias hz 2>/dev/null
+hz() {   # edit zsh config in the chezmoi source; files differing from live open directly
+  emulate -L zsh
+  local line target src
+  local -a files targets=(~/.zshenv ~/.zprofile ~/.zshrc ~/.zsh)
+
+  if (( ! $+commands[chezmoi] )); then
+    ${EDITOR:-hx} ~/.zsh/rc.d
+    return
+  fi
+
+  for line in ${(f)"$(chezmoi status -x externals,scripts -- $targets)"}; do
+    target=$HOME/${line[4,-1]}
+    [[ ${line[1]} != ' ' && -e $target ]] && files+=($target)   # edited live: open both sides
+    src=$(chezmoi source-path -- $target 2>/dev/null) && files+=($src)
+  done
+  (( $#files )) || files=("$(chezmoi source-path -- ~/.zsh/rc.d)")
+
+  ${EDITOR:-hx} $files
+
+  local changes=$(chezmoi --color=true diff --no-pager -r -x externals,scripts -- $targets)   # diff, unlike apply, doesn't recurse by default
+  [[ -n $changes ]] || return 0
+  print -r -- $changes | less -FRX
+  if read -q "?hz: apply to live config? [y/N] "; then
+    print
+    chezmoi apply -x externals,scripts -- $targets && print "hz: applied; run sz to reload"
+  else
+    print "\nhz: not applied"
+  fi
+}
+unalias sz 2>/dev/null
+sz() {   # full restart (no double-wrapped ZLE widgets); shows config changes first
+  emulate -L zsh
+  local f old new old_label new_label
+  local -a reply changed
+
+  if (( ${+_zshrc_snap} && ${+functions[_zshrc_modules]} )); then
+    _zshrc_modules
+    for f in ${(k)_zshrc_snap} $reply; do
+      if (( ${+_zshrc_snap[$f]} )); then
+        [[ -r $f && $_zshrc_snap[$f] == "$(<$f)" ]] && continue
+      else
+        [[ -r $f ]] || continue
+      fi
+      changed+=($f)
+    done
+    changed=(${(ou)changed})
+  fi
+
+  if (( $#changed )); then
+    for f in $changed; do
+      old_label=/dev/null new_label=/dev/null old= new=
+      (( ${+_zshrc_snap[$f]} )) && old_label=${f/#$HOME/\~} old=$_zshrc_snap[$f]
+      [[ -r $f ]] && new_label=${f/#$HOME/\~} new=$(<$f)
+      diff -u --color=always --label $old_label --label $new_label \
+        <(print -rn -- ${old:+$old$'\n'}) <(print -rn -- ${new:+$new$'\n'})
+    done | less -FRX
+    for f in $changed; do   # exec into a config that won't parse leaves a broken shell
+      [[ -r $f ]] && ! zsh -fn $f && {
+        print -u2 "sz: not reloading; fix the syntax error in ${f/#$HOME/\~}"
+        return 1
+      }
+    done
+  fi
+
+  print "reloading zsh..."
+  exec zsh
+}
 alias ':q'='exit'
 alias ':qa'='xdotool key --clearmodifiers alt+F4'
 if _have fdfind; then

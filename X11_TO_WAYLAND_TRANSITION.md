@@ -141,8 +141,6 @@ session:
 - `dot_config/polybar/config.ini`
 - `dot_config/polybar/executable_launch.sh`
 - `dot_config/polybar/scripts/executable_confirm-poweroff.sh`
-- `executable_dot_x-unstick.sh` — an X11 stuck-modifier fix. It has no meaning
-  under Wayland; do not port it, just leave it for the fallback session.
 
 `dot_config/i3/MANUAL.md` is a special case. It stays correct for the i3
 session and should not be edited in place, but it is a large user-facing
@@ -216,8 +214,7 @@ The canonical touchpad utility and its compatibility entry point are both
 X11-only:
 
 - `dot_local/bin/executable_touchpad` — `xinput` plus XFCE pointer settings,
-  with a desired-state file and an `apply` action called from i3 autostart and
-  `~/.x-unstick.sh`.
+  with a desired-state file and an `apply` action called from i3 autostart.
 - `executable_dot_toggle-touchpad.sh` — compatibility wrapper for the old
   `~/.toggle-touchpad.sh` path; maps `toggle|on|off` to the canonical utility.
 

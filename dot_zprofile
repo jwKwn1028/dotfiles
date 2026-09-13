@@ -1,18 +1,15 @@
+# Login-shell extras (zsh -l, and `zsh -lc` as used by coding agents).
+# The shared PATH + env moved to ~/.zshenv (read by every zsh, before this
+# file); here we only add what login shells need on top: miniconda on PATH
+# and the full lazy conda wrappers.
 typeset -U path PATH
 
-export TYPST_INSTALL="${TYPST_INSTALL:-$HOME/.typst}"
-
+# User-installed tools (uv, ruff in ~/.local/bin) stay ahead of conda's copies.
 path=(
+  "$HOME/.pixi/bin"
+  "$HOME/.local/bin"
   "$HOME/miniconda3/condabin"
   "$HOME/miniconda3/bin"
-  "/usr/local/go/bin"
-  "$HOME/.local/bin"
-  "$HOME/.local/npm-global/bin"
-  "$TYPST_INSTALL/bin"
-  "$HOME/Applications/FullProf_Suite"
-  "$HOME/.juliaup/bin"
-  "$HOME/Applications/qe-7.5/bin"
-  "$HOME/Applications/task-calendar"
   "${path[@]}"
 )
 export PATH

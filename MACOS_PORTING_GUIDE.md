@@ -363,7 +363,6 @@ Do not copy these to a Mac merely because the paths are harmless:
 - `dot_local/bin/executable_touchpad`, its
   `executable_dot_toggle-touchpad.sh` compatibility wrapper, and
   `dot_local/bin/executable_disable-trackpoint-middle-click`.
-- `executable_dot_x-unstick.sh`.
 - `Applications/` Helium AppImage files and the duplicate Linux desktop entry.
 - `Applications/executable_update-helium.sh`.
 - Linux browser chrome payloads until a native macOS browser installation and

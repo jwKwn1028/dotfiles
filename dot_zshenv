@@ -13,6 +13,7 @@ export TYPST_INSTALL="$HOME/.typst"
 
 typeset -U path PATH
 path=(
+  "$HOME/.pixi/bin"
   "/usr/local/go/bin"
   "$HOME/.local/bin"
   "$HOME/.local/npm-global/bin"
@@ -22,6 +23,7 @@ path=(
   "$HOME/.juliaup/bin"
   "$HOME/Applications/qe-7.5/bin"
   "$HOME/Applications/task-calendar"
+  "$HOME/Applications/pomodoro"
   "$HOME/.cargo/bin"
   "${path[@]}"
 )
