@@ -30,10 +30,17 @@ typeset -gi TEST_PROXY_EXIT=0
 typeset -gi TEST_PROXY_ONLINE=1
 typeset -gi TEST_MAIN_EXIT=0
 typeset -gi TEST_SET_FAILURE=0
+typeset -gi TEST_SET_TRANSIENT=0
 typeset -gi TEST_REQUIRE_FAILURE=0
 typeset -gi TEST_RETIRE_COUNT=0
 typeset -g TEST_BACKEND=NeedsLogin
 typeset -ga LABROUTE_COMMANDS
+
+# Make labroute's `command sleep` retry pauses instant.
+mkdir -p "$TEST_TMP/sleep-bin"
+print -r -- '#!/bin/sh' >| "$TEST_TMP/sleep-bin/sleep"
+chmod +x "$TEST_TMP/sleep-bin/sleep"
+path=("$TEST_TMP/sleep-bin" $path)
 
 _labroute_require_commands() {
   if (( TEST_REQUIRE_FAILURE )); then
@@ -98,7 +105,9 @@ _labroute_cli() {
           exit_node=${argument#*=}
         fi
       done
-      if (( TEST_SET_FAILURE )) && [[ -n $exit_node ]]; then
+      if [[ -n $exit_node ]] && (( TEST_SET_FAILURE || TEST_SET_TRANSIENT > 0 )); then
+        (( TEST_SET_TRANSIENT > 0 )) && (( TEST_SET_TRANSIENT-- ))
+        print -u2 -- "no node found in netmap with IP $exit_node"
         return 1
       fi
       if [[ -n $exit_node ]]; then
@@ -169,11 +178,38 @@ TEST_MAIN_EXIT=0
 TEST_SET_FAILURE=1
 TEST_BACKEND=Running
 expect_failure 'unavailable exit node' 1 'remote SSH remains blocked' labroute on
+failure_output=$(<"$TEST_TMP/output")
+[[ $failure_output == *'no node found'* &&
+  $failure_output != *'no node found'*'no node found'* ]] ||
+  fail "exit-node retries did not report exactly one final error: $failure_output"
 (( TEST_SERVICE_ACTIVE == 0 )) || fail 'failed activation left the proxy service running'
 [[ -f $TAILSCALE_REMOTE_MODE_FILE ]] || fail 'failed activation did not fail closed'
 expect_failure 'blocked status' 1 'proxy service is stopped' labroute status
+expect_failure 'failed blocked toggle' 1 'run labroute off for direct access' labroute toggle
+[[ -f $TAILSCALE_REMOTE_MODE_FILE ]] || fail 'failed blocked toggle fell back to direct mode'
 expect_success 'blocked direct reset' 'OFF (direct connection)' labroute off
 TEST_SET_FAILURE=0
+TEST_BACKEND=Stopped
+
+TEST_SET_TRANSIENT=3
+TEST_BACKEND=Running
+LABROUTE_COMMANDS=()
+expect_success 'cached netmap race' 'Lab SSH route: ON' labroute on
+(( TEST_PROXY_EXIT == 1 )) || fail 'activation gave up before the exit node appeared'
+(( ${#${(@M)LABROUTE_COMMANDS:#set *--exit-node=test-exit-node}} == 4 )) ||
+  fail "activation did not retry the exit-node selection: ${(j:|:)LABROUTE_COMMANDS}"
+[[ $(<"$TEST_TMP/output") != *'no node found'* ]] ||
+  fail 'activation printed a transient exit-node error'
+expect_success 'cached race direct reset' 'OFF (direct connection)' labroute off
+TEST_PROXY_EXIT=0
+
+: >| "$TAILSCALE_REMOTE_MODE_FILE"
+expect_success 'blocked toggle retry' 'Lab SSH route: ON' labroute toggle
+(( TEST_SERVICE_ACTIVE == 1 && TEST_PROXY_EXIT == 1 )) ||
+  fail 'blocked toggle did not restore the proxy route'
+[[ -f $TAILSCALE_REMOTE_MODE_FILE ]] || fail 'blocked toggle did not keep proxy-required mode'
+expect_success 'blocked toggle direct reset' 'OFF (direct connection)' labroute off
+TEST_PROXY_EXIT=0
 TEST_BACKEND=Stopped
 
 TEST_PROXY_ONLINE=0

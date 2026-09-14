@@ -144,6 +144,24 @@ _labroute_wait_for_proxy() {
   return 1
 }
 
+_labroute_set_exit_node() {
+  _labroute_cli set \
+    --accept-dns=false \
+    --accept-routes=false \
+    --exit-node="$TAILSCALE_LAB_EXIT_NODE"
+}
+
+# A cache-restored daemon is Running before its netmap lists the exit node.
+_labroute_select_exit_node() {
+  integer attempt
+
+  for attempt in {1..49}; do
+    _labroute_set_exit_node 2>/dev/null && return 0
+    command sleep 0.2
+  done
+  _labroute_set_exit_node
+}
+
 _labroute_proxy_requested() {
   [[ -f "$TAILSCALE_REMOTE_MODE_FILE" ]]
 }
@@ -220,7 +238,7 @@ labroute() {
   fi
 
   local route_action=${1:-status}
-  local backend proxy_hostname tailscale_snapshot
+  local backend proxy_hostname rc tailscale_snapshot
 
   case "$route_action" in
     on|off|status|toggle) ;;
@@ -231,10 +249,16 @@ labroute() {
   esac
 
   if [[ "$route_action" == toggle ]]; then
-    if _labroute_proxy_requested; then
-      route_action=off
-    else
+    if ! _labroute_proxy_requested; then
       route_action=on
+    elif _labroute_require_commands 2>/dev/null && ! _labroute_proxy_enabled; then
+      # Blocked: retry, since the direct route may be unreachable.
+      labroute on && return
+      rc=$?
+      print -u2 'labroute: run labroute off for direct access'
+      return $rc
+    else
+      route_action=off
     fi
   fi
 
@@ -312,11 +336,7 @@ labroute() {
         fi
       fi
 
-      if ! _labroute_cli set \
-        --accept-dns=false \
-        --accept-routes=false \
-        --exit-node="$TAILSCALE_LAB_EXIT_NODE"
-      then
+      if ! _labroute_select_exit_node; then
         _labroute_stop_service >/dev/null 2>&1
         print -u2 'labroute: proxy unavailable; remote SSH remains blocked'
         return 1
