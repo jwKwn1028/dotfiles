@@ -89,6 +89,8 @@ run 'bar navigation tests' bash "$I3_ROOT/tests/test-bar-nav.sh"
 run 'Polybar peek tests' bash "$I3_ROOT/tests/test-polybar-peek.sh"
 run 'resurrect Polybar tests' \
     bash "$I3_ROOT/tests/test-i3-resurrect-polybar.sh"
+run 'resurrect Ghostty session tests' \
+    bash "$I3_ROOT/tests/test-i3-resurrect-ghostty.sh"
 run 'RandR hotplug tests' bash "$I3_ROOT/tests/test-randr-hotplug.sh"
 run 'Dunst monitor selection tests' \
     env DUNST_SYSTEMD_OVERRIDE="$DUNST_OVERRIDE" \

@@ -954,7 +954,13 @@ Default environment and paths:
 - Focused workspace: `focused-workspace.txt`.
 - Zathura state: `zathura-pages.json`.
 - Zen/Helium URL state: `zen-pages.json`.
+- Ghostty session state: `ghostty-sessions.json`.
+- Lab route state: `labroute.txt`.
 - Zen URL helper: `zen-url-state.py`.
+- `I3_RESURRECT_GHOSTTY_HELPER`: `ghostty-session-state.py`.
+- `TAILSCALE_REMOTE_MODE_FILE`:
+  `$XDG_RUNTIME_DIR/tailscale-remote-proxy-required`, which `labroute on`
+  creates.
 - Helium desktop file: `~/.local/share/applications/helium.desktop`.
 
 `--check` verifies that `i3-msg`, `jq`, and `i3-resurrect` are available.
@@ -964,6 +970,9 @@ Save behavior:
 - Creates state and metadata directories.
 - Captures Zathura page state through D-Bus when possible.
 - Captures Zen and Helium URL state through `zen-url-state.py`.
+- Captures each Ghostty window's directory and remote sessions through
+  `ghostty-session-state.py`.
+- Records whether the lab route is on.
 - Writes sorted workspace names to `workspaces.txt`.
 - Writes the focused workspace to `focused-workspace.txt`.
 - Runs `i3-resurrect save` for each workspace.
@@ -972,11 +981,13 @@ Save behavior:
 - Rewrites Helium AppImage commands to stable launch commands.
 - Adds captured Zen/Helium URLs back into browser launch commands.
 - Adds captured Zathura page numbers back into Zathura launch commands.
+- Rewrites Ghostty launch commands and placeholders per window.
 - Sends a desktop notification with the saved workspace count.
 
 Layout normalization removes titles from swallows for Ghostty, Zen, and Helium
 so restored windows are less likely to miss placeholders because of changed
-window titles.
+window titles. It also drops Ghostty's instance, which the Ghostty step pins
+again per window.
 
 ### Zathura Page Capture
 
@@ -1025,6 +1036,43 @@ The save script resolves a stable command by:
 - Falling back to the newest `~/Applications/helium*.AppImage`.
 - Replacing Helium-like saved commands with the stable command.
 
+### Ghostty Session Capture
+
+i3 sees one X11 window per Ghostty window, not its splits or tabs. On its own,
+i3-resurrect saves a bare `ghostty` and takes its directory from Ghostty's
+`/bin/sh -c` wrapper, which never changes directory.
+
+`ghostty-session-state.py` reads the i3 tree on stdin and `/proc`
+(`I3_RESURRECT_PROC_ROOT` overrides it). It:
+
+- Groups each Ghostty process's surfaces by `WINDOWID`, which Ghostty sets to
+  the X11 window i3 manages.
+- Reads each surface's shell directory from below the wrapper.
+- Detects `hpc NAME` (tmux) and `hpcz NAME` (zmx) attaches in `ssh` command
+  lines.
+- Writes one entry per Ghostty window, in i3-resurrect's program order, with
+  every distinct session and the directory of the surface holding the first
+  one, else of the first surface.
+
+When a workspace's Ghostty program, placeholder, and captured-window counts
+agree, the save script rewrites each Ghostty program with:
+
+- `--working-directory=<dir>`. A directory containing `"`, `\`, `$`, or a
+  backtick would break i3-resurrect's quoted exec line, so it falls back to the
+  saved directory, then `$HOME`.
+- `--x11-instance-name=ghostty-ws<workspace>-<n>`, and the same instance in
+  that window's placeholder, so each window returns to its own slot.
+- `--initial-command=env I3_RESURRECT_REMOTE_SESSION=<kind>:<name> zsh` when
+  the window had a session. `50-remote.zsh` runs `hpc`/`hpcz` for it before
+  the first prompt and adds that command to history. Later splits and tabs get
+  plain shells.
+
+Otherwise the workspace keeps plain `ghostty` programs. Any command-line
+argument turns off Ghostty's single-instance mode, so each restored window is
+its own Ghostty process that quits when the window closes. Ghostty has no
+external API to create splits, so only each window's first session comes back;
+the restore notification lists the rest.
+
 ### Restore Script
 
 `i3-resurrect-restore-all.sh` restores the saved workspace list from metadata.
@@ -1040,6 +1088,8 @@ Default environment and paths:
 - `I3_RESURRECT_POLL_INTERVAL`: `0.25`.
 - `I3_LAPTOP_OUTPUT`: `eDP`.
 - `I3_RESURRECT_EXTERNAL_WORKSPACES`: `7 8 9 10`.
+- `I3_RESURRECT_REMOTE_HELPERS`: `~/.zsh/rc.d/50-remote.zsh`.
+- `I3_RESURRECT_LABROUTE_TIMEOUT`: `45` seconds.
 
 `--check` verifies that `i3-msg`, `jq`, `i3-resurrect`, and a saved workspace
 list are available.
@@ -1049,6 +1099,9 @@ Restore behavior:
 - Aborts if no workspace list exists.
 - Hides Polybar during restore if it is visible.
 - Kills all existing windows and waits for them to close.
+- If `labroute.txt` says `on`, runs `labroute on` from the remote helpers
+  before any program starts, so reattaching sessions take the route. It never
+  turns the route off, and a failure or timeout counts as an error.
 - Detects an active external output.
 - For each saved workspace:
   - Switches to the workspace.
@@ -1059,7 +1112,8 @@ Restore behavior:
   - Waits until i3-resurrect placeholders are swallowed.
 - Restores focus to the saved focused workspace.
 - Restores Polybar visibility on exit if it was visible before restore.
-- Sends a success or error notification.
+- Sends a success or error notification that also names a lab route failure
+  and any saved sessions to reattach by hand.
 
 ## Saved Session Profiles
 
@@ -1077,6 +1131,8 @@ cat resurrect-meta/workspaces.txt          # which workspaces will restore
 cat resurrect-meta/focused-workspace.txt
 jq . resurrect-meta/zathura-pages.json     # captured PDF pages
 jq . resurrect-meta/zen-pages.json         # captured browser URLs
+jq . resurrect-meta/ghostty-sessions.json  # Ghostty dirs and sessions
+cat resurrect-meta/labroute.txt            # lab route at save time
 jq -r '.[].command | if type=="array" then join(" ") else . end' \
    resurrect/workspace_7_programs.json     # what workspace 7 relaunches
 ```
@@ -1265,10 +1321,12 @@ Inside this directory:
 - `i3-resurrect-save-all-b.sh` and `i3-resurrect-restore-all-b.sh`: profile B.
 - `i3-resurrect-save-all-c.sh` and `i3-resurrect-restore-all-c.sh`: profile C.
 - `zen-url-state.py`: Zen/Helium URL capture helper.
+- `ghostty-session-state.py`: Ghostty window directory and remote session
+  capture helper.
 - `resurrect`, `resurrect-b`, `resurrect-c`: saved i3-resurrect layouts and
   program lists.
 - `resurrect-meta`, `resurrect-meta-b`, `resurrect-meta-c`: saved workspace,
-  focus, browser URL, and Zathura page metadata.
+  focus, browser URL, Zathura page, Ghostty session, and lab route metadata.
 - `tests/`: standalone checks for the watchers, hotplug trigger, and Polybar
   interaction helpers.
 
@@ -1314,6 +1372,8 @@ Runtime files outside this directory:
   `resnap.sh`, and cleanup logic together.
 - If changing browser launch commands, update the Zen/Helium detection logic in
   `i3-resurrect-save-all.sh` and `zen-url-state.py`.
+- If `hpc` or `hpcz` change their remote attach commands, update
+  `SESSION_PATTERNS` in `ghostty-session-state.py`.
 - If Helium is upgraded, the restore scripts should keep working as long as
   `~/.local/share/applications/helium.desktop` or a matching
   `~/Applications/helium*.AppImage` exists.

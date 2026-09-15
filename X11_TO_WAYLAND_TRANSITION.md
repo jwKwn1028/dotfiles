@@ -340,6 +340,7 @@ watcher over speculatively.
 ### `dot_config/i3/executable_i3-resurrect-save-all.sh`
 ### `dot_config/i3/executable_i3-resurrect-restore-all.sh`
 ### `dot_config/i3/executable_zen-url-state.py`
+### `dot_config/i3/executable_ghostty-session-state.py`
 
 These are the most fragile migration area.
 
@@ -365,13 +366,17 @@ The base scripts rely on:
 - Zen session files plus live Zen/Helium URL matching
 - Helium AppImage command normalization
 - `xprop` plus Zathura's user D-Bus API for PDF page capture
+- Ghostty's X11 `WINDOWID` and `--x11-instance-name` to pair terminal windows
+  with their shells and placeholders
 
 The save path now preserves more than the old guide recorded: Zen and Helium
-URLs, stable Helium launch commands, Zathura page numbers, focused workspace,
+URLs, stable Helium launch commands, Zathura page numbers, Ghostty working
+directories and first remote sessions, the lab route mode, focused workspace,
 and the list of workspaces to restore. The restore path hides Polybar, closes
-existing windows, rebuilds each saved workspace, moves workspaces 7–10 to the
-active external output, and restores focus and prior bar visibility. A partial
-port must say explicitly which of those behaviors it drops.
+existing windows, re-enables a saved lab route, rebuilds each saved workspace,
+moves workspaces 7–10 to the active external output, and restores focus and
+prior bar visibility. A partial port must say explicitly which of those
+behaviors it drops.
 
 Under Sway, some layout IPC can move to `swaymsg`, but the browser URL capture
 path should be redesigned. Wayland blocks synthetic global input and arbitrary

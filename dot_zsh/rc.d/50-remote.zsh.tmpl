@@ -4,6 +4,7 @@
 # Values come from the local chezmoi config; env vars override per session.
 HPC_REMOTE_USER=${HPC_REMOTE_USER:-{{ .sshRemoteUser | quote }}}
 HPC_REMOTE_HOST=${HPC_REMOTE_HOST:-{{ .sshGpuHost | quote }}}
+HPC_JOBMON_HOST=${HPC_JOBMON_HOST-{{ .sshHpcHost | quote }}}
 TAILSCALE_LAB_EXIT_NODE=${TAILSCALE_LAB_EXIT_NODE:-{{ $tailscaleExitNode | quote }}}
 TAILSCALE_REMOTE_SERVICE=${TAILSCALE_REMOTE_SERVICE:-tailscale-remote-proxy.service}
 TAILSCALE_REMOTE_SOCKET=${TAILSCALE_REMOTE_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$EUID}/tailscale-remote/tailscaled.sock}
@@ -505,6 +506,124 @@ sftp-hpc() {
   cdcluster
 }
 
+# --- Personal Slurm job monitoring ---
+_jobmon_host() {
+  emulate -L zsh
+  local host=${HPC_JOBMON_HOST:-}
+  if [[ -z $host || $host == -* || $host == *[^A-Za-z0-9_.@:-]* ]]; then
+    print -u2 -- 'jobmon: set HPC_JOBMON_HOST to an existing SSH host alias.'
+    return 2
+  fi
+  REPLY=$host
+}
+
+_jobmon_ssh() {
+  emulate -L zsh
+  local REPLY
+  _jobmon_host || return
+  # HOME and optional environment setup resolve on the cluster, without a PTY.
+  local remote_command='if [ -r "$HOME/.config/jobmon/env.sh" ]; then . "$HOME/.config/jobmon/env.sh" || exit; fi; exec "${JOBMON_PYTHON:-python3}" "$HOME/.local/libexec/jobmon/jobmon.py" _transport'
+  command ssh -T -o BatchMode=yes -o ConnectTimeout=10 -o ConnectionAttempts=1 -- "$REPLY" "$remote_command"
+}
+
+_jobmon_request() {
+  emulate -L zsh
+  local operation=$1 job_id='' request option value
+  shift
+  case $operation in
+    show|watch|report|fetch)
+      job_id=${1:-}
+      local job_pattern='^[1-9][0-9]*(_[0-9]+)?$'
+      if [[ ! $job_id =~ $job_pattern || ${#job_id} -gt 40 ]]; then
+        print -u2 -- 'jobmon: expected a job ID such as 123456 or 123456_7.'
+        return 2
+      fi
+      shift
+      request='{"operation":"'${operation}'","job_id":"'${job_id}'"'
+      ;;
+    jobs|doctor) request='{"operation":"'${operation}'"' ;;
+    *) print -u2 -- 'jobmon: unsupported operation'; return 2 ;;
+  esac
+  while (( $# )); do
+    option=$1
+    shift
+    case $option in
+      --json) request+=',"json":true' ;;
+      --days|--interval|--count)
+        if [[ $option == --days && $operation != (show|watch|report) ]] ||
+           [[ $option != --days && $operation != watch ]]; then
+          print -u2 -- "jobmon: $option is not valid for $operation."
+          return 2
+        fi
+        value=${1:-}
+        local integer_pattern='^[1-9][0-9]{0,6}$'
+        if [[ ! $value =~ $integer_pattern ]] ||
+           [[ $option == --days && $value -gt 3650 ]] ||
+           [[ $option == --interval && $value -gt 86400 ]] ||
+           [[ $option == --count && $value -gt 1000000 ]]; then
+          print -u2 -- "jobmon: invalid positive integer for $option."
+          return 2
+        fi
+        shift
+        request+=',"'${option#--}'":'${value}
+        ;;
+      *) print -u2 -- "jobmon: unsupported option: $option"; return 2 ;;
+    esac
+  done
+  request+='}'
+  print -r -- "$request" | _jobmon_ssh
+}
+
+hpc-jdoctor() { emulate -L zsh; _jobmon_request doctor "$@"; }
+hpc-jobs() { emulate -L zsh; _jobmon_request jobs "$@"; }
+hpc-job() { emulate -L zsh; _jobmon_request show "$@"; }
+hpc-jwatch() { emulate -L zsh; _jobmon_request watch "$@"; }
+hpc-jreport() { emulate -L zsh; _jobmon_request report "$@"; }
+
+hpc-jfetch() (
+  emulate -L zsh
+  if (( $# != 2 )); then
+    print -u2 -- 'Usage: hpc-jfetch JOB_ID LOCAL_DIRECTORY'
+    return 2
+  fi
+  local job_id=$1 destination=$2 partial result REPLY
+  local job_pattern='^[1-9][0-9]*(_[0-9]+)?$'
+  if [[ ! $job_id =~ $job_pattern || ${#job_id} -gt 40 || -z $destination ]]; then
+    print -u2 -- 'jobmon: invalid job ID or empty destination.'
+    return 2
+  fi
+  _jobmon_host || return
+  # Keep private archive permissions without changing the caller's umask.
+  umask 077
+  command mkdir -p -- "$destination" || return
+  partial=$(command mktemp "${destination%/}/jobmon-${job_id}.XXXXXXXX.tar.gz.partial") || return
+  _jobmon_request fetch "$job_id" > "$partial"
+  result=$?
+  if (( result )); then
+    print -u2 -- "jobmon: fetch failed ($result); incomplete archive retained at $partial"
+    return $result
+  fi
+  command mv -- "$partial" "${partial%.partial}" || return
+  print -r -- "${partial%.partial}"
+)
+
+hpc-jdeploy() {
+  emulate -L zsh
+  local REPLY
+  local tools_dir=${HPC_JOBMON_TOOLS_DIR:-$HOME/Applications/remote-tools}
+  if (( $# > 1 )) || { (( $# == 1 )) && [[ $1 != --apply ]]; }; then
+    print -u2 -- 'Usage: hpc-jdeploy [--apply] (default: read-only deployment preview)'
+    return 2
+  fi
+  _jobmon_host || return
+  if [[ ! -r $tools_dir/shell/deploy-jobmon.sh ]]; then
+    print -u2 -- 'jobmon: set HPC_JOBMON_TOOLS_DIR to the local remote-tools directory.'
+    return 2
+  fi
+  command bash "$tools_dir/shell/deploy-jobmon.sh" "$REPLY" "$@"
+}
+# --- End personal Slurm job monitoring ---
+
 _hpc_age() {
   emulate -L zsh
   zmodload -i zsh/datetime
@@ -822,3 +941,23 @@ hpcz-kill() {
 
   ssh "$base" "$zmx kill $1${force:+ --force} && $zmx list"
 }
+
+# i3-resurrect starts a restored Ghostty window's first shell with this set.
+_hpc_restore_session() {
+  emulate -L zsh
+  local session=${I3_RESURRECT_REMOTE_SESSION-}
+
+  autoload -Uz add-zsh-hook
+  add-zsh-hook -d precmd _hpc_restore_session
+  unset I3_RESURRECT_REMOTE_SESSION
+
+  case $session in
+    tmux:?*) print -rs -- "hpc ${session#tmux:}"; hpc "${session#tmux:}" ;;
+    zmx:?*) print -rs -- "hpcz ${session#zmx:}"; hpcz "${session#zmx:}" ;;
+  esac
+}
+
+if [[ -o interactive && -n ${I3_RESURRECT_REMOTE_SESSION-} ]]; then
+  autoload -Uz add-zsh-hook
+  add-zsh-hook precmd _hpc_restore_session
+fi

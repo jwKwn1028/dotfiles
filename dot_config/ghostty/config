@@ -53,6 +53,8 @@ gtk-wide-tabs = true
 gtk-toolbar-style = flat
 # Thin title strip; see tabbar.css. Relative to this file's directory.
 gtk-custom-css = tabbar.css
+# Focused split outline uses TokyoNight cyan.
+gtk-custom-css = split-focus.css
 
 keybind = ctrl+enter=unbind
 keybind = ctrl+0=set_font_size:15

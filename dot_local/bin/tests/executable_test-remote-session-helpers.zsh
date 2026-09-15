@@ -310,4 +310,23 @@ HPC_SESSIONS_MODE=unreachable
 expect_failure 'hpcz-kill unreachable host' 255 'ssh: connect to host test.invalid' hpcz-kill shell
 HPC_SESSIONS_MODE=success
 
-print 'PASS: remote helpers report connection failures and act only on existing sessions'
+# A restored Ghostty window's first shell reattaches its saved session once.
+autoload -Uz add-zsh-hook
+SSH_MODE=success
+I3_RESURRECT_REMOTE_SESSION=tmux:dev
+add-zsh-hook precmd _hpc_restore_session
+expect_ssh_command 'restored tmux session' 'exec tmux attach-session -t =dev' _hpc_restore_session
+[[ -z ${I3_RESURRECT_REMOTE_SESSION-} ]] ||
+  fail 'restore hook left its session request set'
+[[ " ${precmd_functions-} " != *' _hpc_restore_session '* ]] ||
+  fail 'restore hook stayed registered after running'
+
+I3_RESURRECT_REMOTE_SESSION=zmx:shell
+expect_ssh_command 'restored zmx session' '~/.local/bin/zmx attach shell' _hpc_restore_session
+
+SSH_COMMANDS=()
+I3_RESURRECT_REMOTE_SESSION=bogus:dev
+_hpc_restore_session >| "$TEST_TMP/output" 2>&1
+(( ${#SSH_COMMANDS} == 0 )) || fail 'restore hook acted on an unknown session kind'
+
+print 'PASS: remote helpers report connection failures, act only on existing sessions, and reattach restored ones'

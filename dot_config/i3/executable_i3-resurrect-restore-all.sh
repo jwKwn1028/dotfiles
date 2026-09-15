@@ -18,9 +18,14 @@ PLACEHOLDER_WAIT_ATTEMPTS="${I3_RESURRECT_WAIT_ATTEMPTS:-48}"
 PLACEHOLDER_POLL_INTERVAL="${I3_RESURRECT_POLL_INTERVAL:-0.25}"
 WORKSPACES_FILE="$META_DIR/workspaces.txt"
 FOCUSED_FILE="$META_DIR/focused-workspace.txt"
+LABROUTE_FILE="$META_DIR/labroute.txt"
+GHOSTTY_SESSIONS_FILE="$META_DIR/ghostty-sessions.json"
+REMOTE_HELPERS="${I3_RESURRECT_REMOTE_HELPERS:-$HOME/.zsh/rc.d/50-remote.zsh}"
+LABROUTE_TIMEOUT="${I3_RESURRECT_LABROUTE_TIMEOUT:-45}"
 LAPTOP_OUTPUT="${I3_LAPTOP_OUTPUT:-eDP}"
 EXTERNAL_WORKSPACES="${I3_RESURRECT_EXTERNAL_WORKSPACES:-7 8 9 10}"
 POLYBAR_WAS_VISIBLE=0
+LABROUTE_ERROR=""
 
 notify() {
     if command -v notify-send >/dev/null 2>&1; then
@@ -162,6 +167,56 @@ wait_for_placeholders() {
     return 1
 }
 
+# Brings the saved lab route up before windows reattach; never turns it off.
+restore_labroute() {
+    local output
+    local status=0
+
+    [ "$(head -n 1 "$LABROUTE_FILE" 2>/dev/null)" = on ] || return 0
+
+    output="$(
+        timeout "$LABROUTE_TIMEOUT" zsh -fc 'source "$1" && labroute on' \
+            zsh "$REMOTE_HELPERS" 2>&1
+    )" || status="$?"
+    [ "$status" -ne 0 ] || return 0
+
+    if [ "$status" -eq 124 ]; then
+        LABROUTE_ERROR="labroute on timed out after ${LABROUTE_TIMEOUT}s"
+    else
+        LABROUTE_ERROR="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | tail -n 1)"
+        LABROUTE_ERROR="${LABROUTE_ERROR:-labroute on failed}"
+    fi
+    printf 'Lab route not restored: %s\n' "$LABROUTE_ERROR" >&2
+    return 1
+}
+
+# Saved sessions no restored window reattaches: other splits, unpaired windows.
+unattached_sessions() {
+    local workspace index kind name
+    local -a found=()
+
+    [ -s "$GHOSTTY_SESSIONS_FILE" ] || return 0
+    while IFS=$'\t' read -r workspace index kind name; do
+        grep -Fqx -- "$workspace" "$WORKSPACES_FILE" || continue
+        if [ "$index" = 0 ] && grep -Fq -- \
+            "I3_RESURRECT_REMOTE_SESSION=$kind:$name " \
+            "$(programs_file_for_workspace "$workspace")" 2>/dev/null; then
+            continue
+        fi
+        case "$kind" in
+            tmux) found+=("hpc $name") ;;
+            zmx) found+=("hpcz $name") ;;
+        esac
+    done < <(
+        jq -r '.[] | .workspace as $workspace | (.sessions // []) | to_entries[] |
+            [$workspace, .key, .value.kind, .value.name] | map(tostring) | @tsv' \
+            "$GHOSTTY_SESSIONS_FILE" 2>/dev/null
+    )
+
+    [ "${#found[@]}" -gt 0 ] || return 0
+    printf '%s\n' "${found[@]}" | awk '!seen[$0]++' | paste -sd ',' - | sed 's/,/, /g'
+}
+
 if [ "${1:-}" = "--check" ]; then
     command -v i3-msg >/dev/null
     command -v jq >/dev/null
@@ -187,6 +242,10 @@ if ! kill_existing_windows; then
 fi
 
 failed=0
+
+if ! restore_labroute; then
+    failed=1
+fi
 
 EXTERNAL_OUTPUT="$(active_external_output || true)"
 
@@ -224,9 +283,17 @@ if [ -s "$FOCUSED_FILE" ]; then
 fi
 
 if [ "$failed" -eq 0 ]; then
-    notify "Restore complete."
+    summary="Restore complete."
 else
-    notify "Restore finished with errors."
+    summary="Restore finished with errors."
 fi
+if [ -n "$LABROUTE_ERROR" ]; then
+    summary="$summary"$'\n'"Lab route not restored: $LABROUTE_ERROR"
+fi
+reattach="$(unattached_sessions || true)"
+if [ -n "$reattach" ]; then
+    summary="$summary"$'\n'"Reattach by hand: $reattach"
+fi
+notify "$summary"
 
 exit "$failed"

@@ -2,6 +2,19 @@
 [user]
 	email = {{ .email | quote }}
 	name = {{ .name | quote }}
+[init]
+	defaultBranch = main
+[fetch]
+	prune = true
+[merge]
+	conflictStyle = zdiff3
+[rerere]
+	enabled = true
+[diff]
+	algorithm = histogram
+	colorMoved = default
+[commit]
+	verbose = true
 [url "https://github.com/"]
 	insteadOf = git://github.com/
 [credential]
