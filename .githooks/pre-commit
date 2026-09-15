@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Blocks staged changes that carry machine-identifying info: chezmoi data
+# values, local denylist entries, literal home paths, private or Tailscale
+# addresses, and SSH files. Findings name the rule, never the matched value.
+
+set -euo pipefail
+
+denylist="${PRIVACY_GUARD_DENYLIST:-${XDG_CONFIG_HOME:-$HOME/.config}/chezmoi/denylist}"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+# key<TAB>value per line; awk drops generic keys and values under 4 chars.
+# shellcheck disable=SC2016  # $k/$v are Go template variables
+template='{{ range $k, $v := . }}{{ if kindIs "string" $v }}{{ $k }}{{ "\t" }}{{ $v }}{{ "\n" }}{{ end }}{{ end -}}
+username{{ "\t" }}{{ .chezmoi.username }}
+hostname{{ "\t" }}{{ .chezmoi.hostname }}
+fqdnHostname{{ "\t" }}{{ .chezmoi.fqdnHostname }}
+'
+# $HOME names the login user, so it is shown as ~ everywhere.
+if ! chezmoi execute-template "$template" >"$work/values" 2>"$work/err"; then
+    echo "pre-commit: cannot read private values from chezmoi data:" >&2
+    while IFS= read -r line; do echo "  ${line//"$HOME"/\~}"; done <"$work/err" >&2
+    echo "pre-commit: fix chezmoi, or bypass once with git commit --no-verify." >&2
+    exit 1
+fi
+
+# Pin output format against user diff config (prefixes, color, textconv).
+diff_cached() {
+    git -c core.quotePath=false diff --cached --no-color --no-ext-diff --no-textconv "$@"
+}
+diff_cached --name-only -z --diff-filter=ACR | tr '\0' '\n' >"$work/paths"
+diff_cached --numstat -z --no-renames --diff-filter=ACMR | tr '\0' '\n' \
+    | awk -F '\t' '$1 == "-" && $2 == "-" { print $3 }' >"$work/binary"
+
+diff_cached -U0 --text -M --src-prefix=a/ --dst-prefix=b/ --diff-filter=ACMR \
+    | tr '\0' ' ' \
+    | LC_ALL=C awk -v values="$work/values" -v denylist="$denylist" \
+        -v pathfile="$work/paths" -v binfile="$work/binary" '
+function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
+function add(k, v,   i) {
+    v = tolower(trim(v))
+    if (k in skipkey || length(v) < 4) return
+    for (i = 1; i <= nv; i++)
+        if (val[i] == v) { name[i] = name[i] "/" k; return }
+    nv++; val[nv] = v; name[nv] = k
+}
+function redact(s,   i, j, out, ls) {
+    for (i = 1; i <= nv; i++) {
+        out = ""; ls = tolower(s)
+        while ((j = index(ls, val[i])) > 0) {
+            out = out substr(s, 1, j - 1) "<" name[i] ">"
+            s = substr(s, j + length(val[i])); ls = substr(ls, j + length(val[i]))
+        }
+        s = out s
+    }
+    return s
+}
+function hit(p, n, msg) { print redact(p) (n == "" ? "" : ":" n) ": " msg }
+function exempted(i, p) { return (name[i] in exempt) && exempt[name[i]] == p }
+function home_path(s,   rest, user) {
+    rest = s
+    while (match(rest, /(^|[^A-Za-z0-9_$}).-])\/(home|Users)\/[A-Za-z_][A-Za-z0-9._-]*/)) {
+        user = substr(rest, RSTART, RLENGTH); sub(/.*\//, "", user)
+        if (!(tolower(user) in placeholder)) return 1
+        rest = substr(rest, RSTART + RLENGTH)
+    }
+    return 0
+}
+function check_path(p,   lp, i, base) {
+    lp = tolower(p)
+    for (i = 1; i <= nv; i++)
+        if (index(lp, val[i]) && !exempted(i, p))
+            hit(p, "", "file name has private value <" name[i] ">")
+    base = p; sub(/.*\//, "", base)
+    if ((p ~ /(^|\/)[a-z_]*(dot_ssh|\.ssh)\// && p != "private_dot_ssh/private_config.tmpl") \
+        || base ~ /(^|_)(id_(rsa|dsa|ecdsa|ed25519)|known_hosts|authorized_keys)/)
+        hit(p, "", "SSH file; only private_dot_ssh/private_config.tmpl is tracked")
+}
+function check_line(p, n, s,   ls, i) {
+    ls = tolower(s)
+    for (i = 1; i <= nv; i++)
+        if (index(ls, val[i]) && !exempted(i, p)) hit(p, n, "private value <" name[i] ">")
+    # Pattern rules skip binaries, third-party themes, and this hook with its fixtures.
+    if (p in binary || p ~ /^(dot_themes|\.githooks)\// || index(s, "privacy:allow")) return
+    if (home_path(s)) hit(p, n, "literal home directory path")
+    if (s ~ ipv4) hit(p, n, "private or Tailscale IPv4 address")
+    if (ls ~ /fd7a:115c:a1e0:/ || ls ~ /[a-z0-9-]\.ts\.net([^a-z0-9.-]|$)/)
+        hit(p, n, "Tailscale tailnet address or name")
+}
+BEGIN {
+    # Too generic to match: machine class, profile name, a date.
+    skipkey["class"] = 1; skipkey["desktopProfile"] = 1; skipkey["birthdayMonthDay"] = 1
+    exempt["name"] = "LICENSE"
+    split("user username you yourname me name example runner audit shared linuxbrew", w, " ")
+    for (i in w) placeholder[w[i]] = 1
+    o = "[0-9][0-9]?[0-9]?"
+    ipv4 = "(^|[^0-9.])(10\\." o "|172\\.(1[6-9]|2[0-9]|3[01])|192\\.168|100\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7]))\\." o "\\." o "([^0-9.]|\\.[^0-9]|\\.?$)"
+
+    while ((getline line < values) > 0)
+        if ((t = index(line, "\t")) > 0) add(substr(line, 1, t - 1), substr(line, t + 1))
+    ln = 0
+    while ((getline line < denylist) > 0) {
+        ln++; line = trim(line)
+        if (line != "" && line !~ /^#/) add("denylist:" ln, line)
+    }
+    while ((getline line < binfile) > 0) binary[line] = 1
+    while ((getline line < pathfile) > 0) check_path(line)
+}
+/^diff --git / { hunk = 0; path = ""; next }
+!hunk && /^\+\+\+ / {
+    path = substr($0, 5); sub(/\t$/, "", path)
+    if (path ~ /^".*"$/) path = substr(path, 2, length(path) - 2)
+    sub(/^b\//, "", path); next
+}
+/^@@ / {
+    hunk = 1; lineno = 0
+    if (match($0, /\+[0-9]+/)) lineno = substr($0, RSTART + 1, RLENGTH - 1) + 0
+    next
+}
+hunk && /^\+/ { check_line(path, lineno, substr($0, 2)); lineno++; next }
+hunk && /^ / { lineno++ }
+' >"$work/findings"
+
+if [ -s "$work/findings" ]; then
+    {
+        echo "pre-commit: staged changes carry private info:"
+        sed 's/^/  /' "$work/findings"
+        echo "Values are never printed; <key> marks where one sits in a path."
+        echo "Template private values through chezmoi data. For a false pattern"
+        echo "match, add privacy:allow to that line. Denylist: ${denylist/#"$HOME"/\~}"
+    } >&2
+    exit 1
+fi

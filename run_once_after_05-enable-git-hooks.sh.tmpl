@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Points the source repo at its tracked hooks, so a fresh clone gets the
+# .githooks/pre-commit privacy guard without a manual step.
+
+set -euo pipefail
+
+repo={{ .chezmoi.sourceDir | quote }}
+if ! command -v git >/dev/null 2>&1 || ! git -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Source directory is not a git checkout; skipping hook setup."
+    exit 0
+fi
+
+current="$(git -C "$repo" config --local --get core.hooksPath || true)"
+case "$current" in
+    .githooks) ;;
+    "")
+        git -C "$repo" config --local core.hooksPath .githooks
+        echo "==> Enabled repo hooks in .githooks"
+        ;;
+    *) echo "core.hooksPath is already '$current'; leaving it (repo hooks live in .githooks)." ;;
+esac
