@@ -12,11 +12,12 @@ HEL="$TEST_TMP/Default/Bookmarks"
 READY="$TEST_TMP/writer-ready"
 STOP="$TEST_TMP/writer-stop"
 WRITER_PID=
+LOCK_WRITER_PID=
 cleanup() {
     touch "$STOP" 2>/dev/null || true
-    if [ -n "$WRITER_PID" ]; then
-        wait "$WRITER_PID" 2>/dev/null || true
-    fi
+    for pid in "$WRITER_PID" "$LOCK_WRITER_PID"; do
+        [ -n "$pid" ] && wait "$pid" 2>/dev/null || true
+    done
     rm -rf -- "$TEST_TMP"
 }
 trap cleanup EXIT
@@ -104,7 +105,51 @@ exec 8>&-
     exit 1
 }
 
+# Zen keeps places.sqlite exclusively locked while it runs; the sync must fail
+# fast rather than retry the locked database forever.
+LOCKED="$TEST_TMP/locked.sqlite"
+LOCK_READY="$TEST_TMP/locked-ready"
+python3 - "$LOCKED" "$LOCK_READY" "$STOP" <<'PY' &
+import pathlib, sqlite3, sys, time
+
+db, ready, stop = map(pathlib.Path, sys.argv[1:])
+con = sqlite3.connect(db)
+con.execute("PRAGMA locking_mode=EXCLUSIVE")
+con.execute("PRAGMA journal_mode=WAL")
+con.execute("CREATE TABLE moz_places (id INTEGER PRIMARY KEY, url TEXT)")
+con.execute("""CREATE TABLE moz_bookmarks (
+    id INTEGER PRIMARY KEY, parent INTEGER, type INTEGER, title TEXT,
+    fk INTEGER, dateAdded INTEGER, lastModified INTEGER, position INTEGER
+)""")
+con.commit()
+con.execute("SELECT count(*) FROM moz_places").fetchone()  # take the lock
+ready.touch()
+while not stop.exists():
+    time.sleep(0.02)
+con.close()
+PY
+LOCK_WRITER_PID=$!
+for _ in $(seq 1 100); do
+    [ -e "$LOCK_READY" ] && break
+    sleep 0.02
+done
+[ -e "$LOCK_READY" ] || {
+    printf 'FAIL: exclusive-lock fixture did not become ready\n' >&2
+    exit 1
+}
+lock_start=$(date +%s)
+status=0
+env ZEN_PLACES="$LOCKED" HELIUM_BOOKMARKS="$HEL" KEEP_BACKUPS=1 ZEN_READ_TIMEOUT=2 \
+    bash "$SYNC" --force >/dev/null 2>"$TEST_TMP/locked-err" || status=$?
+lock_elapsed=$(( $(date +%s) - lock_start ))
+[ "$status" -ne 0 ] && [ "$lock_elapsed" -lt 30 ] && grep -Fq 'is locked' "$TEST_TMP/locked-err" || {
+    printf 'FAIL: locked Zen database did not fail fast (status=%s, %ss)\n' "$status" "$lock_elapsed" >&2
+    exit 1
+}
+
 touch "$STOP"
 wait "$WRITER_PID"
 WRITER_PID=
-printf 'PASS: bookmark sync uses a consistent WAL snapshot and serialized writes\n'
+wait "$LOCK_WRITER_PID"
+LOCK_WRITER_PID=
+printf 'PASS: bookmark sync snapshots WAL consistently, serializes writes, and fails fast when Zen holds the lock\n'

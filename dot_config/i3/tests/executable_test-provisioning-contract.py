@@ -85,6 +85,7 @@ class ProvisioningContractTests(unittest.TestCase):
         packages = set(data["packages"]["apt"]["i3_x11"])
         config = source_file("config")
         contracts = (
+            ("ghostty", config, "exec ghostty"),
             ("xfce4-terminal", config, "xfce4-terminal"),
             ("xfce4-settings", config, "xfsettingsd"),
             ("xfce4-power-manager", config, "xfce4-power-manager"),
@@ -97,6 +98,7 @@ class ProvisioningContractTests(unittest.TestCase):
             ("pulseaudio-utils", source_file("bar-nav.sh"), "pactl"),
             ("zenity", polybar_file("scripts/confirm-poweroff.sh"), "zenity"),
             ("xss-lock", config, "xss-lock"),
+            ("i3lock", source_file("lock.sh"), "exec i3lock -n"),
             ("unclutter-xfixes", config, "unclutter-xfixes"),
             ("policykit-1-gnome", config, "polkit-gnome-authentication-agent-1"),
         )
@@ -124,6 +126,21 @@ class ProvisioningContractTests(unittest.TestCase):
         installer_source = installer.read_text(encoding="utf-8")
         self.assertIn("range .packages.pipx.apps", installer_source)
         self.assertIn("pipx install {{ .package | quote }}", installer_source)
+
+    def test_i3lock_color_build_is_pinned(self) -> None:
+        manifest, data = self.manifest_data()
+        build = data["packages"]["source"]["i3lock_color"]
+        self.assertRegex(build["commit"], r"^[0-9a-f]{40}$")
+        self.assertIn(".c.", build["tag"], "lock.sh detects i3lock-color by '.c.' in its version")
+        self.assertIn("i3lock", data["packages"]["apt"]["i3_x11"], "apt i3lock ships /etc/pam.d/i3lock")
+        self.assertIn("*.c.*)", source_file("lock.sh").read_text(encoding="utf-8"))
+
+        installer = manifest.parent.parent / "run_once_after_95-build-i3lock-color.sh.tmpl"
+        self.assertTrue(installer.is_file(), f"missing i3lock-color installer: {installer}")
+        source = installer.read_text(encoding="utf-8")
+        self.assertIn(".packages.source.i3lock_color", source)
+        self.assertIn('"$actual" != "$commit"', source)
+        self.assertIn("--prefix=/usr/local", source)
 
     def test_helium_transient_deferrals_retry(self) -> None:
         manifest, _ = self.manifest_data()

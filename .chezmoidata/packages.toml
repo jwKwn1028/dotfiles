@@ -8,6 +8,10 @@ ppas = [
     "ppa:maveonair/helix-editor",   # helix editor
 ]
 
+ppas_i3_x11 = [
+    "ppa:mkasberg/ghostty-ubuntu",
+]
+
 # Installed on every machine (CLI / dev tooling).
 # NOTE: Debian ships `fd-find`->`fdfind` and `bat`->`batcat`; the shell configs
 # already alias these, so no extra symlinks are needed.
@@ -42,11 +46,12 @@ laptop = [
 i3_x11 = [
     "i3", "i3status", "polybar", "picom", "rofi", "dunst",
     "feh", "flameshot", "xdotool", "wmctrl", "xclip", "xsel",
+    "ghostty",
 # Direct i3/Polybar runtime dependencies.
     "xfce4-terminal", "xfce4-settings", "xfce4-power-manager", "xfce4-taskmanager",
     "gnome-keyring", "libnotify-bin", "policykit-1-gnome",
     "x11-utils", "x11-xserver-utils", "xinput", "pulseaudio-utils",
-    "zenity", "xss-lock", "unclutter-xfixes",
+    "zenity", "xss-lock", "i3lock", "unclutter-xfixes",
     "zathura", "zathura-pdf-poppler",
     "thunar", "thunar-archive-plugin", "thunar-media-tags-plugin", "thunar-volman",
     # ~/.local/bin/thunar shadows the XSETTINGS icon name onto Papirus-Dark;
@@ -68,8 +73,8 @@ i3_x11 = [
     # distro Python used by the i3 helpers.
     "python3-lz4",
     "gimp", "vlc", "mpv",
-    # Display manager + screen locker for a standalone i3 login session.
-    # Installing lightdm may prompt you to pick the default display manager.
+    # Display manager for a standalone i3 login session; i3lock above is the
+    # locker. Installing lightdm may prompt you to pick the default one.
     "lightdm", "lightdm-settings", "light-locker",
 ]
 
@@ -125,4 +130,17 @@ git = [
     { url = "https://github.com/Myriad-Dreamin/tinymist",        bin = "tinymist", package = "tinymist-cli" },
     # tdf terminal PDF viewer
     { url = "https://github.com/itsjunetime/tdf.git",            bin = "tdf" },
+]
+
+# Pinned source builds; run_once_after_95 installs each into /usr/local.
+[packages.source.i3lock_color]
+url = "https://github.com/Raymo111/i3lock-color.git"
+tag = "2.13.c.5"
+commit = "7b2badbb407ef5fce1eb338a98974ad5f70e226e"
+build_deps = [
+    "autoconf", "automake",
+    "libcairo2-dev", "libev-dev", "libfontconfig-dev", "libjpeg-dev", "libpam0g-dev",
+    "libxcb-composite0-dev", "libxcb-image0-dev", "libxcb-randr0-dev", "libxcb-util-dev",
+    "libxcb-xinerama0-dev", "libxcb-xkb-dev", "libxcb-xrm-dev",
+    "libxkbcommon-dev", "libxkbcommon-x11-dev",
 ]

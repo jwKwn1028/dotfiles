@@ -12,6 +12,9 @@
 #
 # Bars start hidden. Tray icons are foreign windows Polybar's cursor-click never
 # reaches, so tray-cursor.py paints them.
+#
+# The startup hide must also withdraw the dock i3 still holds, or the reload
+# leaves a bar-sized strip no window can use -- see the tail of this script.
 
 POLYBAR_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 POLYBAR_LAUNCH_LOCK="$POLYBAR_RUNTIME_DIR/polybar-launch.lock"
@@ -152,6 +155,23 @@ for _ in $(seq 1 25); do
     sleep 0.1
 done
 polybar-msg cmd hide >/dev/null 2>&1 || true
+
+# Bars come up visible, so i3 has already docked them and reserved their height
+# by the time the hide above lands. A hide that reaches an already-unmapped
+# window -- i3 unmaps the dock itself whenever the output holds a fullscreen
+# client -- emits no UnmapNotify, so i3 keeps the dock and the reservation
+# outlives the bar: every window on that output sits a bar-height down, under a
+# strip Polybar no longer paints. Reuse the withdrawal the toggle path runs, so
+# the two hide paths cannot drift.
+POLYBAR_COMMON_LIB="${POLYBAR_COMMON_LIB:-$HOME/.config/i3/_polybar-common.sh}"
+if [ -r "$POLYBAR_COMMON_LIB" ]; then
+    # shellcheck disable=SC2034  # the sourced library resolves its siblings from DIR
+    DIR="${POLYBAR_COMMON_LIB%/*}"
+    # shellcheck source=/dev/null
+    . "$POLYBAR_COMMON_LIB"
+    polybar_wait_for_state 0 "${POLYBAR_SETTLE_MS:-200}" >/dev/null || true
+    polybar_withdraw_orphan_docks || true
+fi
 
 pgrep -f 'polybar/scripts/tray-cursor.py' >/dev/null 2>&1 ||
     setsid -f "$HOME/.config/polybar/scripts/tray-cursor.py" >/dev/null 2>&1 9>&-

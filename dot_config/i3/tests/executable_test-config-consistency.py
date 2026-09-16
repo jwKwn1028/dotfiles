@@ -81,6 +81,17 @@ class ConfigConsistencyTests(unittest.TestCase):
         snap_common = SNAP_COMMON.read_text(encoding="utf-8")
         self.assertIn('limit="${2:-0}"', snap_common)
 
+    def test_process_guards_use_a_matchable_pgrep_pattern(self) -> None:
+        names = re.findall(r"pgrep -x ([A-Za-z0-9_.-]+)", self.i3_config)
+        self.assertTrue(names)
+        for name in names:
+            with self.subTest(name=name):
+                self.assertLessEqual(
+                    len(name),
+                    15,
+                    f"pgrep -x {name} can never match; use -f or -fx",
+                )
+
     def test_parallel_navigation_arrays_have_the_same_length(self) -> None:
         names = (
             "modules",
@@ -141,7 +152,7 @@ class ConfigConsistencyTests(unittest.TestCase):
             self.polybar,
             r"(?m)^menu-0-1-exec\s*=.*confirm-poweroff\.sh reboot$",
         )
-        self.assertRegex(self.polybar, r"(?m)^menu-0-2-exec\s*=\s*xflock4$")
+        self.assertRegex(self.polybar, r"(?m)^menu-0-2-exec\s*=\s*\$HOME/\.config/i3/lock\.sh$")
         self.assertRegex(
             self.polybar, r"(?m)^menu-0-3-exec\s*=\s*#powermenu\.open\.1$"
         )

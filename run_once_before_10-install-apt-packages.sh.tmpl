@@ -26,6 +26,11 @@ sudo apt-get install -y software-properties-common
 {{- range .packages.apt.ppas }}
 sudo add-apt-repository -y {{ . | quote }}
 {{- end }}
+{{- if and (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") }}
+{{- range .packages.apt.ppas_i3_x11 }}
+sudo add-apt-repository -y {{ . | quote }}
+{{- end }}
+{{- end }}
 sudo apt-get update -qq
 
 # --- common packages ---

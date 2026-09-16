@@ -98,6 +98,7 @@ run 'Dunst monitor selection tests' \
 run 'validated i3 restart tests' bash "$I3_ROOT/tests/test-i3-restart.sh"
 run 'session reload tests' bash "$I3_ROOT/tests/test-session-reload.sh"
 run 'window-mode tests' bash "$I3_ROOT/tests/test-window-mode.sh"
+run 'lock wrapper tests' bash "$I3_ROOT/tests/test-lock.sh"
 run 'resnap duplicate-mark tests' bash "$I3_ROOT/tests/test-resnap.sh"
 run 'Polybar launcher tests' bash "$POLYBAR_ROOT/tests/test-launch.sh"
 run 'power confirmation tests' \

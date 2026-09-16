@@ -28,8 +28,10 @@ bindsym $mod+t                exec --no-startup-id thunar
 bindsym $mod+p                exec --no-startup-id xfce4-display-settings --minimal
 bindsym XF86Display           exec --no-startup-id xfce4-display-settings --minimal
 bindsym $mod+Shift+p          exec --no-startup-id ~/.config/i3/display-setup.sh
+# Not provisioned: zed comes from its upstream installer in ~/.local/bin.
 bindsym Control+$mod+z        exec --no-startup-id zed
-# bindsym Control+$mod+l        exec --no-startup-id xflock4  # reserved for workspace nav
+# bindsym Control+$mod+l        exec --no-startup-id ~/.config/i3/lock.sh  # reserved for workspace nav
+bindsym --release $mod+Escape exec --no-startup-id ~/.config/i3/lock.sh
 bindsym Mod1+Shift+t          exec --no-startup-id ~/.config/ghostty/toggle-tabbar.sh
 # bindsym Control+$mod+h        exec --no-startup-id gtk-launch helium  # reserved for workspace nav
 bindsym Control+Shift+z       exec --no-startup-id /usr/bin/flatpak run app.zen_browser.zen
@@ -259,12 +261,13 @@ exec --no-startup-id xsetroot -cursor_name left_ptr
 exec_always --no-startup-id /usr/bin/flock -n /tmp/disable-trackpoint-middle-click.lock ~/.local/bin/disable-trackpoint-middle-click
 exec_always --no-startup-id ~/.local/bin/touchpad apply
 exec_always --no-startup-id sh -c 'pgrep -x xfsettingsd          >/dev/null || xfsettingsd &'
-exec_always --no-startup-id sh -c 'pgrep -x xfce4-power-manager >/dev/null || xfce4-power-manager &'
+exec_always --no-startup-id sh -c 'pgrep -fx xfce4-power-manager >/dev/null || xfce4-power-manager &'
 exec_always --no-startup-id sh -c 'pgrep -x picom               >/dev/null || picom -b'
 exec_always --no-startup-id sh -c 'pgrep -x nm-applet           >/dev/null || nm-applet &'
 exec_always --no-startup-id sh -c 'pgrep -x blueman-applet      >/dev/null || blueman-applet &'
 # After nm-applet for tray order; stays `exec` since launch.sh restarts it.
 exec --no-startup-id sh -c 'sleep 2; pgrep -x blueman-tray >/dev/null || blueman-tray &'
-exec_always --no-startup-id sh -c 'pgrep -x unclutter-xfixes    >/dev/null || unclutter-xfixes --timeout 3 &'
+exec_always --no-startup-id sh -c 'pgrep -f "^unclutter-xfixes " >/dev/null || unclutter-xfixes --timeout 3 &'
+# Not provisioned; install by hand to use it.
 exec --no-startup-id dropbox start -i
-exec_always --no-startup-id sh -c 'pgrep -x xss-lock >/dev/null || xss-lock -- xflock4 &'
+exec_always --no-startup-id sh -c 'pgrep -x xss-lock >/dev/null || xss-lock --transfer-sleep-lock -- ~/.config/i3/lock.sh &'

@@ -112,6 +112,19 @@ EOF
 
 chmod +x "$MOCK_BIN"/*
 
+# The launcher hands its startup hide to the i3 helpers; stub them so the test
+# never sources the live configuration, and so the calls are observable.
+cat >"$MOCK_STATE/polybar-common.sh" <<'EOF'
+polybar_wait_for_state() {
+    printf 'wait-hidden %s %s\n' "$1" "$2" >>"$POLYBAR_TEST_STATE_DIR/ipc-events"
+    printf '%s\n' "$1"
+}
+polybar_withdraw_orphan_docks() {
+    printf 'withdraw-docks %s\n' "$DIR" >>"$POLYBAR_TEST_STATE_DIR/ipc-events"
+}
+EOF
+export POLYBAR_COMMON_LIB="$MOCK_STATE/polybar-common.sh"
+
 # A transient RandR failure must not tear down the working bars or tray applet.
 : >"$MOCK_STATE/killall-events"
 : >"$MOCK_STATE/applet-events"
@@ -153,6 +166,14 @@ fi
     { printf 'FAIL: expected exactly two bar instances\n' >&2; exit 1; }
 grep -Fqx 'cmd hide' "$MOCK_STATE/ipc-events" ||
     { printf 'FAIL: startup visibility was not broadcast\n' >&2; exit 1; }
+# A hide onto an already-unmapped bar emits no UnmapNotify, so i3 keeps the dock
+# and reserves its height for a bar nothing paints -- every window on that output
+# then sits a bar-height down. The withdrawal has to follow the final hide.
+grep -Fq 'wait-hidden 0 ' "$MOCK_STATE/ipc-events" ||
+    { printf 'FAIL: the startup hide was not given time to reach X\n' >&2; exit 1; }
+[ "$(tail -n 1 "$MOCK_STATE/ipc-events")" = "withdraw-docks $MOCK_STATE" ] ||
+    { printf 'FAIL: the startup hide left i3 holding the bar dock\n' >&2
+      cat "$MOCK_STATE/ipc-events" >&2; exit 1; }
 grep -Fqx -- '-x blueman-tray' "$MOCK_STATE/applet-events" ||
     { printf 'FAIL: blueman-tray was not stopped before Polybar\n' >&2; exit 1; }
 grep -Fqx -- 'closed|-f blueman-tray' "$MOCK_STATE/applet-events" ||

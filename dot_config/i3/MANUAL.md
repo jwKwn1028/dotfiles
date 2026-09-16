@@ -75,7 +75,7 @@ Theme colors use a Tokyo Night style palette:
 `Ctrl+Alt+T` is intentionally left for XFCE, and `Super+D` is used for snap
 right instead of application launch. The old `Ctrl+Super+H` Helium and
 `Ctrl+Super+L` lock bindings are commented out to reserve those keys for
-numeric workspace navigation.
+numeric workspace navigation; `Super+Escape` locks the screen instead.
 
 ### Window Management
 
@@ -121,6 +121,7 @@ number keys.
 | `Super+Shift+C` | Reload i3 config. |
 | `Super+Shift+I` | Validate the config, then restart i3; refresh systemd user units, changed dunst config, Picom, displays, wallpaper, and Polybar; report one final result toast. |
 | `Super+Shift+E` | Show an `i3-nagbar` confirmation, then exit i3 if confirmed. |
+| `Super+Escape` on release | Lock the screen with `lock.sh`. |
 
 ### Workspaces
 
@@ -301,7 +302,9 @@ the menu collapses and the bar returns to whatever visibility it had before
 
 Shutdown and restart both pass through `confirm-poweroff.sh`. Only an explicit
 confirmation acts; a timeout or cancellation leaves the session alone. The
-lock entry uses `xflock4`, matching the idle lock started through `xss-lock`.
+lock entry runs `lock.sh`, the locker `xss-lock` also drives on idle.
+`lock.sh` styles i3lock-color when it is installed and otherwise falls back
+to stock `i3lock -n -c 292d3e`.
 
 ## XFWM-Style Snap System
 
@@ -1181,8 +1184,8 @@ Always on reload/restart:
 - Stop and restart `~/.local/bin/autotiling`.
 - Stop and restart `overflow-watcher.py`.
 - Start `top-edge-peek.py`; its runtime lock rejects duplicate instances.
-- Start `xss-lock -- xflock4` if it is not already running, so an i3 restart
-  revives a dead idle-lock daemon.
+- Start `xss-lock --transfer-sleep-lock -- lock.sh` if it is not
+  running, so an i3 restart revives a dead idle-lock daemon.
 - Start the polkit authentication agent
   (`/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1`) if no
   `polkit-gnome` process is already running.
@@ -1223,7 +1226,7 @@ Desktop integration:
 - `xfce4-power-manager`
 - `xfce4-display-settings`
 - `xfce4-taskmanager`
-- `xflock4`
+- `i3lock`
 - `xss-lock`
 - `gnome-keyring-daemon`
 - `picom`

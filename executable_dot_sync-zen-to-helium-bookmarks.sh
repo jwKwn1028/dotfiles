@@ -10,7 +10,8 @@
 # Usage: ./sync-zen-to-helium-bookmarks.sh [--dry-run] [--force]
 #   --force proceeds even if Helium is running (NOT recommended: Helium
 #   overwrites this file when it closes).
-# Env overrides: ZEN_PLACES, HELIUM_BOOKMARKS, KEEP_BACKUPS (default 5).
+# Env overrides: ZEN_PLACES, HELIUM_BOOKMARKS, KEEP_BACKUPS (default 5),
+#   ZEN_READ_TIMEOUT (default 10; seconds to wait for a locked Zen database).
 #
 set -euo pipefail
 
@@ -22,7 +23,7 @@ for arg in "$@"; do
     --dry-run) DRY_RUN=1 ;;
     --force)   FORCE=1 ;;
     -h|--help)
-      sed -n '2,24p' "$0"; exit 0 ;;
+      awk 'NR == 1 { next } /^#/ { print; next } { exit }' "$0"; exit 0 ;;
     *)
       echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
@@ -31,6 +32,14 @@ done
 case "$KEEP_BACKUPS" in
   ''|*[!0-9]*|0)
     printf 'error: KEEP_BACKUPS must be a positive integer\n' >&2
+    exit 2
+    ;;
+esac
+
+export ZEN_READ_TIMEOUT=${ZEN_READ_TIMEOUT:-10}
+case "$ZEN_READ_TIMEOUT" in
+  ''|*[!0-9]*)
+    printf 'error: ZEN_READ_TIMEOUT must be a nonnegative integer\n' >&2
     exit 2
     ;;
 esac
@@ -121,7 +130,7 @@ fi
 
 # --- Build the new Helium bookmark tree from Zen ----------------------------
 python3 - "$ZEN" "$HEL" "$DRY_RUN" <<'PY'
-import sys, os, json, sqlite3, uuid, hashlib, shutil, tempfile, urllib.parse
+import sys, os, json, sqlite3, time, uuid, hashlib, shutil, tempfile, urllib.parse
 
 zen_path, hel_path, dry = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 
@@ -140,9 +149,23 @@ source = snapshot = None
 try:
     snap = os.path.join(snapdir, "places.sqlite")
     quoted_path = urllib.parse.quote(os.path.abspath(zen_path), safe="/")
-    source = sqlite3.connect(f"file:{quoted_path}?mode=ro", uri=True, timeout=30)
+    # Zen holds places.sqlite exclusively while it runs, and backup() retries a
+    # locked database forever, so bound the wait.
+    wait = float(os.environ.get("ZEN_READ_TIMEOUT", "10"))
+    deadline = time.monotonic() + wait
+    def stop_if_locked(status, remaining, total):
+        if time.monotonic() > deadline:
+            raise TimeoutError
+
+    source = sqlite3.connect(f"file:{quoted_path}?mode=ro", uri=True, timeout=wait)
     snapshot = sqlite3.connect(snap)
-    source.backup(snapshot)
+    try:
+        source.backup(snapshot, progress=stop_if_locked)
+    except (TimeoutError, sqlite3.OperationalError) as exc:
+        if isinstance(exc, sqlite3.OperationalError) and "locked" not in str(exc):
+            raise
+        sys.exit("error: Zen's bookmarks database is locked -- Zen locks it while "
+                 "running. Close Zen and re-run.")
     source.close()
     source = None
     snapshot.row_factory = sqlite3.Row
