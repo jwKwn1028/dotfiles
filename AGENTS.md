@@ -8,7 +8,8 @@ Guidance for agents working in this repository. Canonical for every agent tool;
 The [chezmoi](https://chezmoi.io) **source directory** for this machine — not a
 normal project. It carries both configuration (dotfiles) and provisioning
 (`run_once_*` scripts that install the software those configs are for).
-Targets Linux Mint 22.3 / Ubuntu 24.04 with i3/X11. See `README.md`.
+Targets Linux Mint 22.3 / Ubuntu 24.04 with i3/X11. See `README.md` for what
+the repo is and `docs.md` for how to use it.
 
 ## Editing rules
 

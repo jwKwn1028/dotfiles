@@ -89,7 +89,7 @@ Blocking hazards still present:
   payload, `.config/pipewire/`, `.config/systemd/`, `.config/zathura/`, Linux
   browser chrome payloads, and the Linux VS Code target under `.config/Code/`.
 - `.chezmoidata/packages.toml` has no Darwin package section or Homebrew
-  provisioning, and `README.md` still documents Linux only.
+  provisioning, and `docs.md` still documents Linux only.
 - The current macOS shell installer calls Homebrew directly and can append to
   `~/.zshenv`, although that file is now managed and already contains the hook.
   Its dependencies and setup must be folded into the Darwin profile rather than

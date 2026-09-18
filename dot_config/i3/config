@@ -1,4 +1,4 @@
-# Pure i3 session: no xfce4-panel; xfsettingsd for theming, polybar for the bar.
+# Pure i3 session: xfsettingsd for theming, polybar for the bar.
 
 set $mod Mod4
 font pango:DejaVu Sans 10
@@ -6,7 +6,7 @@ focus_follows_mouse yes
 focus_wrapping no
 workspace_auto_back_and_forth yes
 
-# Keep the pixel value in sync with NEW in toggle-titles.sh.
+# Keep in sync with NEW in toggle-titles.sh.
 default_border pixel 1
 default_floating_border pixel 1
 hide_edge_borders smart
@@ -28,7 +28,7 @@ bindsym $mod+t                exec --no-startup-id thunar
 bindsym $mod+p                exec --no-startup-id xfce4-display-settings --minimal
 bindsym XF86Display           exec --no-startup-id xfce4-display-settings --minimal
 bindsym $mod+Shift+p          exec --no-startup-id ~/.config/i3/display-setup.sh
-# Not provisioned: zed comes from its upstream installer in ~/.local/bin.
+# Not provisioned: upstream installer, ~/.local/bin.
 bindsym Control+$mod+z        exec --no-startup-id zed
 # bindsym Control+$mod+l        exec --no-startup-id ~/.config/i3/lock.sh  # reserved for workspace nav
 bindsym --release $mod+Escape exec --no-startup-id ~/.config/i3/lock.sh
@@ -55,7 +55,7 @@ bindsym $mod+Up    focus up
 bindsym $mod+Right focus right
 bindsym $mod+Shift+m scratchpad show
 
-# No split bindings: autotiling picks the direction; tile-snap.sh splits directly.
+# No split bindings: autotiling picks the direction.
 bindsym $mod+Shift+space floating toggle
 bindsym $mod+Shift+n move position center
 
@@ -80,7 +80,7 @@ bindsym $mod+c exec --no-startup-id ~/.config/i3/tile-snap.sh dr
 bindsym --release $mod+u exec --no-startup-id ~/.config/i3/tile-snap.sh unsnap
 bindsym $mod+f fullscreen toggle
 
-# Sticky -- no `mode "default"` on the actions. The name is the Polybar label.
+# Sticky: no `mode "default"` on actions. The name is the Polybar label.
 set $mode_window hjkl / HJKL / Tab
 mode "$mode_window" {
     bindsym h move left
@@ -91,7 +91,7 @@ mode "$mode_window" {
     bindsym Shift+j resize grow   height 10 px or 10 ppt
     bindsym Shift+k resize shrink height 10 px or 10 ppt
     bindsym Shift+l resize grow   width  10 px or 10 ppt
-# The trailing focus is required; mouse_warping beats focus_follows_mouse.
+# Trailing focus required: mouse_warping beats focus_follows_mouse.
     bindsym Tab move container to output next; focus output next
     bindsym Return exec --no-startup-id ~/.config/i3/window-mode.sh close, mode "default"
     bindsym Escape exec --no-startup-id ~/.config/i3/window-mode.sh close, mode "default"
@@ -165,7 +165,7 @@ bindsym Control+Mod1+8 workspace $ws8
 bindsym Control+Mod1+9 workspace $ws9
 bindsym Control+Mod1+0 workspace $ws10
 
-# Keycodes, so a shifted number-row move does not depend on the layout.
+# Keycodes: layout-independent.
 bindcode $mod+Shift+10 exec --no-startup-id ~/.config/i3/workspace-action.sh move 1
 bindcode $mod+Shift+11 exec --no-startup-id ~/.config/i3/workspace-action.sh move 2
 bindcode $mod+Shift+12 exec --no-startup-id ~/.config/i3/workspace-action.sh move 3
@@ -177,7 +177,7 @@ bindcode $mod+Shift+17 exec --no-startup-id ~/.config/i3/workspace-action.sh mov
 bindcode $mod+Shift+18 exec --no-startup-id ~/.config/i3/workspace-action.sh move 9
 bindcode $mod+Shift+19 exec --no-startup-id ~/.config/i3/workspace-action.sh move 10
 
-# Super+X, then 1-0 for one workspace or Shift+K for every window.
+# Super+X, then 1-0 for one workspace or Shift+K for all.
 mode "kill workspace" {
     bindsym 1 [workspace=$ws1] kill, mode "default"
     bindsym 2 [workspace=$ws2] kill, mode "default"
@@ -219,7 +219,7 @@ bindsym Shift+$mod+s          exec --no-startup-id flameshot gui
 # --- bar: polybar ---
 bindsym $mod+Shift+b exec --no-startup-id ~/.config/i3/toggle-polybar-resnap.sh
 
-# The mode name is a literal single space so polybar renders no text.
+# Mode name is a literal space: polybar renders no text.
 bindsym $mod+b exec --no-startup-id ~/.config/i3/bar-nav.sh open, mode " "
 mode " " {
     bindsym h     exec --no-startup-id ~/.config/i3/bar-nav.sh prev
@@ -251,9 +251,9 @@ exec_always --no-startup-id sh -c 'pkill -f "bash .*/snap-watcher\.sh$"; setsid 
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/kakaotalk-float-watcher\.sh$"; setsid ~/.config/i3/kakaotalk-float-watcher.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/randr-hotplug\.sh$"; setsid ~/.config/i3/randr-hotplug.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/super-polybar-listener\.py$"; exec /usr/bin/python3 ~/.config/i3/super-polybar-listener.py'
-# Match an interpreter-led worker, not this `sh -c` launcher itself.
+# Match the interpreter-led worker, not this `sh -c` launcher.
 exec_always --no-startup-id sh -c 'pkill -f "^[^ ]*/python[^ ]* [^ ]*/autotiling( |$)"; exec ~/.local/bin/autotiling'
-# -d until the idle-tiling bug is caught; pkill pattern omits `$` to match args.
+# -d until the idle-tiling bug is caught; no `$` so args match.
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/overflow-watcher\.py"; exec /usr/bin/python3 ~/.config/i3/overflow-watcher.py -d'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/top-edge-peek\.py$"; exec /usr/bin/python3 ~/.config/i3/top-edge-peek.py'
 exec --no-startup-id xrdb -merge ~/.Xresources
@@ -265,9 +265,9 @@ exec_always --no-startup-id sh -c 'pgrep -fx xfce4-power-manager >/dev/null || x
 exec_always --no-startup-id sh -c 'pgrep -x picom               >/dev/null || picom -b'
 exec_always --no-startup-id sh -c 'pgrep -x nm-applet           >/dev/null || nm-applet &'
 exec_always --no-startup-id sh -c 'pgrep -x blueman-applet      >/dev/null || blueman-applet &'
-# After nm-applet for tray order; stays `exec` since launch.sh restarts it.
+# After nm-applet for tray order; `exec` since launch.sh restarts it.
 exec --no-startup-id sh -c 'sleep 2; pgrep -x blueman-tray >/dev/null || blueman-tray &'
 exec_always --no-startup-id sh -c 'pgrep -f "^unclutter-xfixes " >/dev/null || unclutter-xfixes --timeout 3 &'
-# Not provisioned; install by hand to use it.
+# Not provisioned.
 exec --no-startup-id dropbox start -i
 exec_always --no-startup-id sh -c 'pgrep -x xss-lock >/dev/null || xss-lock --transfer-sleep-lock -- ~/.config/i3/lock.sh &'

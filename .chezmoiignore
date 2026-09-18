@@ -17,6 +17,7 @@
 # Repo docs, not dotfiles: without this, `chezmoi apply` writes them to ~/ and
 # litters $HOME. The leading slash anchors to $HOME so a nested README.md applies.
 /README.md
+/docs.md
 /X11_TO_WAYLAND_TRANSITION.md
 /MACOS_PORTING_GUIDE.md
 /CHEZMOI_UPDATE_WORKFLOW.md
