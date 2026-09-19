@@ -1,0 +1,74 @@
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" -}}{{- $class = .class -}}{{- end -}}
+{{- $desktopProfile := "none" -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{-     $desktopProfile = "linuxmint-i3-x11" -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey . "desktopProfile" -}}{{- $desktopProfile = .desktopProfile -}}{{- end -}}
+{{- if and (eq .chezmoi.os "linux") (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
+{{- $girara := .packages.source.girara -}}
+{{- $zathura := .packages.source.zathura -}}
+{{- $poppler := .packages.source.zathura_pdf_poppler -}}
+#!/usr/bin/env bash
+# Builds the pinned girara, zathura, and PDF plugin into ~/.local.
+set -euo pipefail
+
+prefix="$HOME/.local"
+multiarch=$(gcc -print-multiarch)
+libdir="$prefix/lib/$multiarch"
+
+installed=$("$prefix/bin/zathura" --version 2>/dev/null || true)
+has() { grep -qxF "$1" <<<"$installed"; }
+if has "zathura {{ $zathura.tag }}" &&
+    has "girara {{ $girara.tag }} (runtime: {{ $girara.tag }})" &&
+    has "(plugin) pdf-poppler ({{ $poppler.tag }}) ($libdir/zathura/libpdf-poppler.so)"; then
+    echo "  zathura {{ $zathura.tag }} already installed; skipping"
+    exit 0
+fi
+
+echo "==> building zathura {{ $zathura.tag }} (sudo may prompt for your password)"
+sudo apt-get update -qq
+sudo apt-get install -y --no-install-recommends \
+{{- range concat $girara.build_deps $zathura.build_deps $poppler.build_deps | uniq }}
+    {{ . }} \
+{{- end }}
+    ;
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# Point zathura's bash and fish completion dirs into the prefix, not /usr.
+mkdir "$work/pc"
+printf 'completionsdir=%s\nName: bash-completion\nDescription: user-local\nVersion: 0\n' \
+    "$prefix/share/bash-completion/completions" >"$work/pc/bash-completion.pc"
+printf 'completionsdir=%s\nName: fish\nDescription: user-local\nVersion: 0\n' \
+    "$prefix/share/fish/vendor_completions.d" >"$work/pc/fish.pc"
+export PKG_CONFIG_PATH="$libdir/pkgconfig:$work/pc${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+
+build() {
+    local name=$1 url=$2 tag=$3 commit=$4 actual
+    shift 4
+    git clone --quiet --depth 1 --branch "$tag" "$url" "$work/$name"
+    actual=$(git -C "$work/$name" rev-parse HEAD)
+    if [ "$actual" != "$commit" ]; then
+        echo "error: $name $tag resolves to $actual, not the pinned $commit" >&2
+        exit 1
+    fi
+    # nofallback: fail rather than build a subprojects/*.wrap, which tracks develop.
+    meson setup "$work/$name/build" "$work/$name" \
+        --prefix="$prefix" --libdir="lib/$multiarch" --buildtype=release \
+        --wrap-mode=nofallback -Dc_link_args="-Wl,-rpath,$libdir" "$@"
+    meson compile -C "$work/$name/build"
+    meson install -C "$work/$name/build"
+}
+
+build girara {{ $girara.url | quote }} {{ $girara.tag | quote }} {{ $girara.commit | quote }} \
+    -Dtests=disabled -Ddocs=disabled -Djson=enabled
+build zathura {{ $zathura.url | quote }} {{ $zathura.tag | quote }} {{ $zathura.commit | quote }} \
+    -Dtests=disabled -Dconvert-icon=disabled -Dsynctex=enabled -Dseccomp=enabled -Dlandlock=enabled
+build zathura-pdf-poppler {{ $poppler.url | quote }} {{ $poppler.tag | quote }} {{ $poppler.commit | quote }}
+
+echo "==> zathura {{ $zathura.tag }} installed to $prefix/bin/zathura"
+{{- end }}

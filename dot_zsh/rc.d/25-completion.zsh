@@ -2,6 +2,8 @@
 # Completion
 # --------------------------------------------------------
 # Note: the (#q...) glob below needs EXTENDED_GLOB (set in 00-options).
+# Completions installed by user-local builds (e.g. zathura in ~/.local).
+[[ -d "$HOME/.local/share/zsh/site-functions" ]] && fpath=("$HOME/.local/share/zsh/site-functions" $fpath)
 autoload -Uz compinit
 
 _compdump="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/zcompdump"

@@ -20,28 +20,32 @@ trap 'rm -rf -- "$TEST_TMP"' EXIT
 
 PDF_FILE="$TEST_TMP/report with spaces.pdf"
 EPUB_FILE="$TEST_TMP/book with spaces.epub"
+PNG_FILE="$TEST_TMP/photo with spaces.png"
 OPEN_LOG="$TEST_TMP/open.log"
 CONTROL_LOG="$TEST_TMP/control.log"
 SESSION_OUTPUT="$TEST_TMP/session-output.log"
 : >| "$PDF_FILE"
 : >| "$EPUB_FILE"
+: >| "$PNG_FILE"
 
 typeset -r SESSION_PROGRAM='
-_have() { return 0; }
+_have() { [[ " $MISSING " != *" $1 "* ]]; }
 _zsh_ls_files() { print -r -- "$PICK_FILE"; }
 fzf() { cat; return "$FZF_STATUS"; }
 
 _log_viewer() {
-  local viewer=$1 arg
+  local record="viewer=$1" arg
   shift
-  print -r -- "viewer=$viewer" >> "$OPEN_LOG"
   for arg in "$@"; do
-    print -r -- "arg=<$arg>" >> "$OPEN_LOG"
+    record+=" arg=<$arg>"
   done
+  print -r -- "$record" >> "$OPEN_LOG"
 }
 sioyek() { _log_viewer sioyek "$@"; }
 zathura() { _log_viewer zathura "$@"; }
 ebook-viewer() { _log_viewer ebook-viewer "$@"; }
+feh() { _log_viewer feh "$@"; }
+xviewer() { _log_viewer xviewer "$@"; }
 
 source "$OPENERS_FILE"
 
@@ -74,6 +78,7 @@ run_session() {
       RUN_MODE="$mode" \
       PICK_FILE="$file" \
       FZF_STATUS="$fzf_status" \
+      MISSING="${MISSING:-}" \
       OPEN_LOG="$OPEN_LOG" \
       CONTROL_LOG="$CONTROL_LOG" \
       zsh -f -ic "$SESSION_PROGRAM" </dev/null \
@@ -129,13 +134,18 @@ expect_cancel_stays_open() {
 expect_picked_closes so sioyek "$PDF_FILE"
 expect_picked_closes zo zathura "$PDF_FILE"
 expect_picked_closes bo ebook-viewer "$EPUB_FILE"
+expect_picked_closes io xviewer "$PNG_FILE"
+MISSING=xviewer expect_picked_closes io feh "$PNG_FILE"
 
 expect_direct_stays_open so sioyek "$PDF_FILE"
 expect_direct_stays_open zo zathura "$PDF_FILE"
 expect_direct_stays_open bo ebook-viewer "$EPUB_FILE"
+expect_direct_stays_open io xviewer "$PNG_FILE"
+MISSING=xviewer expect_direct_stays_open io feh "$PNG_FILE"
 
 expect_cancel_stays_open so "$PDF_FILE"
 expect_cancel_stays_open zo "$PDF_FILE"
 expect_cancel_stays_open bo "$EPUB_FILE"
+expect_cancel_stays_open io "$PNG_FILE"
 
 print 'PASS: Zsh GUI pickers close only their successful interactive surface'

@@ -105,6 +105,47 @@ bo() {
   return "$launch_status"
 }
 
+# --- Image picker ---
+# io prefers xviewer, falling back to feh. One file opens inside its directory
+# so arrow keys walk its siblings; several open as a set.
+io() {
+  emulate -L zsh
+  local viewer v
+  local -i picked=0
+  local -a files exts=(png jpg jpeg gif webp bmp tif tiff svg)
+
+  for v in xviewer feh; do
+    _have "$v" && { viewer="$v"; break; }
+  done
+  [[ -n "$viewer" ]] || { print -u2 "io: neither xviewer nor feh installed"; return 127; }
+
+  if (( $# )); then
+    files=("$@")
+  else
+    _have fzf || { print -u2 "io: fzf not found"; return 127; }
+    files=(${(f)"$(_zsh_ls_files $exts | fzf --multi --prompt='Open image> ')"}) || return
+    (( $#files )) || return 1
+    picked=1
+  fi
+  for v in $files; do
+    [[ -f "$v" ]] || { print -u2 "io: '$v' not found"; return 1; }
+  done
+
+  case "$viewer" in
+    feh)
+      local -a opts=(--scale-down --auto-zoom --version-sort)
+      if (( $#files == 1 )); then
+        feh $opts --start-at "${files[1]:a}" -- "${files[1]:a:h}" >/dev/null 2>&1 &!
+      else
+        feh $opts -- "${files[@]}" >/dev/null 2>&1 &!
+      fi ;;
+    xviewer) xviewer "${files[@]}" >/dev/null 2>&1 &! ;;
+  esac
+  local launch_status=$?
+  (( launch_status == 0 && picked )) && _zsh_close_after_open_pick
+  return "$launch_status"
+}
+
 # --- File manager ---
 # Bare `thunar` opens $PWD, detached. `command` keeps the ~/.local/bin/thunar
 # GTK_THEME wrapper in play; .desktop and systemd launches never see this.

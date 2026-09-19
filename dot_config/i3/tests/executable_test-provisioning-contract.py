@@ -142,6 +142,31 @@ class ProvisioningContractTests(unittest.TestCase):
         self.assertIn('"$actual" != "$commit"', source)
         self.assertIn("--prefix=/usr/local", source)
 
+    def test_zathura_build_is_pinned(self) -> None:
+        manifest, data = self.manifest_data()
+        root = manifest.parent.parent
+        components = ("girara", "zathura", "zathura_pdf_poppler")
+        for name in components:
+            with self.subTest(component=name):
+                self.assertRegex(data["packages"]["source"][name]["commit"], r"^[0-9a-f]{40}$")
+        for package in ("zathura", "zathura-pdf-poppler"):
+            self.assertNotIn(package, data["packages"]["apt"]["i3_x11"], "apt would add a second zathura")
+
+        installer = root / "run_once_after_96-build-zathura.sh.tmpl"
+        self.assertTrue(installer.is_file(), f"missing zathura installer: {installer}")
+        source = installer.read_text(encoding="utf-8")
+        for name in components:
+            self.assertIn(f".packages.source.{name}", source)
+        self.assertIn('"$actual" != "$commit"', source)
+        self.assertIn('prefix="$HOME/.local"', source)
+
+        forward_search = (root / "dot_local/bin/executable_hx-fwd-search").read_text(encoding="utf-8")
+        self.assertIn("--synctex-forward", forward_search)
+        self.assertIn("-Dsynctex=enabled", source)
+
+        completion = (root / "dot_zsh/rc.d/25-completion.zsh").read_text(encoding="utf-8")
+        self.assertIn('"$HOME/.local/share/zsh/site-functions"', completion)
+
     def test_helium_transient_deferrals_retry(self) -> None:
         manifest, _ = self.manifest_data()
         template = manifest.parent.parent / "run_onchange_after_70-configure-helium-profile.sh.tmpl"
