@@ -26,7 +26,8 @@ filesystem, and `--one-file-system` prevents crossing a nested mount. `/opt`,
 `/boot`, caches, logs, and all of `/var/lib` are deliberately omitted: on this
 machine they are mostly reinstallable application payloads, transient data, or
 live databases that need application-aware dumps. Add an exact path to
-`RESTIC_SYSTEM_PATHS` in the chezmoi config if it contains irreplaceable data.
+`RESTIC_SYSTEM_PATHS` with `chezmoi edit ~/.config/restic/config.sh` if it
+contains irreplaceable data.
 
 ## One-time setup
 

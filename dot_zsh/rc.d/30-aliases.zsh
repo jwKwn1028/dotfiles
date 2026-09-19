@@ -19,7 +19,7 @@ btop () {
   command btop "$@"
   xdotool key --clearmodifiers ctrl+0
 }
-unalias hz 2>/dev/null
+unalias hz 2>/dev/null || true
 hz() {   # edit zsh config in the chezmoi source; files differing from live open directly
   emulate -L zsh
   local line target src
@@ -49,7 +49,7 @@ hz() {   # edit zsh config in the chezmoi source; files differing from live open
     print "\nhz: not applied"
   fi
 }
-unalias sz 2>/dev/null
+unalias sz 2>/dev/null || true
 sz() {   # full restart (no double-wrapped ZLE widgets); shows config changes first
   emulate -L zsh
   local f old new old_label new_label
@@ -92,7 +92,7 @@ alias ':qa'='xdotool key --clearmodifiers alt+F4'
 if _have fdfind; then
   alias fd='fdfind'
 fi
-unalias scpo poweroff 2>/dev/null
+unalias scpo poweroff 2>/dev/null || true
 poweroff() {
   local host reply
 

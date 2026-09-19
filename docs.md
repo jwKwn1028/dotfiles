@@ -41,8 +41,10 @@ export PATH="$HOME/.local/bin:$PATH"
 chezmoi init 'https://github.com/OWNER/REPOSITORY.git'
 ```
 
-The bootstrap prompts for Git identity and the optional `MM-DD` birthday banner
-value; those answers live only in `~/.config/chezmoi/chezmoi.toml`.
+The bootstrap prompts for Git identity, machine class and desktop profile, SSH
+and Tailscale endpoints, the screenshot directory, and the optional `MM-DD`
+birthday banner value; those answers live only in
+`~/.config/chezmoi/chezmoi.toml`.
 
 ### 3. Review
 
@@ -59,14 +61,20 @@ Run `chezmoi apply -v` in an interactive terminal. In order:
 1. `run_once_before_10-install-apt-packages`: install apt sets from
    `.chezmoidata/packages.toml`, write and clone files from
    `.chezmoiexternal.toml`.
-2. `run_once_after_20`: install Flathub apps.
-3. `run_once_after_30`: install profile-specific pipx apps, rustup, cargo
+2. `run_once_after_05`: point the source repo's Git hooks at `.githooks`.
+3. `run_once_after_20`: install Flathub apps.
+4. `run_once_after_30`: install profile-specific pipx apps, rustup, cargo
    crates, Starship, zoxide, and Miniconda.
-4. `run_once_after_40`: add zsh to `/etc/shells` and run `chsh` (password
+5. `run_once_after_40`: add zsh to `/etc/shells` and run `chsh` (password
    prompt).
-5. `run_once_after_50`: install fonts in `~/.local/share/fonts`.
-6. `run_onchange_after_60/62/65/70`: configure browser/Thunderbird profiles.
-7. `run_after_90/91`: install X11 keyboard/TrackPoint/TLP configuration.
+6. `run_once_after_50`: install fonts in `~/.local/share/fonts`.
+7. `run_onchange_after_60/62/65/70`: configure browser/Thunderbird profiles.
+8. `run_after_90/91`: install X11 keyboard/TrackPoint/TLP configuration.
+9. `run_onchange_after_92`: create the Flameshot screenshot directory.
+10. `run_after_93`: install the logind lid-switch drop-in.
+11. `run_once_after_95/96`: build pinned i3lock-color into `/usr/local` and
+    zathura into `~/.local` from source; both install build dependencies with
+    sudo.
 
 ### 5. Start i3
 
@@ -80,6 +88,9 @@ Log out, select **i3** in LightDM, and log back in.
   cannot read the sqlite data targeted by `dot_taskrc`. Then switch on
   reminders: `systemctl --user daemon-reload && systemctl --user enable --now
 task-notify.timer`. See `~/.config/task/MANUAL.md`.
+- **npm:** install NodeSource's `nodejs`, which bundles npm; apt's `npm`
+  conflicts with it, so the manifest installs `nodejs` alone. `~/.npmrc` puts
+  global packages in `~/.local/npm-global`.
 - **i3-resurrect:** `pipx install i3-resurrect`; helpers expect
   `~/.local/bin/i3-resurrect`.
 - **Optional scientific software:** `.zshenv` adds it to PATH when present;

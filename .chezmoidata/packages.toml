@@ -25,7 +25,7 @@ common = [
     "bat", "btop", "htop", "fastfetch",
     "fd-find", "fzf", "ripgrep", "jq", "tree",
     "unzip", "zip", "7zip", "p7zip-full", "bzip2", "gzip",
-    "nodejs", "npm", "pipx",
+    "nodejs", "pipx",
     "ranger",
     # Host half of the browserpass integration below; must not drift from it.
     "pass",

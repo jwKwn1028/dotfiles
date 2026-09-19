@@ -16,7 +16,6 @@ macOS is audit-only: never run `chezmoi apply` or a provisioning script there.
 - [docs.md](docs.md) — daily commands, full desktop recovery, macOS boundary
 - [MACOS_PORTING_GUIDE.md](MACOS_PORTING_GUIDE.md) — macOS port contract
 - [X11_TO_WAYLAND_TRANSITION.md](X11_TO_WAYLAND_TRANSITION.md) — Sway plan
-- [CHEZMOI_UPDATE_WORKFLOW.md](CHEZMOI_UPDATE_WORKFLOW.md) — upstream updates
 - [AGENTS.md](AGENTS.md) — working rules for agents and contributors
 
 ## License
