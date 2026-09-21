@@ -1,0 +1,182 @@
+{{- $settingsPath := joinPath .chezmoi.homeDir ".config" "zed" "settings.json" -}}
+{{- $localSettings := dict -}}
+{{- if stat $settingsPath -}}
+{{- $localSettings = include $settingsPath | fromJsonc -}}
+{{- end -}}
+{
+  "helix_mode": true,
+  "base_keymap": "VSCode",
+  "vim": {
+    "toggle_relative_line_numbers": false,
+    "use_system_clipboard": "never",
+    "cursor_shape": {
+      "normal": "block",
+      "insert": "bar",
+      "visual": "underline",
+    },
+  },
+  "relative_line_numbers": "enabled",
+  "cursor_blink": false,
+  "current_line_highlight": "all",
+  "gutter": {
+    "min_line_number_digits": 2,
+    "line_numbers": true,
+  },
+  "which_key": {
+    "enabled": true,
+    "delay_ms": 500,
+  },
+  "inlay_hints": {
+    "enabled": true,
+    "show_background": true,
+  },
+
+  "buffer_font_family": "JuliaMono",
+  "buffer_font_size": 8.9,
+  "buffer_line_height": { "custom": 1.35 },
+  "buffer_font_fallbacks": ["Ubuntu Mono"],
+  "ui_font_size": 10,
+  "unstable.ui_density": "compact",
+  "terminal": {
+    "shell": "system",
+    "font_family": "JuliaMono",
+    "font_size": 14,
+    "button": false,
+  },
+
+  "soft_wrap": "editor_width",
+  "preferred_line_length": 100,
+  "languages": {
+    "Markdown": { "soft_wrap": "bounded", "preferred_line_length": 100 },
+    "LaTeX": { "soft_wrap": "bounded", "preferred_line_length": 100 },
+    "Typst": { "soft_wrap": "bounded", "preferred_line_length": 100 },
+    "Plain Text": { "soft_wrap": "bounded", "preferred_line_length": 100 },
+  },
+  "format_on_save": "off",
+
+  "status_bar": {
+    "experimental.show": true,
+    "show_active_file": true,
+    "active_language_button": true,
+    "cursor_position_button": true,
+    "line_endings_button": false,
+    "active_encoding_button": "non_utf8",
+    "pending_keystrokes_indicator": true,
+  },
+  "line_indicator_format": "short",
+  "profiles": {
+    "No status bar": {
+      "settings": {
+        "status_bar": { "experimental.show": false },
+      },
+    },
+  },
+  "diagnostics": {
+    "button": true,
+    "include_warnings": true,
+  },
+  "global_lsp_settings": { "button": true },
+  "show_call_status_icon": false,
+  "search": { "button": false },
+  "outline_panel": { "dock": "left", "button": false },
+  "collaboration_panel": { "dock": "left", "button": false },
+  "git_panel": { "dock": "left", "button": false },
+  "project_panel": {
+    "default_width": 160.0,
+    "dock": "right",
+    "button": false,
+  },
+  "tab_bar": { "show": false },
+  "minimap": { "show": "never" },
+  "scrollbar": { "show": "never" },
+
+  "auto_install_extensions": {
+    "tokyo-night": true,
+    "html": true,
+  },
+  "icon_theme": "Colored Zed Icons Theme Dark",
+  "theme": {
+    "mode": "dark",
+    "light": "One Light",
+    "dark": "Tokyo Night Storm",
+  },
+  "theme_overrides": {
+    "Tokyo Night Storm": {
+      "background": "#292d3e",
+      "editor.background": "#292d3e",
+      "editor.gutter.background": "#292d3e",
+      "editor.subheader.background": "#292d3e",
+      "terminal.background": "#292d3e",
+      "editor.foreground": "#c0caf5",
+      "terminal.foreground": "#c0caf5",
+      "text": "#c0caf5",
+      "text.muted": "#a9b1d6",
+      "editor.active_line.background": "#363d5c",
+      "editor.line_number": "#737aa2",
+      "editor.active_line_number": "#7dcfff",
+      "hint": "#1abc9c",
+      "hint.background": "#233745",
+      "surface.background": "#1f2335",
+      "elevated_surface.background": "#1f2335",
+      "panel.background": "#1f2335",
+      "status_bar.background": "#1f2335",
+      "element.selected": "#343a55",
+      "element.active": "#2e3c64",
+      "border": "#1d202f",
+      "border.focused": "#29a4bd",
+      "vim.normal.background": "#7aa2f7",
+      "vim.normal.foreground": "#292d3e",
+      "vim.helix_normal.background": "#7aa2f7",
+      "vim.helix_normal.foreground": "#292d3e",
+      "vim.insert.background": "#9ece6a",
+      "vim.insert.foreground": "#292d3e",
+      "vim.helix_select.background": "#bb9af7",
+      "vim.helix_select.foreground": "#292d3e",
+      "vim.visual.background": "#bb9af7",
+      "vim.visual.foreground": "#292d3e",
+      "players": [
+        {
+          "cursor": "#c0caf5",
+          "background": "#c0caf5",
+          "selection": "#3d59a1",
+        },
+      ],
+      "syntax": {
+        "comment": { "color": "#565f89", "font_style": "italic" },
+        "comment.doc": { "color": "#e0af68" },
+        "comment.documentation": { "color": "#e0af68" },
+        "function": { "color": "#7aa2f7", "font_style": "italic" },
+        "function.call": { "color": "#7aa2f7", "font_style": "italic" },
+        "function.method": { "color": "#7aa2f7", "font_style": "italic" },
+        "function.method.call": { "color": "#7aa2f7", "font_style": "italic" },
+        "keyword": { "color": "#9d7cd8", "font_style": "italic" },
+        "keyword.return": { "color": "#9d7cd8", "font_style": "italic" },
+        "keyword.conditional": { "color": "#bb9af7" },
+        "keyword.repeat": { "color": "#bb9af7" },
+        "keyword.exception": { "color": "#bb9af7" },
+        "keyword.function": { "color": "#bb9af7" },
+        "keyword.operator": { "color": "#bb9af7" },
+        "keyword.import": { "color": "#7dcfff" },
+        "keyword.directive": { "color": "#7dcfff" },
+      },
+    },
+  },
+
+  "proxy": "",
+  "cli_default_open_behavior": "existing_window",
+  "auto_update": true,
+  "restore_on_startup": "empty_tab",
+  "session": { "trust_all_worktrees": true },
+  "telemetry": { "diagnostics": true, "metrics": false },
+  "disable_ai": true,
+  "edit_predictions": { "mode": "subtle" },
+  "agent": {
+    "dock": "right",
+    "button": false,
+    "favorite_models": [],
+    "model_parameters": [],
+  },
+{{- if hasKey $localSettings "context_servers" }}
+  "context_servers": {{ index $localSettings "context_servers" | toPrettyJson | indent 2 | trim }},
+{{- end }}
+}

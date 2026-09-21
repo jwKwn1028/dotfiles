@@ -28,17 +28,20 @@
     "context": "VimControl && vim_mode == helix_normal && !menu",
     "bindings": {
       "enter": ["workspace::SendKeystrokes", "o escape"],
+      "shift-v": ["workspace::SendKeystrokes", "\" + shift-p"],
     },
   },
   {
     "context": "(vim_mode == helix_normal || vim_mode == helix_select) && !menu",
     "bindings": {
-      "shift-v": "editor::Paste"
+      "space p": ["workspace::SendKeystrokes", "\" + shift-p"],
+      "space shift-p": ["workspace::SendKeystrokes", "\" + p"],
     },
   },
   {
     "context": "vim_mode == helix_select && !menu",
     "bindings": {
+      "shift-v": "editor::Paste",
       "tab": "vim::Indent",
       "shift-tab": "vim::Outdent"
     },
@@ -70,6 +73,13 @@
     "context": "Workspace",
     "bindings": {
       "ctrl-t ctrl-p": "terminal_panel::Toggle"
+    }
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "ctrl-t ctrl-s": ["workspace::SendKeystrokes", "ctrl-t ctrl-shift-s down enter"],
+      "ctrl-t ctrl-shift-s": "settings_profile_selector::Toggle"
     }
   },
   {

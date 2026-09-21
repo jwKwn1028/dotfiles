@@ -44,6 +44,7 @@ if _have fzf; then
     --height 60%
     --layout=reverse
     --border
+    --cycle
     --preview 'sh -c \"${prev_cmd//$'\n'/ }\"'"
   }
 fi

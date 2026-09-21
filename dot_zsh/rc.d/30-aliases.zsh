@@ -1,5 +1,6 @@
 # --- Aliases ---
 alias twt='taskwarrior-tui'
+alias tcal='task-calendar'
 alias v='vim .'
 alias c='code .'
 alias h='hx .'
