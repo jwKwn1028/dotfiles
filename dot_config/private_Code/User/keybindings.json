@@ -8,7 +8,7 @@
 //     extension.helixKeymap.insertMode / normalMode / visualMode / selectMode
 //
 //   Chord prefixes are kept off keys Helix uses in normal mode (Ctrl-f/b/d/u/w
-//   etc.) so Helix scrolling/navigation keeps working. See KEYBINDINGS.md.
+//   etc.) so Helix scrolling/navigation keeps working.
 [
     // ---- Workbench / window ----
     {
@@ -18,6 +18,30 @@
     {
         "key": "shift+alt+s",
         "command": "workbench.action.toggleStatusbarVisibility"
+    },
+    {
+        "key": "shift shift",
+        "command": "workbench.action.quickOpen"
+    },
+    {
+        "key": "ctrl+h ctrl+m",
+        "command": "extension.helixKeymap.enterDisabledMode",
+        "when": "editorTextFocus && !extension.helixKeymap.insertMode && !extension.helixKeymap.disabledMode"
+    },
+    {
+        "key": "ctrl+h ctrl+m",
+        "command": "extension.helixKeymap.enableHelix",
+        "when": "editorTextFocus && extension.helixKeymap.disabledMode"
+    },
+    {
+        "key": "shift+h",
+        "command": "workbench.action.previousEditor",
+        "when": "editorTextFocus && (extension.helixKeymap.normalMode || extension.helixKeymap.visualMode)"
+    },
+    {
+        "key": "shift+l",
+        "command": "workbench.action.nextEditor",
+        "when": "editorTextFocus && (extension.helixKeymap.normalMode || extension.helixKeymap.visualMode)"
     },
     {
         "key": "ctrl+alt+z",
@@ -68,7 +92,7 @@
         "command": "-workbench.action.focusRightGroup"
     },
 
-    // ---- Zed-style ctrl+t toggles (docks / terminal / markdown bold) ----
+    // ---- Zed-style ctrl+t toggles (docks / terminal / status bar / markdown bold) ----
     {
         "key": "ctrl+t ctrl+l",
         "command": "workbench.action.toggleSidebarVisibility"
@@ -80,6 +104,10 @@
     {
         "key": "ctrl+t ctrl+p",
         "command": "workbench.action.terminal.toggleTerminal"
+    },
+    {
+        "key": "ctrl+t ctrl+s",
+        "command": "workbench.action.toggleStatusbarVisibility"
     },
     {
         "key": "ctrl+t ctrl+b",

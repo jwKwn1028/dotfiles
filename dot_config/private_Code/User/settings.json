@@ -17,7 +17,6 @@
     "markdown.extension.list.indentationSize": "inherit",
     "editor.cursorSmoothCaretAnimation": "on",
     "editor.wordWrap": "on",
-    "workbench.iconTheme": "material-icon-theme",
     "markdown-preview-enhanced.previewTheme": "one-light.css",
     "markdown-preview-enhanced.codeBlockTheme": "pen-paper-coffee.css",
     "markdown-preview-enhanced.enablePreviewZenMode": true,
@@ -49,6 +48,13 @@
     "terminal.integrated.defaultProfile.linux": "zsh",
     "workbench.sideBar.location": "right",
     "editor.minimap.enabled": false,
+    "editor.scrollbar.vertical": "hidden",
+    "editor.scrollbar.horizontal": "hidden",
+    "editor.overviewRulerLanes": 0,
+    "[markdown][latex][typst][plaintext]": {
+        "editor.wordWrap": "bounded",
+        "editor.wordWrapColumn": 100
+    },
     "workbench.colorTheme": "Palenight Italic",
     "window.openFoldersInNewWindow": "off",
     "terminal.integrated.initialHint": false,
@@ -56,9 +62,11 @@
     "chat.viewSessions.enabled": false,
     "chat.viewWelcome.enabled": false,
     // JuliaMono, matching ghostty/rofi.
-    "terminal.integrated.fontSize": 14,
-    "editor.fontSize": 10,
-    "editor.fontFamily": "'JuliaMono', monospace",
+    "terminal.integrated.fontSize": 13.35,
+    "terminal.integrated.lineHeight": 1.35,
+    "editor.fontSize": 13.35,
+    "editor.lineHeight": 1.35,
+    "editor.fontFamily": "'JuliaMono', 'Ubuntu Mono', monospace",
     "terminal.integrated.fontFamily": "'JuliaMono', 'Hack Nerd Font Mono'",
     "editor.fontLigatures": true,
     "explorer.fileNesting.patterns": {
