@@ -165,14 +165,20 @@ _bash_ls_files() {
 # --- Aliases ---
 alias twt='taskwarrior-tui'
 alias v='vim .'
-alias c='code .'
 alias h='hx .'
-alias z='zed .'
 alias vi='vim'
 alias mo='micro'
 alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 [ "$_bash_bat" = batcat ] && alias bat='batcat'
 [ "$_bash_fd" = fdfind ] && alias fd='fdfind'
+unalias c z 2>/dev/null
+_open_gui_editor() {
+  command "$1" . || return
+  [[ $- == *i* && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]] && exit 0
+  return 0
+}
+c() { _open_gui_editor code; }
+z() { _open_gui_editor zed; }
 alias ':q'='exit'
 alias ':qa'='xdotool key --clearmodifiers alt+F4'
 alias hb='${EDITOR:-hx} ~/.bashrc'

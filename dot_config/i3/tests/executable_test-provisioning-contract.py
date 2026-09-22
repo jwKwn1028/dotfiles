@@ -198,8 +198,8 @@ class ProvisioningContractTests(unittest.TestCase):
         self.assertIn("!private_dot_codex/modify_private_config.toml", gitignore)
 
         chezmoiignore = (source_root / ".chezmoiignore").read_text(encoding="utf-8")
-        self.assertIn("!/.claude/settings.json", chezmoiignore)
-        self.assertIn("!/.codex/config.toml", chezmoiignore)
+        self.assertIn("!.claude/settings.json", chezmoiignore)
+        self.assertIn("!.codex/config.toml", chezmoiignore)
 
 
 if __name__ == "__main__":

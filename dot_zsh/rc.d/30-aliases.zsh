@@ -2,13 +2,20 @@
 alias twt='taskwarrior-tui'
 alias tcal='task-calendar'
 alias v='vim .'
-alias c='code .'
 alias h='hx .'
-alias z='zed .'
 alias vi='vim'
 alias mo='micro'
 alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 (( $+commands[batcat] )) && alias bat='batcat'
+unalias c z 2>/dev/null || true
+_open_gui_editor() {
+  emulate -L zsh
+  command "$1" . || return
+  [[ -o interactive && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]] && exit 0
+  return 0
+}
+c() { _open_gui_editor code }
+z() { _open_gui_editor zed }
 btop () {
   emulate -L zsh
   if [[ $TERM_PROGRAM != ghostty ]] || (( ! $+commands[xdotool] )); then

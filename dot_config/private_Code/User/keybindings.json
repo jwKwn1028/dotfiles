@@ -197,10 +197,13 @@
         "when": "editorTextFocus && (extension.helixKeymap.visualMode || extension.helixKeymap.selectMode)"
     },
 
-    // ==== Zed: ctrl+q -> quit, only in normal/select (mirrors Zed's "VimControl && !menu" guard) ====
+    // ==== Zed: ctrl+q -> close focused window globally ====
     {
         "key": "ctrl+q",
-        "command": "workbench.action.quit",
-        "when": "editorTextFocus && (extension.helixKeymap.normalMode || extension.helixKeymap.visualMode)"
+        "command": "-workbench.action.quit"
+    },
+    {
+        "key": "ctrl+q",
+        "command": "workbench.action.closeWindow"
     }
 ]

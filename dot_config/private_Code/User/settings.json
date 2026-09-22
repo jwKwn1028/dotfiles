@@ -43,7 +43,6 @@
     "[github-actions-workflow]": {
         "editor.defaultFormatter": "redhat.vscode-yaml"
     },
-    "workbench.statusBar.visible": false,
     "python.defaultInterpreterPath": "/usr/bin/python3",
     "terminal.integrated.defaultProfile.linux": "zsh",
     "workbench.sideBar.location": "right",
@@ -56,7 +55,7 @@
         "editor.wordWrapColumn": 100
     },
     "workbench.colorTheme": "Palenight Italic",
-    "window.openFoldersInNewWindow": "off",
+    "window.openFoldersInNewWindow": "on",
     "terminal.integrated.initialHint": false,
     "chat.viewTitle.enabled": false,
     "chat.viewSessions.enabled": false,
@@ -110,5 +109,6 @@
             "icon": "terminal-powershell"
         }
     },
-    "claudeCode.preferredLocation": "panel"
+    "claudeCode.preferredLocation": "panel",
+    "workbench.iconTheme": "material-icon-theme"
 }
