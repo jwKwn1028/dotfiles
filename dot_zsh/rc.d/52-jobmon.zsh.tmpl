@@ -1,0 +1,8 @@
+# Canonical jobmon helpers live in the application repository. Host and source
+# directory remain overridable for a shell session or a different checkout.
+typeset -g HPC_JOBMON_HOST=${HPC_JOBMON_HOST:-{{ .sshHpcHost | quote }}}
+typeset -g HPC_JOBMON_TOOLS_DIR=${HPC_JOBMON_TOOLS_DIR:-$HOME/Applications/remote-tools}
+
+if [[ -r "$HPC_JOBMON_TOOLS_DIR/shell/jobmon.zsh" ]]; then
+  source "$HPC_JOBMON_TOOLS_DIR/shell/jobmon.zsh"
+fi

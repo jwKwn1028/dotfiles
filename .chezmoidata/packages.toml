@@ -14,7 +14,7 @@ ppas_i3_x11 = [
 
 # Installed on every machine (CLI / dev tooling).
 # NOTE: Debian ships `fd-find`->`fdfind` and `bat`->`batcat`; the shell configs
-# already alias these, so no extra symlinks are needed.
+# alias both. `~/.local/bin/fd` also links `fdfind`, since Yazi runs `fd` directly.
 common = [
     "git", "git-lfs", "curl", "wget", "netcat-openbsd",
     "restic", "openssl",
@@ -104,11 +104,13 @@ apps = [
 # Provisioning skips a crate whose `bin` is already on PATH.
 
 # `cargo install --locked <crate>` from crates.io. eza = modern ls; the rest are
-# Helix LSPs / formatters plus utilities. yazi-fm/yazi-cli provide `yazi`.
+# Helix LSPs / formatters plus utilities. yazi-fm/yazi-cli provide `yazi`;
+# resvg renders its SVG previews.
 registry = [
     { crate = "eza",           bin = "eza" },
     { crate = "yazi-fm",       bin = "yazi" },
     { crate = "yazi-cli",      bin = "ya" },
+    { crate = "resvg",         bin = "resvg" },
     { crate = "dprint",        bin = "dprint" },
     { crate = "taplo-cli",     bin = "taplo" },
     { crate = "typstyle",      bin = "typstyle" },

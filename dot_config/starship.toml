@@ -1,4 +1,5 @@
 format = """
+${env_var.YAZI_LEVEL}\
 $os\
 $directory\
 $git_branch\
@@ -36,6 +37,11 @@ truncation_symbol = "…/"
 # 4. Configure Git (Purple)
 [git_branch]
 style = "bold purple"
+
+# Set inside shells spawned by Yazi (`!`); exit to return instead of nesting.
+[env_var.YAZI_LEVEL]
+style = "bold yellow"
+format = "[󰇥 yazi]($style) "
 
 # 5. Add the Time (Yellow, on the right side)
 [time]

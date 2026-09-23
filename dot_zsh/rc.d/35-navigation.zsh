@@ -88,13 +88,17 @@ y() {
 
   command yazi "$@" --cwd-file="$tmp"
   rc=$?
-  if (( rc == 0 )); then
+  if (( rc == 0 || rc == 10 )); then
     cwd="$(<"$tmp")"
     if [[ -n "$cwd" && "$cwd" != "$PWD" ]]; then
       builtin cd -- "$cwd" || rc=$?
     fi
   fi
   rm -f -- "$tmp"
+  if (( rc == 10 )); then
+    _close_gui_terminal
+    return 0
+  fi
   return $rc
 }
 alias yp='y "$HOME/Documents/Workspace/Project"'

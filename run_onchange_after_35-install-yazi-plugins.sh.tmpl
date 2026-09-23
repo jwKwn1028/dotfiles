@@ -1,0 +1,14 @@
+#!/bin/sh
+# Installs the Yazi plugins locked in ~/.config/yazi/package.toml.
+# Re-runs when the lockfile changes, or once `ya` first shows up on PATH.
+# package.toml: {{ include "dot_config/yazi/package.toml" | sha256sum }}
+# ya: {{ if lookPath "ya" }}present{{ else }}missing{{ end }}
+set -eu
+
+if ! command -v ya >/dev/null 2>&1; then
+    echo "ya not installed; skipping Yazi plugins."
+    exit 0
+fi
+
+echo "==> Yazi plugins"
+ya pkg install || echo "WARN: ya pkg install failed; rerun it by hand."

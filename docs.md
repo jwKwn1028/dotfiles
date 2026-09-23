@@ -65,14 +65,16 @@ Run `chezmoi apply -v` in an interactive terminal. In order:
 3. `run_once_after_20`: install Flathub apps.
 4. `run_once_after_30`: install profile-specific pipx apps, rustup, cargo
    crates, Starship, zoxide, and Miniconda.
-5. `run_once_after_40`: add zsh to `/etc/shells` and run `chsh` (password
+5. `run_onchange_after_35`: install the Yazi plugins locked in
+   `dot_config/yazi/package.toml`; re-runs once `ya` is on PATH.
+6. `run_once_after_40`: add zsh to `/etc/shells` and run `chsh` (password
    prompt).
-6. `run_once_after_50`: install fonts in `~/.local/share/fonts`.
-7. `run_onchange_after_60/62/65/70`: configure browser/Thunderbird profiles.
-8. `run_after_90/91`: install X11 keyboard/TrackPoint/TLP configuration.
-9. `run_onchange_after_92`: create the Flameshot screenshot directory.
-10. `run_after_93`: install the logind lid-switch drop-in.
-11. `run_once_after_95/96`: build pinned i3lock-color into `/usr/local` and
+7. `run_once_after_50`: install fonts in `~/.local/share/fonts`.
+8. `run_onchange_after_60/62/65/70`: configure browser/Thunderbird profiles.
+9. `run_after_90/91`: install X11 keyboard/TrackPoint/TLP configuration.
+10. `run_onchange_after_92`: create the Flameshot screenshot directory.
+11. `run_after_93`: install the logind lid-switch drop-in.
+12. `run_once_after_95/96`: build pinned i3lock-color into `/usr/local` and
     zathura into `~/.local` from source; both install build dependencies with
     sudo.
 

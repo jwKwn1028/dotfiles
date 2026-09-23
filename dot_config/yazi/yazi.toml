@@ -1,5 +1,13 @@
 [mgr]
 ratio = [1, 1, 2]
+sort_by = "natural"
+linemode = "size"
+scrolloff = 8
+
+[preview]
+max_width = 1000
+max_height = 1200
+image_delay = 0
 
 [opener]
 pdf = [
@@ -8,11 +16,44 @@ pdf = [
 micro = [
 	{ run = 'micro %s', desc = "Micro", block = true, for = "unix" },
 ]
+zed = [
+	{ run = 'zed %s', desc = "Zed", orphan = true, for = "unix" },
+]
+feh = [
+	{ run = 'feh --scale-down --auto-zoom %s', desc = "feh", orphan = true, for = "linux" },
+]
 
 [[open.prepend_rules]]
 mime = "application/pdf"
 use = "pdf"
 
 [[open.prepend_rules]]
-url = "*.txt"
-use = "micro"
+url = "local://*.txt"
+use = [ "micro", "zed" ]
+
+# Zed and feh only add entries to the O menu; the first opener is still the default.
+[[open.prepend_rules]]
+mime = "folder/*"
+use = [ "edit", "open", "zed", "reveal" ]
+
+[[open.prepend_rules]]
+mime = "text/*"
+use = [ "edit", "zed", "reveal" ]
+
+[[open.prepend_rules]]
+mime = "application/{json,ndjson,javascript}"
+use = [ "edit", "zed", "reveal" ]
+
+[[open.prepend_rules]]
+mime = "image/*"
+use = [ "open", "feh", "reveal" ]
+
+[[plugin.prepend_fetchers]]
+url = "*"
+run = "git"
+group = "git"
+
+[[plugin.prepend_fetchers]]
+url = "*/"
+run = "git"
+group = "git"

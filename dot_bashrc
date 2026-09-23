@@ -172,10 +172,13 @@ alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 [ "$_bash_bat" = batcat ] && alias bat='batcat'
 [ "$_bash_fd" = fdfind ] && alias fd='fdfind'
 unalias c z 2>/dev/null
-_open_gui_editor() {
-  command "$1" . || return
+_close_gui_terminal() {
   [[ $- == *i* && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]] && exit 0
   return 0
+}
+_open_gui_editor() {
+  command "$1" . || return
+  _close_gui_terminal
 }
 c() { _open_gui_editor code; }
 z() { _open_gui_editor zed; }
@@ -327,13 +330,17 @@ y() {
 
   command yazi "$@" --cwd-file="$tmp"
   rc=$?
-  if (( rc == 0 )); then
+  if (( rc == 0 || rc == 10 )); then
     cwd="$(<"$tmp")"
     if [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
       builtin cd -- "$cwd" || rc=$?
     fi
   fi
   rm -f -- "$tmp"
+  if (( rc == 10 )); then
+    _close_gui_terminal
+    return 0
+  fi
   return "$rc"
 }
 alias yp='y "$HOME/Documents/Workspace/Project"'
