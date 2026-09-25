@@ -9,8 +9,6 @@
     <property name="brightness-switch-restore-on-exit" type="int" value="1"/>
     <property name="brightness-switch" type="int" value="0"/>
     <property name="sleep-button-action" type="uint" value="3"/>
-    <!-- logind owns the lid (run_after_93-install-logind-lid-config.sh.tmpl).
-         lid-action-on-* stay unset: they apply only if this flips false. -->
     <property name="logind-handle-lid-switch" type="bool" value="true"/>
     <property name="brightness-on-battery" type="uint" value="9"/>
     <property name="blank-on-battery" type="int" value="0"/>

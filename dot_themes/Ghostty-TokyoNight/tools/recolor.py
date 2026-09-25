@@ -41,8 +41,8 @@ def to_hls(rgb):
     r, g, b = (c / 255.0 for c in rgb)
     return colorsys.rgb_to_hls(r, g, b)
 
-def from_hls(h, l, s):
-    r, g, b = colorsys.hls_to_rgb(h, max(0.0, min(1.0, l)), max(0.0, min(1.0, s)))
+def from_hls(h, lum, s):
+    r, g, b = colorsys.hls_to_rgb(h, max(0.0, min(1.0, lum)), max(0.0, min(1.0, s)))
     return (round(r * 255), round(g * 255), round(b * 255))
 
 NEUTRAL_RAMP = [
@@ -58,13 +58,13 @@ NEUTRAL_RAMP = [
     (1.00, FG),
 ]
 
-def ramp(l):
+def ramp(lum):
     pts = NEUTRAL_RAMP
-    if l <= pts[0][0]:
+    if lum <= pts[0][0]:
         return pts[0][1]
     for (l0, c0), (l1, c1) in zip(pts, pts[1:]):
-        if l <= l1:
-            t = (l - l0) / (l1 - l0) if l1 > l0 else 0.0
+        if lum <= l1:
+            t = (lum - l0) / (l1 - l0) if l1 > l0 else 0.0
             return tuple(round(c0[i] + (c1[i] - c0[i]) * t) for i in range(3))
     return pts[-1][1]
 
@@ -77,16 +77,16 @@ FAMILIES = [
 ]
 
 def recolor(rgb):
-    h, l, s = to_hls(rgb)
+    h, lum, s = to_hls(rgb)
     if s < 0.10:                       # neutral gray -> TokyoNight neutral
-        return ramp(l)
+        return ramp(lum)
     deg = h * 360.0
     for center, tol, target in FAMILIES:
         d = abs((deg - center + 180) % 360 - 180)
         if d <= tol:
             th, tl, ts = to_hls(target)
-            return from_hls(th, l * 0.75 + tl * 0.25, ts * 0.85 + s * 0.15)
-    return ramp(l)                     # anything else -> neutral
+            return from_hls(th, lum * 0.75 + tl * 0.25, ts * 0.85 + s * 0.15)
+    return ramp(lum)                   # anything else -> neutral
 
 HARD = {
     "#353535": hexs(BG),       # theme_bg_color

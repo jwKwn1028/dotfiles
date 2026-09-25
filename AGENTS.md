@@ -30,6 +30,8 @@ before creating files with a new prefix.
 - Drift in `chezmoi status` is normal, not a defect list: several targets are
   rewritten live by the tools that own them. Reconcile only what the task asks
   for, and never let a broad `apply` sweep up unrelated drift.
+- When changing documented user-facing behavior, update the affected guide in
+  the same change. Keep examples generic and follow the privacy rules below.
 - **Never commit machine-identifying values** — this repo is public. Secrets,
   usernames, hostnames, IPs, SSH host aliases, institution or lab names, and
   literal `/home/...` paths. An alias identifies a machine as surely as its
@@ -111,3 +113,15 @@ config is the risky step, so verify with `chezmoi diff` / `chezmoi status` /
 `chezmoi apply --dry-run`. Check Bash/POSIX scripts with `shellcheck` and
 `bash -n`, Zsh with `zsh -n`.
 `chezmoi execute-template < file.tmpl` renders a template without applying it.
+
+`chezmoi diff` and `chezmoi status` never prompt. `chezmoi apply --dry-run`
+does: on a target rewritten live it asks whether to overwrite, and with no TTY
+it dies on EOF instead of reporting. Pass `--force` to answer for it, and scope
+it to what the task touched:
+
+    chezmoi apply --dry-run --force ~/.config/i3
+
+`--dry-run` makes no modifications and `--force` only suppresses the prompt, so
+together they are safe. **`--force` without `--dry-run` is not**: it overwrites
+every live-rewritten target without asking, which is exactly the drift this file
+says to leave alone. `--no-tty` does not help -- it still prompts, then fails.

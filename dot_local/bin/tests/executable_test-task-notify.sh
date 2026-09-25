@@ -55,6 +55,8 @@ expect_count() {
 expect_match() { grep -Fq -- "$1" "$LOG" || fail "$2"; }
 expect_no_match() { grep -Fq -- "$1" "$LOG" && fail "$2"; return 0; }
 
+due_label_re='due ([A-Za-z]{3} )?[0-9]{2}:[0-9]{2}'
+
 # --- windowing, and the two exclusions ------------------------------------
 reset
 fixture <<EOF
@@ -297,7 +299,7 @@ expect_match 'due with offsets' 'an explicit remind: did not arm a due-only task
 expect_no_match 'due without offsets' 'a due date reminded without an explicit remind:'
 expect_no_match 'due already past' 'a due date already past reminded'
 expect_no_match 'due at midnight' 'a date-only due reminded'
-grep -Eq 'due [0-9]{2}:[0-9]{2}' "$LOG" ||
+grep -Eq "$due_label_re" "$LOG" ||
     fail 'a due-based body did not label the time it announces'
 
 reset
@@ -309,7 +311,7 @@ expect_count 1 'a task with both fields reminded more than once'
 grep -Fq 'scheduled ' "$STATE/notified" ||
     fail 'the state key does not name the field it fired on'
 grep -Fq -- '-- both fields' "$LOG" || fail 'the reminder did not fire at all'
-! grep -Eq 'due [0-9]{2}:[0-9]{2}' "$LOG" ||
+! grep -Eq "$due_label_re" "$LOG" ||
     fail 'due won over scheduled on a task carrying both'
 
 # Unusable remind: values still opt due-only tasks into the default lead.

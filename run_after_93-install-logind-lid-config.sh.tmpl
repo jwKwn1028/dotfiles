@@ -52,6 +52,11 @@ fi
 # A handle-lid-switch inhibitor always wins over this drop-in, and
 # xfce4-power-manager takes one the moment it stops deferring to logind. That
 # swap is silent, so surface it here.
+#
+# The deferral itself is seeded by xfce4-power-manager.xml, which sets
+# logind-handle-lid-switch=true and leaves lid-action-on-* unset: those only
+# apply if the deferral flips false. That note cannot live in the XML -- xfconf
+# rewrites the file and strips comments, which reads as permanent chezmoi drift.
 if command -v xfconf-query >/dev/null 2>&1 &&
     defer=$(xfconf-query -c xfce4-power-manager \
         -p /xfce4-power-manager/logind-handle-lid-switch 2>/dev/null) &&

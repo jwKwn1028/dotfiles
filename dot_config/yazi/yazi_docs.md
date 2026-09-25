@@ -1,11 +1,13 @@
 # Yazi Manual
 
 How the Yazi setup in `~/.config/yazi` works and how to use it day to day.
-Written for Yazi 26.9.1 in Ghostty on i3/X11. Everything here is managed by
-chezmoi: edit the files under `dot_config/yazi/` in the source repo, not in
-`~/.config/yazi`.
+Written for Yazi 26.9.1 in Ghostty on i3/X11. The tracked configuration is
+managed by chezmoi: edit the files under `dot_config/yazi/` in the source repo,
+not in `~/.config/yazi`. Plugins installed by `ya pkg` are separate.
 
 Press `~` (or `F1`) inside Yazi at any time for the live list of bindings.
+The [Helix guide](../helix/docs.md) covers its `Ctrl-y` Yazi picker, and the
+[Micro guide](../micro/docs.md) covers that editor's keys when Yazi opens it.
 
 ## Contents
 

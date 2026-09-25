@@ -4,6 +4,11 @@ Operating manual for this chezmoi source directory: daily commands, full
 recovery of a Linux i3 desktop, and the macOS boundary. See
 [`README.md`](README.md) for what the repo is.
 
+The [README documentation index](README.md#documentation) links the
+application guides. This public source uses generic examples: keep real SSH
+endpoints, account names, machine names, private project paths, and backup
+contents in local configuration or local state, not in these guides.
+
 ## Day-to-day
 
 ```sh
@@ -51,8 +56,11 @@ birthday banner value; those answers live only in
 ```sh
 chezmoi status
 chezmoi diff | less
-chezmoi apply --dry-run --verbose | less
+chezmoi apply --dry-run --force --verbose | less
 ```
+
+In this preview, `--force` only suppresses overwrite prompts. Keep it paired
+with `--dry-run`; a live `chezmoi apply --force` would overwrite drift.
 
 ### 4. Apply
 

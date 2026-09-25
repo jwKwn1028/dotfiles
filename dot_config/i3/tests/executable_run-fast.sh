@@ -78,6 +78,8 @@ run 'Super listener unit tests' \
     /usr/bin/python3 "$I3_ROOT/tests/test-super-polybar-listener.py"
 run 'top-edge peek unit tests' \
     /usr/bin/python3 "$I3_ROOT/tests/test-top-edge-peek.py"
+run 'zen URL state unit tests' \
+    /usr/bin/python3 "$I3_ROOT/tests/test-zen-url-state.py"
 run 'config consistency tests' \
     env I3_POLYBAR_CONFIG="$POLYBAR_ROOT/config.ini" \
     /usr/bin/python3 "$I3_ROOT/tests/test-config-consistency.py"
@@ -100,6 +102,8 @@ run 'session reload tests' bash "$I3_ROOT/tests/test-session-reload.sh"
 run 'window-mode tests' bash "$I3_ROOT/tests/test-window-mode.sh"
 run 'lock wrapper tests' bash "$I3_ROOT/tests/test-lock.sh"
 run 'resnap duplicate-mark tests' bash "$I3_ROOT/tests/test-resnap.sh"
+run 'tile-snap geometry tests' bash "$I3_ROOT/tests/test-tile-snap.sh"
+run 'snap watcher tests' bash "$I3_ROOT/tests/test-snap-watcher.sh"
 run 'Polybar launcher tests' bash "$POLYBAR_ROOT/tests/test-launch.sh"
 run 'power confirmation tests' \
     bash "$POLYBAR_ROOT/tests/test-confirm-poweroff.sh"

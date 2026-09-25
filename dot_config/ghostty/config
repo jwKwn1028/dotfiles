@@ -72,6 +72,9 @@ keybind = ctrl+tab=goto_split:next
 keybind = alt+shift+h=previous_tab
 keybind = alt+shift+l=next_tab
 
+keybind = ctrl+alt+k=scroll_page_lines:-5
+keybind = ctrl+alt+j=scroll_page_lines:5
+
 scrollbar = never
 # No "120x36" popup on every i3 resize
 resize-overlay = never

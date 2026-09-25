@@ -13,6 +13,10 @@ up only this Linux Mint installation:
 The repositories are separate because restic writes files as the process user.
 This keeps the system job from leaving root-owned files in the home repository.
 
+Repository contents, snapshot listings, passwords, mount UUIDs, and actual
+machine names stay local. The examples below compute the machine name at run
+time; do not paste a resolved repository path into this public source.
+
 The privileged source list lives in `~/.config/restic/config.sh` and includes:
 
 - `/etc`, `/root`, `/usr/local`, `/srv`, and `/var/www`;

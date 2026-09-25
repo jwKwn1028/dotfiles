@@ -4,6 +4,9 @@ This manual documents the i3 setup in `~/.config/i3`. It covers the main
 `config`, all helper scripts in this directory, and the saved i3-resurrect
 state directories present at the time this manual was written.
 
+Related controls have shorter references in the
+[Polybar guide](../polybar/docs.md) and [Ghostty guide](../ghostty/docs.md).
+
 ## Overview
 
 This is a pure i3 session that keeps a small set of XFCE services for desktop
@@ -153,11 +156,12 @@ appfinder shortcuts remain unchanged.
 
 Workspace output policy:
 
-- Workspaces `1` to `6` are assigned to the primary output.
-- Workspaces `7` to `10` are assigned to `nonprimary`. The keyword, not an
+- Workspaces `1` and `2` are assigned to the primary output. The external
+  display carries most of the work when docked, so it takes the larger share.
+- Workspaces `3` to `10` are assigned to `nonprimary`. The keyword, not an
   output name: names like `DP-1` go stale when the hardware changes, and the
   keyword is portable across machines.
-- If no external output is active, workspaces `7` to `10` remain available on
+- If no external output is active, workspaces `3` to `10` remain available on
   the laptop output and accept moved windows normally.
 
 ### Kill Workspace Mode
@@ -536,6 +540,9 @@ ShellCheck (when installed), and `i3 -C`.
 | `test-i3-restart.sh` | `Super+Shift+I` validates the candidate config before restart and reports validation/IPC failures once. |
 | `test-super-polybar-listener.py` | Standalone-Super tap/hold gesture detection. |
 | `test-top-edge-peek.py` | Top-edge pointer gesture: hysteresis and per-monitor tops. |
+| `test-tile-snap.sh` | Region geometry for all nine snaps including odd-sized workspaces, Polybar inset arithmetic, pseudo-output clamping, size-hint convergence, the `_presnap_`/`_pretiling_` mark protocol, unsnap, and the per-window lock. |
+| `test-snap-watcher.sh` | Auto-fill region choice, splitting the largest occupant to make room, the fallback to tiling when nothing can be split, and rebalancing survivors after a snapped window closes. |
+| `test-zen-url-state.py` | Session-store parsing for both Zen and Firefox layouts, profile discovery and dedup, i3 tree walking, window-to-page title matching, and the gates that keep a headless save out of the live address-bar capture. |
 | `test-window-mode.sh` | Window mode's show-on-entry and restore-prior-Polybar-state contract. |
 | `test-session-reload.sh` | Service refresh, changed-dunstrc handling, Picom `SIGUSR1`, and single success/partial-failure toast coordination. |
 | `../../polybar/tests/test-launch.sh` | Multi-monitor launch, tray ordering, lock-fd closure, hung-bar kill escalation, log defaults and filename safety, and rotation. |
@@ -932,6 +939,10 @@ Behavior:
 
 ## i3-Resurrect Save and Restore
 
+Saved session state can contain live directories, browser URLs, PDF paths, and
+remote session names. It stays local under the `resurrect*` directories and
+must not be copied into this public source or its documentation.
+
 There are three save/restore profiles:
 
 | Profile | Save binding | Restore binding | State directory | Metadata directory |
@@ -1090,7 +1101,7 @@ Default environment and paths:
 - `I3_RESURRECT_WAIT_ATTEMPTS`: `48`.
 - `I3_RESURRECT_POLL_INTERVAL`: `0.25`.
 - `I3_LAPTOP_OUTPUT`: `eDP`.
-- `I3_RESURRECT_EXTERNAL_WORKSPACES`: `7 8 9 10`.
+- `I3_RESURRECT_EXTERNAL_WORKSPACES`: `3 4 5 6 7 8 9 10`.
 - `I3_RESURRECT_REMOTE_HELPERS`: `~/.zsh/rc.d/50-remote.zsh`.
 - `I3_RESURRECT_LABROUTE_TIMEOUT`: `45` seconds.
 

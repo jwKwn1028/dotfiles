@@ -125,10 +125,10 @@ set $ws10 "10"
 
 workspace $ws1  output primary
 workspace $ws2  output primary
-workspace $ws3  output primary
-workspace $ws4  output primary
-workspace $ws5  output primary
-workspace $ws6  output primary
+workspace $ws3  output nonprimary
+workspace $ws4  output nonprimary
+workspace $ws5  output nonprimary
+workspace $ws6  output nonprimary
 workspace $ws7  output nonprimary
 workspace $ws8  output nonprimary
 workspace $ws9  output nonprimary

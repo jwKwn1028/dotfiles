@@ -160,8 +160,9 @@ dunstctl rule taskwarrior-priority-high disable
 
 ## Quick-add shortcuts
 
-`~/.zsh/rc.d/30-aliases.zsh` defines a weekday quick-add DSL whose whole
-specification is the command name:
+`~/.zsh/rc.d/30-aliases.zsh` defines a weekday quick-add DSL. Its full
+specification is the command name; `~/.zsh/docs.md` summarizes the wider shell
+workflow:
 
 ```
 t<W><D><d|s>[hml][HH:MM][r<offsets>]

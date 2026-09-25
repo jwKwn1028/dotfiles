@@ -8,10 +8,12 @@ cat >"$config_file"
 set_top_level() {
     local key="$1" value="$2"
 
-    if sed -n '1,/^\[/p' "$config_file" | grep -Eq "^${key}[[:space:]]*="; then
-        sed -i -E "1,/^\[/s|^${key}[[:space:]]*=.*$|${key} = \"${value}\"|" "$config_file"
-    else
+    if sed -n '0,/^\[/p' "$config_file" | grep -Eq "^${key}[[:space:]]*="; then
+        sed -i -E "0,/^\[/s|^${key}[[:space:]]*=.*$|${key} = \"${value}\"|" "$config_file"
+    elif [ -s "$config_file" ]; then
         sed -i "1i${key} = \"${value}\"" "$config_file"
+    else
+        printf '%s = "%s"\n' "$key" "$value" >"$config_file"
     fi
 }
 

@@ -37,5 +37,7 @@ private_dot_ssh/*
 
 __pycache__/
 *.py[cod]
+.ruff_cache/
 
 prospect.md
+commitmsg.txt

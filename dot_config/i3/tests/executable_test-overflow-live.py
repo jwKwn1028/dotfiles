@@ -55,7 +55,8 @@ def write_config(path: Path, socket: Path, dual: bool) -> None:
         "workspace_auto_back_and_forth yes",
     ]
     if dual:
-        # Same split as the real config: 1-6 on the primary, 7-10 on the other.
+        # A two-output split, not the real config's: the handoff rules under
+        # test are about occupancy and wrapping, not which output owns a number.
         lines += [f"workspace {n}  output xinerama-0" for n in range(1, 7)]
         lines += [f"workspace {n} output xinerama-1" for n in range(7, 11)]
     path.write_text("\n".join(lines) + "\n")
@@ -310,11 +311,12 @@ def single_screen():
 
     print("\nS10  a hand-off asks Polybar for a peek, an ordinary window does not")
     kill_all()
-    peeks = lambda: len(PEEK_LOG.read_text().split())
+    def peeks():
+        return len(PEEK_LOG.read_text().split())
     print(f"    ws1 packed with {pack(1, 'r')} windows")
     before = peeks()
     spawn("s1", on=2)  # roomy workspace, nothing moves
-    quiet = wait_for(lambda: peeks() > before, timeout=2) or peeks()
+    wait_for(lambda: peeks() > before, timeout=2)
     check("S10 no peek when the window simply stays put", peeks(), before)
     opened, landed = spawn("t1", on=1)  # ws1 is packed, so this one is handed off
     wait_for(lambda: peeks() > before, timeout=5)
@@ -326,7 +328,6 @@ def single_screen():
     for num in range(1, 11):
         pack(num, f"z{num}_")
     print(f"    occupancy: {occupied_map()}")
-    peeks = lambda: len(PEEK_LOG.read_text().split())
     before = peeks()
     opened, landed = spawn("last", on=5)
     print(f"    new window on ws{opened} -> ws{landed}, size {ratios(landed)}")

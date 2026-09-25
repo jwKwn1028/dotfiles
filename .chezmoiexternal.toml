@@ -1,39 +1,40 @@
-[".zsh/plugins/zsh-helix-mode"]
-type = "git-repo"
-url = "https://github.com/Multirious/zsh-helix-mode.git"
-refreshPeriod = "168h"
+# Pinned: these are sourced at every interactive shell start, so the version is
+# a reviewed commit rather than whatever HEAD was on install day. A mismatched
+# checksum fails the apply instead of running unverified code.
+# To bump one: change the SHA in url, then
+#   curl -sSL <url> | sha256sum
 
-[ ".zsh/plugins/zsh-helix-mode".clone ]
-args = ["--depth=1"]
+[".zsh/plugins/zsh-helix-mode"]
+type = "archive"
+url = "https://github.com/Multirious/zsh-helix-mode/archive/e8d4940588f9809ab5658aa7c9c664921d547879.tar.gz"
+stripComponents = 1
+exact = true
+checksum.sha256 = "ca0361112dd0ffdd748b7d8eaf48793c8746342433c8aed7b29eb4b7ed462ed5"
 
 [".zsh/plugins/zsh-autosuggestions"]
-type = "git-repo"
-url = "https://github.com/zsh-users/zsh-autosuggestions.git"
-refreshPeriod = "168h"
-
-[".zsh/plugins/zsh-autosuggestions".clone]
-args = ["--depth=1"]
+type = "archive"
+url = "https://github.com/zsh-users/zsh-autosuggestions/archive/85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5.tar.gz"
+stripComponents = 1
+exact = true
+checksum.sha256 = "20665e469e720e674964a66854d5534b9af78cdfd438512746ecd1ade8e819ce"
 
 [".zsh/plugins/zsh-syntax-highlighting"]
-type = "git-repo"
-url = "https://github.com/zsh-users/zsh-syntax-highlighting.git"
-refreshPeriod = "168h"
-
-[".zsh/plugins/zsh-syntax-highlighting".clone]
-args = ["--depth=1"]
+type = "archive"
+url = "https://github.com/zsh-users/zsh-syntax-highlighting/archive/5eb677bb0fa9a3e60f0eff031dc13926e093df92.tar.gz"
+stripComponents = 1
+exact = true
+checksum.sha256 = "c78570f573d6c87649da7e2921f4a2222e73f4b0951b3af7489c1897c5f1dac9"
 
 [".vim/helix.vim"]
-type = "git-repo"
-url = "https://github.com/chtenb/helix.vim.git"
-refreshPeriod = "168h"
-
-[ ".vim/helix.vim".clone ]
-args = ["--depth=1"]
+type = "archive"
+url = "https://github.com/chtenb/helix.vim/archive/958314b6210d93d1abd4b1bc23b06a69fd17e3e9.tar.gz"
+stripComponents = 1
+exact = true
+checksum.sha256 = "4d29f5f95f55366710688712a21f027bb92bd0d48ffaf3df1dbe35f3d1436f30"
 
 [".vim/pack/themes/opt/tokyonight-vim"]
-type = "git-repo"
-url = "https://github.com/ghifarit53/tokyonight-vim.git"
-refreshPeriod = "168h"
-
-[ ".vim/pack/themes/opt/tokyonight-vim".clone ]
-args = ["--depth=1"]
+type = "archive"
+url = "https://github.com/ghifarit53/tokyonight-vim/archive/4e82e0f0452a6ce8f387828ec71013015515035a.tar.gz"
+stripComponents = 1
+exact = true
+checksum.sha256 = "9bf3d7955096dbabd798e4ec5db395f5142c34f75ac814a4d84af07454503dd0"
