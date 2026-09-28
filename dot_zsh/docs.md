@@ -8,7 +8,13 @@ remote endpoint, account name, or SSH alias belongs in this guide.
 ## Editing the command line
 
 `zsh-helix-mode` provides the modal command line when its plugin is installed.
-The following bindings are added on top of it:
+The cursor is a steady block in normal mode, an underline in select mode, and
+a bar in insert mode or a Helix text-entry prompt. Its shape is restored when
+the command line starts or redraws, including after returning from fzf or the
+external editor. Ghostty's shell integration uses `no-cursor` so it does not
+override these shapes.
+
+The following bindings are added on top of the plugin:
 
 | Keys | Mode | Action |
 | --- | --- | --- |

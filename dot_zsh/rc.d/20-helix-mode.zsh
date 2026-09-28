@@ -12,6 +12,30 @@ if [[ -f "$HOME/.zsh/plugins/zsh-helix-mode/zsh-helix-mode.plugin.zsh" ]]; then
 fi
 
 if (( $+functions[zhm_select] )); then
+  # Widgets such as fzf or edit-command-line can change the terminal cursor
+  # without changing Helix mode. Reapply it when ZLE starts or redraws, even
+  # if the mode has not changed. KEYMAP is usually the "main" alias in all
+  # Helix modes, so use the plugin's state instead.
+  _zhm_sync_cursor() {
+    emulate -L zsh
+    local cursor
+    if (( ZHM_IN_PROMPT )); then
+      # Recursive regex/pipe prompts accept text in normal and select mode.
+      cursor=$ZHM_CURSOR_INSERT
+    else
+      case $ZHM_MODE in
+        normal) cursor=$ZHM_CURSOR_NORMAL ;;
+        select) cursor=$ZHM_CURSOR_SELECT ;;
+        insert) cursor=$ZHM_CURSOR_INSERT ;;
+        *) return 0 ;;
+      esac
+    fi
+    printf '%b' "$cursor"
+  }
+  autoload -Uz add-zle-hook-widget
+  add-zle-hook-widget line-init _zhm_sync_cursor
+  add-zle-hook-widget line-pre-redraw _zhm_sync_cursor
+
   zhm_user_clipboard_v() {
     if [[ $ZHM_MODE == select ]]; then
       zhm_replace_selections_with_clipboard

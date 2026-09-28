@@ -5,6 +5,12 @@ bindings also apply; `ghostty +list-keybinds` prints the complete active list.
 The i3 shortcuts below are global in the i3 session, including while Ghostty
 is focused.
 
+Cursor shape follows Zsh's Helix mode: block for normal, underline for select,
+and bar for insert or text-entry prompts. `shell-integration-features` disables
+Ghostty's cursor changes with `no-cursor`, leaving cursor control to the shell.
+After changing this setting, reload Ghostty's config and open a new terminal
+tab so its shell starts with the updated integration features.
+
 ## Configured in Ghostty
 
 | Keys | Action |

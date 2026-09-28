@@ -31,7 +31,8 @@ cursor-style-blink = false
 term = xterm-256color
 
 shell-integration = zsh
-shell-integration-features = cursor,sudo,title,ssh-terminfo
+# Helix mode owns the cursor; Ghostty's vi-keymap detection misses hxnor/hxins.
+shell-integration-features = no-cursor,sudo,title,ssh-terminfo
 
 # Matches xfce font-allow-bold = false
 font-style-bold = false
