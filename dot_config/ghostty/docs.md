@@ -11,7 +11,8 @@ is focused.
 | --- | --- |
 | `Ctrl+Enter` | Unbound in Ghostty, so the terminal program can receive it. |
 | `Ctrl+0` | Reset the font size. |
-| `Ctrl+Shift+Plus` | Set the font size to 15. |
+| `Ctrl+Shift+Plus` | Increase the font size by 5 points. |
+| `Ctrl+Shift+Minus` | Decrease the font size by 5 points. |
 | `Ctrl+Shift+H` / `Ctrl+Shift+L` | Focus the split to the left / right. |
 | `Ctrl+Shift+J` / `Ctrl+Shift+K` | Focus the split below / above. |
 | `Ctrl+Tab` | Focus the next split. This replaces Ghostty's default next-tab shortcut. |

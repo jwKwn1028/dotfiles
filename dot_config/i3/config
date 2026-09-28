@@ -250,6 +250,7 @@ exec_always --no-startup-id sh -c 'pkill -f "bash .*/focus-tracker\.sh$"; setsid
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/snap-watcher\.sh$"; setsid ~/.config/i3/snap-watcher.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/kakaotalk-float-watcher\.sh$"; setsid ~/.config/i3/kakaotalk-float-watcher.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/randr-hotplug\.sh$"; setsid ~/.config/i3/randr-hotplug.sh </dev/null >/dev/null 2>&1 &'
+exec_always --no-startup-id sh -c 'pkill -f "bash .*/usb-hotplug\.sh$"; setsid ~/.config/i3/usb-hotplug.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/super-polybar-listener\.py$"; exec /usr/bin/python3 ~/.config/i3/super-polybar-listener.py'
 # Match the interpreter-led worker, not this `sh -c` launcher.
 exec_always --no-startup-id sh -c 'pkill -f "^[^ ]*/python[^ ]* [^ ]*/autotiling( |$)"; exec ~/.local/bin/autotiling'
@@ -260,7 +261,7 @@ exec --no-startup-id xrdb -merge ~/.Xresources
 exec --no-startup-id xsetroot -cursor_name left_ptr
 exec_always --no-startup-id /usr/bin/flock -n /tmp/disable-trackpoint-middle-click.lock ~/.local/bin/disable-trackpoint-middle-click
 exec_always --no-startup-id ~/.local/bin/touchpad apply
-exec_always --no-startup-id sh -c 'pgrep -x xfsettingsd          >/dev/null || xfsettingsd &'
+exec_always --no-startup-id sh -c 'xfconf-query -c keyboards -p /Default/RestoreNumlock --create --type bool --set true; pgrep -x xfsettingsd >/dev/null || xfsettingsd'
 exec_always --no-startup-id sh -c 'pgrep -fx xfce4-power-manager >/dev/null || xfce4-power-manager &'
 exec_always --no-startup-id sh -c 'pgrep -x picom               >/dev/null || picom -b'
 exec_always --no-startup-id sh -c 'pgrep -x nm-applet           >/dev/null || nm-applet &'

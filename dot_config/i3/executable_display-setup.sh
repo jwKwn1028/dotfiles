@@ -3,6 +3,8 @@
 # per-monitor Polybars.
 
 DIR="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=_toast-common.sh
+. "$DIR/_toast-common.sh"
 LAPTOP_OUTPUT="${I3_LAPTOP_OUTPUT:-eDP}"
 
 is_connected() {
@@ -80,11 +82,4 @@ if [ "${I3_RELOAD_TOAST:-0}" = 1 ]; then
     touch "$TOAST_STAMP"
 fi
 
-if [ -n "$TOAST_TEXT" ] && command -v rofi >/dev/null 2>&1; then
-    # rofi 1.7.5 ignores a `timeout` block in -e mode, so time it out here.
-    rofi -e "$TOAST_TEXT" -theme reload-toast &
-    toast_pid=$!
-    sleep 1
-    kill "$toast_pid" 2>/dev/null || true
-    wait "$toast_pid" 2>/dev/null || true
-fi
+show_toast "$TOAST_TEXT"

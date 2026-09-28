@@ -1,6 +1,6 @@
 # Porting This Chezmoi Setup to macOS
 
-Last audited against the repository and upstream documentation: 2026-08-20
+Last audited against the repository and upstream documentation: 2026-09-27
 
 This document is the implementation contract for a coding agent asked to move
 this dotfile setup from Linux Mint/Ubuntu to macOS. It describes the desired
@@ -57,9 +57,13 @@ workflow equivalents below—without changing the Linux render.
 
 ## Current implementation snapshot
 
-This snapshot was verified on 2026-08-20 by rendering the current source with
-`.chezmoi.os=darwin`, `.chezmoi.arch=arm64`, `class=desktop`, and
-`desktopProfile=none`. It is a source audit, not evidence from a real Mac.
+This snapshot was verified on 2026-09-27, with chezmoi 2.72.2, by rendering
+the current source with `.chezmoi.os=darwin`, `.chezmoi.arch=arm64`,
+`class=desktop`, and `desktopProfile=none`. It is a source audit, not evidence
+from a real Mac. Two facts frame everything below: the `arm64` and `amd64`
+renders are still byte-identical because nothing branches on `.chezmoi.arch`,
+and no file outside `dot_zsh/macos/` names Darwin at all — every gate in the
+repository is a negative test on `eq .chezmoi.os "linux"`.
 
 Already implemented:
 
@@ -75,6 +79,18 @@ Already implemented:
   and fzf compatibility. `dot_zshenv` already sources its prelude, and
   `macos/doctor.zsh` validates it on a real Mac.
 - The shared `clipcopy` and tmux clipboard paths already support `pbcopy`.
+- Linux provisioning added since the previous audit arrived pre-gated: the apt
+  installer, both source builds (`95-build-i3lock-color`, `96-build-zathura`),
+  the screenshot directory, and the TLP, logind, and X11-input helpers all
+  render to nothing on Darwin.
+- `.chezmoiignore` gates restic and the Tailscale proxy — config, systemd user
+  units, and their `.local/bin` helpers — on `ne .chezmoi.os "linux"`. That is
+  the pattern the rest of the Linux-only target tree still needs.
+- `private_dot_ssh/private_config.tmpl` reads every alias, hostname, and
+  username from the local chezmoi config and already gates its Linux
+  `ProxyCommand` on `.chezmoi.os`, so `~/.ssh/config` renders safely on Darwin.
+- `docs.md` now carries the "macOS: audit only" boundary and the read-only
+  command set, so the restriction is no longer stated only here.
 
 Blocking hazards still present:
 
@@ -84,12 +100,35 @@ Blocking hazards still present:
 - `run_once_after_40-set-default-shell.sh` is not a template and assumes
   `getent`, Linux `/etc/shells` handling, and `sudo tee`.
 - `run_once_after_50-install-fonts.sh.tmpl` renders on Darwin and installs under
-  `~/.local/share/fonts` using fontconfig.
+  `~/.local/share/fonts` using fontconfig. `.config/fontconfig/fonts.conf`, the
+  family-alias file it pairs with, is in the Darwin target as well.
+- `private_dot_codex/modify_private_config.toml` is a `modify_` script, so it
+  runs on Darwin, and all three of its sed calls are GNU-only: the `0,/^\[/`
+  address range, `sed -i` with no backup suffix, and the one-line `1i` insert.
+  BSD sed rejects the range and reads the next argument as a backup extension.
+  `private_dot_claude/modify_private_settings.json` needs a real `python3` on
+  `PATH`, which on macOS means the Command Line Tools or Homebrew.
+- `dot_local/bin/symlink_fd.tmpl` renders `{{ lookPath "fdfind" }}`, a Debian
+  naming workaround. `lookPath` answers for the machine doing the render, so
+  the synthetic audit still prints `/usr/bin/fdfind`; on a Mac it renders empty,
+  and chezmoi then lists `.local/bin/fd` under `managed` while `status` reports
+  nothing and `apply` creates nothing. Darwin must get `fd` from the package
+  manifest; do not let the silent skip pass for a working `fd`.
+- `run_onchange_after_35-install-yazi-plugins.sh.tmpl` renders on Darwin and is
+  the one provisioning script that should: `ya pkg install` is cross-platform.
+  It exits early while `ya` is absent, so the Darwin manifest has to own Yazi
+  or the Yazi config lands without the plugins its keymap expects.
 - The synthetic Darwin target still includes the Linux Helium desktop/AppImage
-  payload, `.config/pipewire/`, `.config/systemd/`, `.config/zathura/`, Linux
-  browser chrome payloads, and the Linux VS Code target under `.config/Code/`.
+  payload, `.config/pipewire/`, `.config/zathura/`, `.config/i3-resurrect/`,
+  `.config/flameshot/`, Linux browser chrome payloads, the Linux VS Code target
+  under `.config/Code/`, `.local/bin/cpu-load` (which parses `/proc/stat`), the
+  Linux-only suites under `.local/bin/tests/`, and the empty `.config/systemd/`,
+  `.local/share/flatpak/overrides/`, and `.themes/` directories left behind by
+  the rules that gate only their contents.
 - `.chezmoidata/packages.toml` has no Darwin package section or Homebrew
-  provisioning, and `docs.md` still documents Linux only.
+  provisioning. Its `[packages.source.*]` entries carry apt build dependencies
+  for girara, zathura, and i3lock-color and are read only by Linux-gated
+  scripts; leave them Linux-only rather than extending them for Darwin.
 - The current macOS shell installer calls Homebrew directly and can append to
   `~/.zshenv`, although that file is now managed and already contains the hook.
   Its dependencies and setup must be folded into the Darwin profile rather than
@@ -140,34 +179,51 @@ run_onchange_before_15-install-homebrew-packages.sh.tmpl
 Chezmoi interprets `.chezmoiignore` as a template and matches target paths, not
 source-state names. Gate whole target trees with negative tests because files
 are managed by default. Keep the current `$desktopProfile` prelude and extend
-it with a `macos-aerospace` value when the Darwin desktop actually lands:
+it with a `macos-aerospace` value when the Darwin desktop actually lands.
+
+Follow the file's existing convention: whole target path, no leading slash. Its
+`linuxmint-i3-x11` block already covers i3, Polybar, Picom, Rofi, dunst, XFCE,
+Fcitx5, Thunar, the GTK theme, and the touchpad helpers, so extend that block
+rather than restating it. What the Darwin render still needs is a `ne
+.chezmoi.os "linux"` block beside the one restic and the Tailscale proxy
+already use:
 
 ```gotemplate
-{{ if ne $desktopProfile "linuxmint-i3-x11" }}
-/.config/i3/
-/.config/polybar/
-/.config/picom/
-/.config/rofi/
-{{ end }}
-
 {{ if ne .chezmoi.os "linux" }}
-/.config/pipewire/
-/.config/systemd/
-/Applications/helium.desktop
-/Applications/helium.png
-/Applications/update-helium.sh
-/.local/share/applications/helium.desktop
+.config/pipewire/
+.config/systemd/
+.config/zathura/
+.config/i3-resurrect/
+.config/flameshot/
+.config/fontconfig/
+.local/bin/cpu-load
+.local/bin/fd
+.local/bin/tests/
+.local/share/applications/helium.desktop
+.local/share/helium-newtab/
+.sync-zen-to-helium-bookmarks.sh
+Applications/
 {{ end }}
 
 {{ if ne $desktopProfile "macos-aerospace" }}
-/.config/aerospace/
-/.config/sketchybar/
+.config/aerospace/
+.config/sketchybar/
 {{ end }}
 
 {{ if ne .chezmoi.os "darwin" }}
-/Library/Application Support/Code/User/
+Library/Application Support/Code/User/
 {{ end }}
 ```
+
+`.config/systemd/` and `Applications/` are directories that survive only
+because the current rules gate their contents; naming the directory removes the
+empty target. `~/Applications` is a real macOS location, which makes ignoring it
+deliberate rather than incidental: what lives there now is an AppImage launcher,
+and a Mac's `~/Applications` should not be chezmoi-managed at all.
+
+`.local/bin/tests/` goes wholesale because every suite there exercises the Linux
+desktop, remote, or backup stack. Re-admit individual tests as their subjects
+are ported, rather than shipping suites that cannot pass.
 
 For content needed at different target paths, keep one shared template:
 
@@ -208,10 +264,10 @@ Expected chezmoi OS is `darwin`; common architecture values are `arm64` and
 `xcode-select --install` if they are missing. Do not script acceptance of an
 Apple license or password prompt.
 
-As of this audit, Homebrew's supported macOS baseline is Sonoma 14 or newer on
-officially supported hardware. Treat that as a moving prerequisite: re-check
-Homebrew's installation page for the target OS instead of copying this version
-number indefinitely.
+As of this audit, Homebrew's supported macOS baseline is Sequoia 15 or newer on
+officially supported hardware — one release higher than at the previous audit.
+Treat it as a moving prerequisite: re-check Homebrew's installation page for the
+target OS instead of copying this version number indefinitely.
 
 Keep `class` (`desktop` or `server`) as a separate workload choice; do not add
 `darwin` as a third machine class. OS branches come from `.chezmoi.os`, while
@@ -224,12 +280,17 @@ ignore rules, config, and verification land together.
 
 ### 1. Gate all Linux provisioning
 
-The apt and X11 input scripts already render empty on Darwin. Apply the same
-outer OS guard to Flatpak, the current CLI/Miniconda installer, fonts, and the
-renamed default-shell template. Prefer an empty render to a runtime
-`command -v` escape: chezmoi does not execute a script whose template result is
-empty. Verify on Linux that rendered bodies remain byte-for-byte equivalent
-except for intentional fixes.
+Most Linux provisioning already renders empty on Darwin: apt, the X11 input,
+TLP, and logind helpers, the screenshot directory, and both source builds. Four
+remain — Flatpak, the CLI/Miniconda installer, fonts, and the default-shell
+script once it is renamed to a template. Apply the same outer OS guard to each.
+Prefer an empty render to a runtime `command -v` escape: chezmoi does not
+execute a script whose template result is empty. Verify on Linux that rendered
+bodies remain byte-for-byte equivalent except for intentional fixes.
+
+The Yazi plugin script is the one to leave alone. `ya pkg install` is
+cross-platform, so a `command -v` guard is the right shape there, and an OS
+gate would be wrong.
 
 The browser/profile scripts currently render small skip-only scripts on
 Darwin. They are safe by inspection, but eventually make Linux-only ones empty
@@ -271,10 +332,10 @@ taps = [
     "FelixKratz/formulae",
 ]
 brews = [
-    "bash", "bat", "btop", "cmake", "coreutils", "fd", "fzf", "git", "git-lfs",
-    "helix", "jq", "micro", "node", "pipx", "pkg-config",
+    "bash", "bat", "btop", "cmake", "coreutils", "eza", "fd", "fzf", "git",
+    "git-lfs", "helix", "jq", "micro", "node", "pipx", "pkg-config",
     "ranger", "ripgrep", "rsync", "sevenzip", "shellcheck", "sketchybar",
-    "task", "tmux", "tree", "wget", "zoxide",
+    "starship", "task", "tmux", "tree", "wget", "yazi", "zoxide",
 ]
 casks = [
     "ghostty", "visual-studio-code", "zed",
@@ -296,7 +357,11 @@ every apply. Make the script fail with a clear manual-bootstrap message if
 `brew` is absent.
 
 The Darwin package list must include at least `coreutils`, `rsync`, and `fzf`
-because the existing `dot_zsh/macos/` compatibility layer tests for them.
+because the existing `dot_zsh/macos/` compatibility layer tests for them, plus
+`starship`, `eza`, `zoxide`, `yazi`, and `fd`: the shared rc modules
+(`35-navigation.zsh`, `30-aliases.zsh`, `40-fzf.zsh`, `95-prompt.zsh`) and the
+Yazi plugin script depend on those, and on Linux they come from the CLI-tools
+installer that Phase 1 gates off on Darwin.
 Install modern `bash` if `.bashrc`, the Claude status line, or
 `cleanup-agents.sh` will be managed on Darwin. Once the manifest owns these
 packages, change `macos/install.zsh` so it no longer appends to the
@@ -333,13 +398,14 @@ These are normally portable, but must still be rendered and tested on macOS:
 | `dot_config/starship.toml` | Share. |
 | `dot_config/helix/` | Share; verify every configured language server is installed. |
 | `dot_config/ghostty/` | Share the XDG directory, which Ghostty supports on macOS, but template the contents. The current file includes GTK-only keys and i3-specific tab-bar behavior. Ghostty 1.2.3+ prefers `config.ghostty`; the existing `config` name remains a legacy fallback. Rename only after the Linux Ghostty version is verified. |
-| `dot_config/zed/` | Share; Zed documents `~/.config/zed/settings.json` and `keymap.json` on both platforms. Keep SSH connections local. |
+| `dot_config/zed/` | Share; Zed documents `~/.config/zed/settings.json` and `keymap.json` on both platforms. Keep SSH connections local. `private_settings.json.tmpl` is already a template, but its font stack is tuned to this display: 8.9pt with an `Ubuntu Mono` fallback that no Mac has. Select sizes and fallbacks per OS. |
 | `dot_config/bat/`, `btop/`, `fastfetch/`, `micro/`, `ranger/`, `rtk/`, `yazi/` | Share after installing each command and checking tool-specific platform options. |
 | `dot_condarc.tmpl`, `private_dot_npmrc.tmpl` | Share the rendered policy, but select platform/architecture-specific runtime installations separately. |
 | `dot_nanorc`, `dot_vimrc`, `dot_visidatarc`, `dot_taskrc` | Share after syntax and command-availability checks; do not infer that a similarly named Homebrew formula provides the same program. |
-| `private_dot_claude/`, `private_dot_codex/` | Share only the narrow settings currently owned here and validate status-line interpreters. MCP servers, plugins, skills, hooks, auth caches, and project trust are installer/tool-owned machine state and must remain outside this repo on Darwin too. |
+| `private_dot_claude/`, `private_dot_codex/` | Share only the narrow settings currently owned here and validate status-line interpreters. Both targets are `modify_` scripts, so they execute on Darwin: port the Codex one off GNU sed (`0,/re/`, bare `sed -i`, one-line `1i`) and confirm `python3` for the Claude one. MCP servers, plugins, skills, hooks, auth caches, and project trust are installer/tool-owned machine state and must remain outside this repo on Darwin too. |
 | `dot_local/bin/executable_weather` | Share after confirming `curl` and `jq`. |
 | `dot_local/bin/executable_clipcopy` | Share; its `pbcopy` branch is the native macOS path. |
+| `.chezmoiexternal.toml` | Share. The five archives are pure Zsh/Vim plugins pinned to checksummed commits, so they are portable; they only need network access at apply time and a matching checksum, and a mismatch fails the Darwin apply exactly as it fails the Linux one. |
 
 ### Relocate with shared content
 
@@ -353,7 +419,9 @@ These are normally portable, but must still be rendered and tested on macOS:
 
 Do not copy these to a Mac merely because the paths are harmless:
 
-- `dot_config/i3/` and every i3-resurrect helper.
+- `dot_config/i3/`, `dot_config/i3-resurrect/`, and every i3-resurrect helper.
+  The resurrect config is a separate target tree, so the desktop-profile block
+  does not catch it.
 - `dot_config/polybar/`, `dot_config/picom/`, and `dot_config/rofi/`.
 - `dot_config/xfce4/`, `dot_config/private_fcitx5/`, the GTK theme, and Thunar
   integration already tied to `linuxmint-i3-x11`.
@@ -363,6 +431,10 @@ Do not copy these to a Mac merely because the paths are harmless:
 - `dot_local/bin/executable_touchpad`, its
   `executable_dot_toggle-touchpad.sh` compatibility wrapper, and
   `dot_local/bin/executable_disable-trackpoint-middle-click`.
+- `dot_config/flameshot/` and `dot_config/fontconfig/`.
+- `dot_local/bin/executable_cpu-load`, which parses `/proc/stat`;
+  `dot_local/bin/symlink_fd.tmpl`, which exists only for Debian's `fdfind`
+  name; and the `dot_local/bin/tests/` suites.
 - `Applications/` Helium AppImage files and the duplicate Linux desktop entry.
 - `Applications/executable_update-helium.sh`.
 - Linux browser chrome payloads until a native macOS browser installation and
@@ -466,8 +538,11 @@ macOS:
 
 - Reinstall browsers and use their supported account sync or a private export;
   never add `~/Library/Application Support/<browser>` to chezmoi.
-- Keep SSH configuration and keys local. If a reusable, non-sensitive SSH
-  fragment is later added, isolate it from hostnames, usernames, and key paths.
+- Keep SSH keys, `known_hosts`, and control sockets local. The one managed
+  fragment, `private_dot_ssh/private_config.tmpl`, already takes its aliases,
+  hostnames, and username from `~/.config/chezmoi/chezmoi.toml` and keeps the
+  Linux `ProxyCommand` behind an OS test. Preserve that split; a Darwin render
+  must not introduce a literal host or user.
 - Store tokens in Keychain, a password manager, environment injection, or the
   local chezmoi config—not in templates committed to Git.
 - Let the user grant Accessibility, Automation, Screen Recording, and Full
@@ -512,9 +587,39 @@ for source_file in run_*; do
 done
 ```
 
-Run this for both `arm64` and `amd64`. It catches template/ignore leaks but
-cannot validate BSD utilities, Homebrew, GUI paths, permissions, or actual app
+Run this for both `arm64` and `amd64`. The two renders are identical today and
+stay identical until Miniconda and the Homebrew prefix actually branch on
+`.chezmoi.arch`. The audit catches template and ignore leaks but cannot
+validate BSD utilities, Homebrew, GUI paths, permissions, or actual app
 behavior.
+
+`--override-data` replaces template data, not the machine, and three template
+facilities see through it. `lookPath` ignores the override completely and
+searches the host `PATH`, which is why `symlink_fd.tmpl` resolves
+`/usr/bin/fdfind` in this audit and renders empty on a Mac.
+`.chezmoi.sourceDir` stays the real source directory, so
+`run_once_after_05-enable-git-hooks.sh` prints a `/home/...` path here: check a
+`/home` path against its template before calling it a leak. And `lstat` and
+`include` follow the paths they are given, so an overridden `homeDir` sends the
+`run_onchange_` browser scripts probing a directory that does not exist — their
+change-detection headers come back `missing`, and the audit cannot tell you
+whether those scripts would re-run on a Mac.
+
+Point the audit at an empty directory as well, so the Darwin render is compared
+against nothing instead of against the live Linux home:
+
+```sh
+audit_dest="$(mktemp -d)"
+chezmoi --override-data "$darwin_data" --destination "$audit_dest" status
+```
+
+`status` writes nothing, and every file row comes back `A`: the exact set a
+fresh Mac would receive, without the modified-target noise of a Darwin render
+diffed against live Linux targets. Two limits. It still prints `R` for a script
+whose template renders empty, so the per-script `execute-template` loop above
+remains the only check on the gating work. And a symlink whose target renders
+empty disappears from `status` while staying in `managed` — which is how
+`.local/bin/fd` will behave on a Mac: silently absent rather than broken.
 
 On the Mac, before any apply:
 

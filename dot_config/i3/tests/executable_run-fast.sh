@@ -94,6 +94,7 @@ run 'resurrect Polybar tests' \
 run 'resurrect Ghostty session tests' \
     bash "$I3_ROOT/tests/test-i3-resurrect-ghostty.sh"
 run 'RandR hotplug tests' bash "$I3_ROOT/tests/test-randr-hotplug.sh"
+run 'USB hotplug tests' bash "$I3_ROOT/tests/test-usb-hotplug.sh"
 run 'Dunst monitor selection tests' \
     env DUNST_SYSTEMD_OVERRIDE="$DUNST_OVERRIDE" \
     bash "$I3_ROOT/tests/test-dunst-start.sh"

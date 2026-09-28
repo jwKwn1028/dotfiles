@@ -48,6 +48,8 @@ General behavior:
 - Default borders are `pixel 1` for both tiled and floating windows.
 - Edge borders are hidden with `hide_edge_borders smart`.
 - Title bars are off by default and can be toggled at runtime.
+- Left Ctrl and Caps Lock are swapped via `ctrl:swapcaps`, provisioned by
+  chezmoi in `/etc/default/keyboard`.
 
 Theme colors use a Tokyo Night style palette:
 
@@ -536,6 +538,7 @@ ShellCheck (when installed), and `i3 -C`.
 | `test-polybar-peek.sh` | `polybar-peek.sh` show/hide, ownership, and debounce behavior. |
 | `test-i3-resurrect-polybar.sh` | Successful, hidden-bar, and early-failure restore paths preserve the bar's prior visibility and raise it when restored. |
 | `test-randr-hotplug.sh` | Output-event coalescing, connected-set changes, mid-run hotplugs, and connection-status toast selection. |
+| `test-usb-hotplug.sh` | Connector classification and its refusal to guess an unrecognized topology, burst coalescing, hub arrivals, bounce suppression, Type-C partner correlation, wattage and alternate-mode detail, detach descriptions taken from cache, and lock handover when the watcher is replaced. |
 | `test-dunst-start.sh` | Dunst 1.9 runtime config generation, laptop/primary fallbacks, and restart-on-index-change behavior. |
 | `test-i3-restart.sh` | `Super+Shift+I` validates the candidate config before restart and reports validation/IPC failures once. |
 | `test-super-polybar-listener.py` | Standalone-Super tap/hold gesture detection. |
@@ -795,8 +798,12 @@ Behavior:
 - Uses `$XDG_RUNTIME_DIR/i3-randr-hotplug.lock` to keep one watcher active.
 - Passes `Display connected`, `Display disconnected`, or `Display changed`
   through `I3_DISPLAY_TOAST`. `display-setup.sh` shows it only after the layout,
-  wallpaper, and bars are ready, using the same `reload-toast` Rofi theme as
-  the `Welcome` and `i3 reloaded` messages. A same-count connector replacement
+  wallpaper, and bars are ready, through `show_toast` in `_toast-common.sh`,
+  which is the same `reload-toast` Rofi theme as the `Welcome` and
+  `i3 reloaded` messages and as the USB notices. Rofi would otherwise place a
+  notice on whichever monitor holds the mouse, so `show_toast` pins every one of
+  them to the primary output, the laptop panel; `I3_TOAST_MONITOR` overrides it
+  with any value `rofi -m` accepts. A same-count connector replacement
   uses `Display changed` because its direction is ambiguous after debouncing.
 
 Starting or restarting the watcher records the current output set without
@@ -808,6 +815,58 @@ announcing it. Session startup and `Super+Shift+I` continue to use `Welcome` or
 ```sh
 feh --no-fehbg --bg-fill "$HOME/.wallpaper-laptop.png" "$HOME/.wallpaper-external.png"
 ```
+
+## USB and Type-C Notices
+
+`usb-hotplug.sh` announces attach and detach with the same Rofi toast as the
+display and reload messages, shared through `show_toast` in `_toast-common.sh`.
+
+- Reads `udevadm monitor --udev --property` filtered to the `usb` and `typec`
+  subsystems. That stream is unprivileged, so this needs no udev rule and no
+  root.
+- Coalesces each plug's event burst for `I3_USB_HOTPLUG_QUIET`, default `0.7`
+  seconds, and shows at most one toast per burst. A hub arrives with all of its
+  children and is announced once, with `+N devices`.
+- Records everything already attached at startup, so a login's enumeration and
+  a resume's re-enumeration are both silent while a detach still knows what
+  left.
+- Describes a detach from that cache, because the device's sysfs is already
+  gone by then.
+- Treats a detach and reattach inside one burst as a bounce and stays quiet.
+- Uses `$XDG_RUNTIME_DIR/i3-usb-hotplug.lock` to keep one watcher active.
+
+Which connector a device arrived on is decided once at startup:
+
+- The kernel's `usbN-portM/connector` link is checked first, but it needs an
+  ACPI `_PLD` match this machine does not provide, so the fallback counts root
+  hubs: a Type-C connector gets its own single-port xHCI, one at high speed and
+  one at super speed. When the number of such root hubs is not twice the number
+  of `/sys/class/typec` ports the shape is unrecognized and no connector is
+  claimed, so the toast says `USB` rather than guessing. `I3_USB_TYPEC_BUSES`
+  overrides the derived table, and `usb-hotplug.sh --dump` prints it.
+- A `typec` partner event and a USB enumeration within `I3_USB_TYPEC_WINDOW`,
+  default `3` seconds, are treated as one plug, so the device's notice can carry
+  the partner's wattage and alternate modes. Outside that window it cannot.
+
+Notices name the connector but deliberately not which side of the machine it is
+on. Adding one would need two sources: a USB-A port's own
+`physical_location/panel`, and `/sys/class/typec` for a Type-C port, because the
+USB root ports of the Type-C connectors report a degenerate `_PLD` here -- all
+four claim the left panel.
+
+`typec` events also fire for partners that expose no USB device at all, so a
+charger or a display is announced on its own. With `I3_USB_TOAST_DETAIL` at its
+default `full` those notices carry the advertised wattage, computed from the
+partner's `usb_power_delivery` source capabilities, and any active alternate
+mode. `compact` drops wattage, alternate modes, and link speed.
+
+The `reload-toast` theme is 320 pixels wide, and `show_toast` breaks a message
+into explicit lines itself: rofi 1.7.5 sizes the window from its own wrap
+estimate, and past two lines that estimate is one line short, which leaves the
+text pressed against the bottom border instead of centred. `I3_TOAST_WRAP` sets
+that width in characters. A value is joined to its unit with a no-break space
+and the separator dot is tied to the field before it, so a line never splits
+`10 Gbps` or `60 W` and never begins with the dot.
 
 ## Workspace Movement
 
@@ -1167,7 +1226,6 @@ One-shot startup:
 - `gnome-keyring-daemon --start --components=secrets`.
 - `xrdb -merge ~/.Xresources`.
 - `xsetroot -cursor_name left_ptr`.
-- `xfsettingsd` if not already running.
 - `xfce4-power-manager` if not already running.
 - `picom -b` if not already running.
 - `nm-applet` if not already running.
@@ -1177,6 +1235,8 @@ One-shot startup:
 
 Always on reload/restart:
 
+- At login and i3 restart, enable Num Lock restoration and start `xfsettingsd`
+  if needed. The remembered on/off state stays local.
 - Run `session-reload.sh`: `systemctl --user daemon-reload`, then `try-restart`
   of `task-notify.timer` and — only when `dunstrc` is newer than the running
   daemon — of `dunst.service`. dunst 1.9.2 has no reload command and a restart
@@ -1258,6 +1318,7 @@ Media and screenshots:
 Monitor/bar/snap helpers:
 
 - `xrandr`
+- `udevadm`, from systemd, for the USB and Type-C event stream
 - `polybar`
 - `polybar-msg`
 - `xdotool`
@@ -1326,6 +1387,9 @@ Inside this directory:
 - `display-setup.sh`: applies monitor layout and wallpaper.
 - `randr-hotplug.sh`: watches the connected-output set, runs display setup, and
   requests the matching Rofi connection-status toast.
+- `usb-hotplug.sh`: watches udev for USB and Type-C events and toasts attach and
+  detach with the connector and what the device is.
+- `_toast-common.sh`: the shared Rofi status toast.
 - `wallpaper.sh`: applies laptop/external wallpapers through `feh`.
 - `move-to-workspace.sh`: validated move-to-workspace command.
 - `show-desktop.sh`: toggles `_desktop` workspace.
@@ -1352,6 +1416,7 @@ Runtime files outside this directory:
 - `$XDG_RUNTIME_DIR/i3-snap-watcher.lock`
 - `$XDG_RUNTIME_DIR/i3-kakaotalk-float-watcher.lock`
 - `$XDG_RUNTIME_DIR/i3-randr-hotplug.lock`
+- `$XDG_RUNTIME_DIR/i3-usb-hotplug.lock`
 - `$XDG_RUNTIME_DIR/i3-polybar-toggle.lock`
 - `$XDG_RUNTIME_DIR/i3-polybar-peek.owner`
 - `$XDG_RUNTIME_DIR/i3-polybar-peek.trigger`
@@ -1379,6 +1444,12 @@ Runtime files outside this directory:
   in `toggle-titles.sh`.
 - If changing the laptop output name, update `I3_LAPTOP_OUTPUT` or the default
   in scripts that use it.
+- `usb-hotplug.sh` derives its Type-C bus table from root-hub port counts. If
+  the machine's USB topology changes, check `usb-hotplug.sh --dump` and set
+  `I3_USB_TYPEC_BUSES` when the derived table is wrong.
+- `TOAST_WRAP` in `_toast-common.sh` defaults to 27, the `reload-toast` theme's
+  270px content width at JuliaMono 13. Changing that width or the font in
+  `spotlight.rasi` means changing it too.
 - If changing which workspaces belong on external monitors, update both the
   i3 workspace output directives and `I3_RESURRECT_EXTERNAL_WORKSPACES` usage.
 - If Polybar changes its class name, update searches for `^[Pp]olybar$`.

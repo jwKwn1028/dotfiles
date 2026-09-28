@@ -18,7 +18,7 @@
 # litters $HOME. Whole-path matching lets a nested README.md still apply.
 README.md
 docs.md
-X11_TO_WAYLAND_TRANSITION.md
+X2W.md
 MACOS_PORTING_GUIDE.md
 CHEZMOI_UPDATE_WORKFLOW.md
 AGENTS.md

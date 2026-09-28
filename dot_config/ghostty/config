@@ -57,7 +57,8 @@ gtk-custom-css = split-focus.css
 
 keybind = ctrl+enter=unbind
 keybind = ctrl+0=reset_font_size
-keybind = ctrl+shift+plus=set_font_size:15
+keybind = ctrl+shift+plus=increase_font_size:5
+keybind = ctrl+shift+minus=decrease_font_size:5
 
 # Split navigation. Ctrl+Shift+J replaces Ghostty's write-screen-file default.
 keybind = ctrl+shift+h=goto_split:left

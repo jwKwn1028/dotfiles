@@ -18,8 +18,9 @@ that authored it and fail completely on a fresh one.
 
 ## Current Machine Snapshot
 
-Last audited on **2026-08-20**. This is a dated observation, not a promise about
-the next machine or the state after a distro upgrade.
+Last audited on **2026-09-26**; first audited 2026-08-20. This is a dated
+observation, not a promise about the next machine or the state after a distro
+upgrade.
 
 - The machine is Linux Mint 22.3 on kernel `6.17.0-1032-oem`, using the AMD
   `amdgpu` driver. The active desktop is still i3 on X11:
@@ -31,14 +32,18 @@ the next machine or the state after a distro upgrade.
   `.chezmoidata/packages.toml` still provisions only `packages.apt.i3_x11`.
   The migration has therefore **not started** in this repo.
 - `sway`, `waybar`, `swayidle`, `swaylock`, `slurp`, `kanshi`, `fuzzel`, and
-  `xdg-desktop-portal-wlr` are not installed. `grim` and `wl-clipboard` are
-  installed only as recommended dependencies of existing software
-  (`flameshot` and `pass` respectively), and `xwayland` is already installed.
-  That partial tool presence is not a usable Sway stack and must not be treated
-  as evidence that provisioning is complete.
-- The kernel currently exposes the internal panel as `eDP-1` and the connected
-  external monitor as `DP-1`. XRandR names can differ, and Sway output names
-  must still be captured from `swaymsg -t get_outputs` in the real session.
+  `xdg-desktop-portal-wlr` are not installed. `grim`, `wl-clipboard`, and
+  `xdg-desktop-portal-gtk` are installed only as dependencies of existing
+  software (`flameshot`, `pass`, and the portal stack respectively), and
+  `xwayland` is already installed. That partial tool presence is not a usable
+  Sway stack and must not be treated as evidence that provisioning is complete.
+- Under X11 on `amdgpu` the outputs are named `eDP` (internal panel) and
+  `DisplayPort-0` (external), with `HDMI-A-0` and `DisplayPort-1` through
+  `DisplayPort-6` present but disconnected. `display-setup.sh` defaults
+  `I3_LAPTOP_OUTPUT` to `eDP` accordingly. An earlier revision of this file
+  recorded `eDP-1` and `DP-1`; that was wrong, so do not trust a draft that
+  copied those. Sway renames outputs regardless — capture the real names from
+  `swaymsg -t get_outputs` in the session.
 - The current machine's chezmoi data predates the explicit `desktopProfile`
   answer. The templates correctly infer `linuxmint-i3-x11` for Mint/Ubuntu
   when the key is absent; a fresh `chezmoi init` records the prompt explicitly.
@@ -99,8 +104,24 @@ apt list:
   outside apt if it turns out to be wanted.
 - `swww` — unavailable. Use `swaybg` (1.2.0) for wallpaper.
 
-Re-check availability rather than trusting this list after a distro upgrade;
-these three are the ones most likely to change.
+Re-verified on 2026-09-26: every package in the block above still resolves
+(sway 1.9, swaybg 1.2.0, swayidle 1.8.0, swaylock 1.7.2, waybar 0.9.24,
+wl-clipboard 2.2.1, grim 1.4.0, slurp 1.5.0, kanshi 1.5.1, fuzzel 1.9.2,
+xwayland 23.2.6, and both portals), and all three tools above are still
+unavailable. Re-check rather than trusting this list after a distro upgrade;
+those three are the ones most likely to change.
+
+Three more are packaged and worth knowing about, though none is required:
+
+- `wlr-randr` (0.3.0) and `wdisplays` (1.1.1) — one-shot and graphical output
+  inspection. Useful while writing kanshi profiles, because there is no
+  `xrandr` to fall back on when a layout misbehaves.
+- `mako-notifier` (1.8.0) — the wlroots-native notification daemon, and the
+  obvious candidate if dunst does not behave under Sway. See
+  [XFCE and X11 Session Glue](#xfce-and-x11-session-glue) for why exactly one
+  daemon must win, and `dunst-start.sh` under
+  [Session Lifecycle Helpers](#session-lifecycle-helpers) for the X11
+  assumption baked into how dunst is started today.
 
 The explicit `xwayland` entry matters here. Ubuntu's Sway 1.9 package does not
 depend on it, while this desktop still needs XWayland for Wine/KakaoTalk and
@@ -130,6 +151,45 @@ Further notes:
 - `run_once_after_50-install-fonts.sh.tmpl` describes its fonts in terms of
   polybar/rofi. The same Nerd Font serves Waybar, so only its comments need
   updating.
+
+## The `desktopProfile` Gating Trap
+
+Read this before deciding how a Sway session gets selected, because the choice
+is not free. Eight files branch on the **exact string** `linuxmint-i3-x11`:
+
+| File | Test | What it gates |
+| --- | --- | --- |
+| `.chezmoiignore` | `ne` | the whole desktop config tree |
+| `run_once_before_10-install-apt-packages.sh.tmpl` | `eq` (twice) | the i3 PPA and the `i3_x11` apt list |
+| `run_once_after_30-install-cli-tools.sh.tmpl` | `eq` | desktop CLI tooling |
+| `run_after_90-install-x11-input-configs.sh.tmpl` | `eq` | the Xorg rule and `/etc/default/keyboard` |
+| `run_once_after_95-build-i3lock-color.sh.tmpl` | `eq` | the i3lock-color build |
+| `run_once_after_96-build-zathura.sh.tmpl` | `eq` | the zathura build |
+| `.chezmoi.toml.tmpl` | — | the prompt that defines the value |
+| `.githooks/tests/test-pre-commit.sh` | — | fixture data |
+
+Keeping one profile that installs both stacks, as
+[Provisioning](#provisioning) recommends, sidesteps every row above. That is
+most of why it is the recommendation.
+
+If a `linuxmint-sway-wayland` value is introduced instead, all eight change
+meaning at once, and they fail in two different directions. `.chezmoiignore`
+is the dangerous one: its `ne` test means a new profile name **silently
+excludes**
+
+    .config/rofi/  .config/dunst/  .config/fcitx5/  .config/xfce4/
+
+Rofi, dunst, and fcitx5 are not X11-only, and fcitx5 is the Korean input
+method. A Sway machine missing `.config/fcitx5/` reads as an input-method bug,
+not a routing bug. The `eq` rows fail more quietly still — the machine simply
+never gets `/etc/default/keyboard`, so `ctrl:swapcaps` and
+`korean:ralt_hangul` go missing with no error anywhere.
+
+So splitting the profile is not "add a value to the prompt". It is: decide,
+per file, whether the gate means *i3 specifically* or *a Linux desktop of any
+session*, and convert the second group to a shared test first. Do that as its
+own change, verified with `chezmoi status` against both values, rather than
+inside the commit that adds the Sway config.
 
 ## Files to Leave As X11 Fallback
 
@@ -182,6 +242,34 @@ changes:
 
 ## High-Risk Files That Need Rewrite
 
+### The shared toast layer
+
+`dot_config/i3/_toast-common.sh` was added after the first audit and is now the
+most widely shared X11 dependency in the i3 tree: `display-setup.sh`,
+`usb-hotplug.sh`, and `tests/test-usb-hotplug.sh` all source it.
+
+`show_toast` renders a transient status message by running
+`rofi -e "<text>" -theme reload-toast -m primary` in the background and killing
+it after `I3_TOAST_SECONDS`. `wrap_toast` hard-wraps at 27 columns first,
+because Rofi 1.7.5 mis-sizes a box it wraps itself past two lines.
+
+Three separate things break under Wayland, and each needs its own decision:
+
+- **Rofi.** `rofi-wayland` is not packaged here, and `fuzzel`, the launcher
+  replacement suggested in [Main Replacements](#main-replacements), has no
+  `-e` message mode. The toast is therefore *not* covered by the launcher
+  decision, however much it looks like it should be.
+- **`-m primary`.** An X11 monitor concept. Wayland notification daemons take
+  an output name instead, which is the same question `dunst-start.sh` faces.
+- **The 27-column wrap.** A workaround for a Rofi bug. Whatever replaces Rofi
+  almost certainly wraps correctly, so port the call sites, not `wrap_toast`.
+
+The low-effort path is `notify-send` through whichever notification daemon wins
+under Sway, which turns each toast into an ordinary notification and deletes
+both the wrap workaround and the manual kill timer. That is a visible behavior
+change — these toasts are centered overlays today, not corner notifications —
+so confirm it is wanted rather than assuming equivalence.
+
 ### `dot_config/i3/executable_display-setup.sh`
 
 This is pure `xrandr`. Replace with `kanshi` profiles or Sway `output`
@@ -196,6 +284,19 @@ Current behavior to preserve:
 - one Polybar instance is relaunched per active output
 - an i3 reload/restart produces the short welcome/reload toast; decide whether
   that feedback is worth keeping rather than losing it accidentally
+
+Two changes since the first audit reshape this port:
+
+- The toast is no longer an inline Rofi call; `display-setup.sh` now sources
+  `_toast-common.sh`. See [The shared toast layer](#the-shared-toast-layer).
+- `dot_config/i3/executable_randr-hotplug.sh` now re-runs `display-setup.sh` on
+  monitor hotplug, keyed on the connected-output set from `xrandr --query`
+  rather than the raw i3 `output` event, with a 0.7s coalescing window and an
+  `flock` that the `exec_always` pkill must be able to release. Under Sway most
+  of this disappears — kanshi reacts to output hotplug natively. Check what
+  kanshi already covers before porting the poll loop; if a watcher is still
+  wanted after that, `swaymsg -t subscribe '["output"]'` replaces the `xrandr`
+  polling, and `tests/test-randr-hotplug.sh` goes with the old mechanism.
 
 ### `dot_config/i3/executable_wallpaper.sh`
 
@@ -238,11 +339,27 @@ There are also two more X11-owned input sources to account for now:
   the ELAN touchpad and carries pointer acceleration/tapping choices.
 - `run_after_90-install-x11-input-configs.sh.tmpl` installs an Xorg libinput
   acceleration rule for the external TrackPoint keyboard and writes
-  `/etc/default/keyboard` with `ctrl:swapcaps`.
+  `/etc/default/keyboard` with
+  `XKBOPTIONS="ctrl:swapcaps,korean:ralt_hangul"`.
 
-Do not port the Xorg rule itself. Re-express its acceleration setting in Sway,
-and verify whether the system keyboard option is inherited; if it is not, add
-the equivalent `xkb_options ctrl:swapcaps` to Sway.
+Do not port the Xorg rule itself; re-express its acceleration setting in Sway.
+
+The keyboard options are not a detail to defer, and there are two of them now —
+`korean:ralt_hangul` is newer than the first audit, which recorded only
+`ctrl:swapcaps`. `/etc/default/keyboard` belongs to console-setup: X11 picks it
+up, and Sway does not read it at all. Both options have to be restated:
+
+```ini
+input type:keyboard {
+    xkb_options ctrl:swapcaps,korean:ralt_hangul
+}
+```
+
+`korean:ralt_hangul` makes right Alt a Hangul key, beside the Ctrl+Space
+trigger fcitx5 already lists. Losing it silently is easy, because Ctrl+Space
+keeps working and the failure then looks like an fcitx5 problem rather than a
+missing xkb option. That is why the
+[Validation Checklist](#validation-checklist) names both triggers.
 
 In Sway, prefer `input` blocks:
 
@@ -434,6 +551,80 @@ Watch for these differences:
 - The current snap scripts inspect Polybar windows with `xdotool`/`xwininfo`;
   remove that logic or replace it with Waybar-aware reserved space handling.
 
+## Session Lifecycle Helpers
+
+These were added or reshaped after the first audit and had no entry here. None
+approaches the Polybar or resurrect surface in size, but each encodes a
+decision that a mechanical command swap gets wrong.
+
+### `dot_config/i3/executable_usb-hotplug.sh`
+
+The cheapest port in the tree, and worth not rewriting by mistake. It toasts
+USB attach and detach by parsing `udevadm monitor --udev --property` across the
+`usb` and `typec` subsystems, correlating a Type-C partner event with USB
+enumeration inside a 3s window, and caching device fields so a detach toast can
+still name hardware that is already gone.
+
+None of that is X11. `udevadm monitor --udev` is unprivileged and
+session-agnostic, and the script never touches a display server. Its only X11
+dependency is the toast it emits through `_toast-common.sh`. Resolve the toast
+layer and this script and its test follow with no other change; the i3
+`exec_always` line that starts it becomes the Sway equivalent.
+
+### `dot_config/i3/executable_lock.sh` and `run_once_after_95-build-i3lock-color.sh.tmpl`
+
+`lock.sh` probes `i3lock --version` for the `.c.` marker identifying
+i3lock-color and, when present, locks with the full theme — ring, inside,
+verify, wrong, and modifier colors, a 60px radius, and JuliaMono at three
+sizes. Stock i3lock is the fallback. `run_once_after_95` exists only to build
+i3lock-color from source, because Ubuntu does not package it.
+
+`swaylock` *is* packaged (1.7.2) and takes the same class of options, so the
+Wayland side needs no build step — drop that dependency rather than porting it.
+Two details do not survive a flag rename: swaylock spells the ring geometry
+`--indicator-radius` and `--indicator-thickness`, not `--radius` and
+`--ring-width`; and the foreground behavior that `-n` selects for i3lock
+matters differently here, because `swayidle`'s `before-sleep` contract needs
+swaylock to stay in the foreground. Verify the lock screen actually renders as
+intended instead of assuming the translation worked.
+
+`tests/test-lock.sh` covers the version probe and the fallback. A Sway
+counterpart needs its own.
+
+### `dot_config/i3/executable_dunst-start.sh`
+
+Starts dunst 1.9 pinned to the internal panel, resolving that panel by reading
+`xrandr --listmonitors` and extracting the **numeric index** of the output
+matching `I3_LAPTOP_OUTPUT` (default `eDP`), then falling back to the first
+`eDP`/`LVDS` name, the primary-flagged monitor, and the first listed.
+
+dunst's `monitor` setting is an index under X11 but an **output name** under
+Wayland, so this is not a command swap: the entire index-resolution function
+becomes unnecessary and collapses to the Sway output name. Take that name from
+`swaymsg -t get_outputs`, per the snapshot note about renaming.
+
+This is also where the notification-daemon choice becomes concrete. If mako
+wins instead of dunst, this script is deleted rather than ported, and its
+output and follow behavior has to be re-expressed in mako's config.
+
+### `dot_config/i3/executable_session-reload.sh` and `executable_i3-restart.sh`
+
+`session-reload.sh` runs from `exec_always`, so it fires on every reload. It
+reloads systemd user units, restarts dunst only when `dunstrc` is newer than
+the running service, refreshes Picom and the displays, and collects failures
+into the reload toast. Under Sway the Picom step disappears, the display step
+becomes kanshi, and the toast follows the toast decision; the systemd and dunst
+steps carry over unchanged.
+
+`i3-restart.sh` validates a candidate config with `i3 -C -c <config>` before
+replacing the running instance, reporting through `notify-send` and falling
+back to `i3-nagbar`. Sway validates with `sway --validate -c <config>`. For the
+error path, confirm whether `swaynag` is present — there is no separate
+`swaynag` package in these repos, so it either ships inside `sway` or is
+unavailable, and that was not verified from an installed system. Keep the
+validate-before-restart guard either way; it is the reason a bad edit does not
+cost a session.
+
 ## XFCE and X11 Session Glue
 
 The current session is pure i3, but it deliberately borrows XFCE services and
@@ -523,22 +714,39 @@ priority favors X11 when `DISPLAY` is set. In XWayland sessions both `DISPLAY`
 and `WAYLAND_DISPLAY` may exist. Prefer `wl-copy` whenever
 `WAYLAND_DISPLAY` is non-empty.
 
-This is not only a Wayland concern — the two files already contradict each
-other. `dot_tmux.conf` documents the priority as "wl-copy (Wayland) -> xclip
-(X11) -> pbcopy (macOS) -> OSC52 fallback", while `clipcopy` both describes
-itself as "xclip -> xsel -> Wayland" and behaves that way. Reordering `clipcopy`
-to check `WAYLAND_DISPLAY` first makes the code match the intent already written
-down in tmux, and is safe under X11 because `WAYLAND_DISPLAY` is unset there.
-Fix the stale comment on `clipcopy` line 3 at the same time; it claims the host
-is "Mint XFCE / X11".
+Reordering `clipcopy` to check `WAYLAND_DISPLAY` first is safe under X11,
+where `WAYLAND_DISPLAY` is unset. Fix the stale comment on `clipcopy` line 3 at
+the same time; it still claims the host is "Mint XFCE / X11".
 
-`dot_tmux.conf` should update Wayland environment variables:
+An earlier revision of this file justified that reorder by saying
+`dot_tmux.conf` documents a "wl-copy -> xclip -> pbcopy -> OSC52" priority that
+`clipcopy` contradicts. That was wrong: no such comment exists in
+`dot_tmux.conf`, whose clipboard notes cover `set-clipboard on` and the OSC 52
+path. The reorder is still right, it just is not resolving a contradiction.
+
+That revision also recommended replacing `update-environment` with one literal
+string. **Do not.** `dot_tmux.conf` deliberately does:
 
 ```tmux
-set -g update-environment "DISPLAY WAYLAND_DISPLAY XDG_SESSION_TYPE SWAYSOCK KRB5CCNAME SSH_ASKPASS SSH_AUTH_SOCK SSH_AGENT_PID SSH_CONNECTION WINDOWID XAUTHORITY TERM_PROGRAM"
+set -gu update-environment
+set -g update-environment[99] TERM_PROGRAM
 ```
 
-Keep X11 variables too so tmux remains usable in the fallback session.
+`-gu` restores tmux's built-in default list and the indexed assignment appends
+to it, so the config never has to track what upstream ships. On tmux 3.7c that
+default is `DISPLAY KRB5CCNAME MSYSTEM SSH_ASKPASS SSH_AUTH_SOCK SSH_AGENT_PID
+SSH_CONNECTION WAYLAND_DISPLAY WINDOWID XAUTHORITY` — `WAYLAND_DISPLAY` is
+already carried. The literal string would drop `MSYSTEM`, freeze the list
+against future tmux versions, and add nothing that is not there already.
+
+Only two variables are genuinely missing, and they append the same way:
+
+```tmux
+set -g update-environment[100] SWAYSOCK
+set -g update-environment[101] XDG_SESSION_TYPE
+```
+
+Both are harmless in the X11 fallback, where they are unset.
 
 ## Suggested Implementation Order
 
@@ -549,6 +757,9 @@ Keep X11 variables too so tmux remains usable in the fallback session.
    fresh machine gets no Wayland stack at all today.
 2. Add the `.chezmoiignore` routing for the new Sway/Waybar/Kanshi trees before
    adding them. A server or `desktopProfile=none` must not receive the session.
+   If that routing tempts you to introduce a second profile value, stop and read
+   [The `desktopProfile` Gating Trap](#the-desktopprofile-gating-trap) — that
+   conversion is its own change, landed before this one.
 3. Add a minimal `dot_config/sway/config` with terminal, launcher, workspaces,
    movement, volume, brightness, lock, screenshot, autostart, and the systemd/
    D-Bus environment import needed by portals.
@@ -569,6 +780,41 @@ Keep X11 variables too so tmux remains usable in the fallback session.
    files. This is also the point to split the package lists (a `wayland` list
    plus a `session` prompt in `.chezmoi.toml.tmpl`) and to rewrite
    the documentation as a parallel `dot_config/sway/MANUAL.md`.
+
+## Tests
+
+AGENTS.md requires running the relevant standalone checks, and the desktop tree
+carries 21 of them under `dot_config/i3/tests/` plus 2 under
+`dot_config/polybar/tests/`. 22 of those 23 run from
+`dot_config/i3/tests/run-fast.sh` and are tabulated in
+`dot_config/i3/MANUAL.md`; `test-overflow-live.py` needs a live session and is
+deliberately left out. The first audit did not mention any of them; they are a
+migration deliverable, not an afterthought.
+
+They fall into three groups that need different treatment:
+
+- **Tests of X11 mechanics** — `test-polybar-peek.sh`, `test-bar-nav.sh`,
+  `test-super-polybar-listener.py`, `test-top-edge-peek.py`,
+  `test-randr-hotplug.sh`, `test-i3-resurrect-polybar.sh`. These die with the
+  features they cover. Do not port them; retire each one alongside the decision
+  about whether its feature survives.
+- **Tests of logic that merely runs under X11** — `test-tile-snap.sh`,
+  `test-snap-watcher.sh`, `test-usb-hotplug.sh`, `test-lock.sh`,
+  `test-dunst-start.sh`, `test-session-reload.sh`, `test-zen-url-state.py`.
+  These assert on geometry arithmetic, parsing, and protocol through fixtures
+  and stubbed commands, so they are the ones worth adapting —
+  `test-usb-hotplug.sh` nearly for free, for the same reason its script is.
+- **Contract tests.** `test-provisioning-contract.py` pairs desktop runtime
+  consumers with their provisioning declarations, so it is exactly the tripwire
+  that catches a config-only migration: adding Wayland packages or a Sway
+  config without the other half should make it fail. Extend it to cover the
+  Sway profile rather than loosening it. `test-config-consistency.py` is mixed
+  — its bar-navigation and power-menu checks are Polybar-specific and retire
+  with Polybar, while its autotiling-restart, `pgrep`-matchability, and
+  system-interpreter checks apply to any session and should be kept.
+
+Keep `run-fast.sh` green on the X11 machine throughout the migration. A Sway
+entry point belongs beside it, not inside it, until that session is real.
 
 ## Validation Checklist
 
@@ -599,7 +845,11 @@ Before calling the migration done, verify in a real Wayland session:
   translated KakaoTalk rule does not fight fullscreen
 - the chosen workspace overflow, snapping, bar visibility, and kill-mode
   behaviors match the decisions recorded during the port
-- Korean/input-method behavior still works
+- Korean/input-method behavior still works through **both** triggers: the
+  fcitx5 Ctrl+Space binding and the right-Alt Hangul key from
+  `korean:ralt_hangul`
+- status toasts still appear — display change, USB attach and detach —
+  through whatever replaced Rofi's `-e` mode
 - fallback i3/X11 session still starts
 
 ## Commands Useful During Migration
@@ -618,5 +868,5 @@ systemctl --user status xdg-desktop-portal.service xdg-desktop-portal-wlr.servic
 Use `rg` to find X11 dependencies before changing behavior:
 
 ```sh
-rg -n "xrandr|xinput|xmodmap|xdotool|xprop|xwininfo|Xlib|xclip|xsel|picom|polybar|feh|xss-lock|xflock4|xkill|xrdb|xsetroot|unclutter|xfconf|xfsettingsd|xfce4-power-manager|i3-msg|i3ipc" -S --glob '!X11_TO_WAYLAND_TRANSITION.md' .
+rg -n "xrandr|xinput|xmodmap|xdotool|xprop|xwininfo|Xlib|xclip|xsel|picom|polybar|feh|xss-lock|xflock4|xkill|xrdb|xsetroot|unclutter|xfconf|xfsettingsd|xfce4-power-manager|i3-msg|i3ipc" -S --glob '!X2W.md' .
 ```

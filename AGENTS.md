@@ -81,7 +81,7 @@ next `apply` when the data changes.
 
 The Mint desktop is deeply X11-coupled (`xrandr`, `xdotool`, `xinput`, Polybar,
 `i3-resurrect`). Before proposing Sway as a second session, read
-[`X11_TO_WAYLAND_TRANSITION.md`](X11_TO_WAYLAND_TRANSITION.md). Standing rules:
+[`X2W.md`](X2W.md). Standing rules:
 
 - Add a **parallel** profile (`dot_config/sway/`, `dot_config/waybar/`); the
   i3/X11 files are the known-good fallback until explicitly retired.
