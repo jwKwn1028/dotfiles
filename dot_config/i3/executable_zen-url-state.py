@@ -19,9 +19,8 @@ import time
 
 try:
     import lz4.block
-except Exception:
-    print("[]")
-    sys.exit(0)
+except ImportError:
+    lz4 = None
 
 
 URL_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
@@ -54,6 +53,8 @@ def decode_mozlz4(path):
     raw = path.read_bytes()
     if raw.startswith(b"mozLz40\0"):
         raw = raw[8:]
+        if lz4 is None:
+            raise ValueError("python3-lz4 is required for compressed session files")
         raw = lz4.block.decompress(raw)
     return json.loads(raw.decode("utf-8"))
 
@@ -249,12 +250,9 @@ def match_pages(windows, pages):
         by_title.setdefault(page["title_key"], []).append((index, page))
 
     used = set()
-    title_occurrences = {}
     matches = []
-    for window_index, window in enumerate(windows):
+    for window in windows:
         key = window["title_key"]
-        occurrence = title_occurrences.get(key, 0)
-        title_occurrences[key] = occurrence + 1
 
         window_browser = window.get("browser", "zen")
         selected = None
@@ -264,7 +262,7 @@ def match_pages(windows, pages):
             if i not in used and p.get("browser", "zen") == window_browser
         ]
         if candidates:
-            selected = candidates[min(occurrence, len(candidates) - 1)]
+            selected = candidates[0]
 
         if selected is None:
             continue
@@ -395,12 +393,12 @@ def main():
 
     windows = list(walk_i3(tree))
     live_matches = live_page_state(windows)
-    live_window_ids = {match["window_id"] for match in live_matches}
-    remaining_windows = [
-        window for window in windows if window["window_id"] not in live_window_ids
-    ]
     pages = active_pages()
-    matches = live_matches + match_pages(remaining_windows, pages)
+    # Reserve fallback candidates for every window before overriding live URLs.
+    # Otherwise a same-title live window's stale page can be given to its sibling.
+    by_id = {match["window_id"]: match for match in match_pages(windows, pages)}
+    by_id.update({match["window_id"]: match for match in live_matches})
+    matches = [by_id.get(window["window_id"], dict(window, url=None)) for window in windows]
     print(json.dumps(matches, ensure_ascii=False))
 
 

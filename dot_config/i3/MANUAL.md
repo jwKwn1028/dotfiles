@@ -537,6 +537,7 @@ ShellCheck (when installed), and `i3 -C`.
 | `test-bar-nav.sh` | Bar-mode navigation, selected-module actions, marker state, and prior-visibility restoration. |
 | `test-polybar-peek.sh` | `polybar-peek.sh` show/hide, ownership, and debounce behavior. |
 | `test-i3-resurrect-polybar.sh` | Successful, hidden-bar, and early-failure restore paths preserve the bar's prior visibility and raise it when restored. |
+| `test-resurrect-state.py` | Snapshot validation, atomic publication, previous-generation recovery, concurrent profiles, interrupted saves, route failures, browser pairing, and observed restore results. |
 | `test-randr-hotplug.sh` | Output-event coalescing, connected-set changes, mid-run hotplugs, and connection-status toast selection. |
 | `test-usb-hotplug.sh` | Connector classification and its refusal to guess an unrecognized topology, burst coalescing, hub arrivals, bounce suppression, Type-C partner correlation, wattage and alternate-mode detail, detach descriptions taken from cache, and lock handover when the watcher is replaced. |
 | `test-dunst-start.sh` | Dunst 1.9 runtime config generation, laptop/primary fallbacks, and restart-on-index-change behavior. |
@@ -1013,6 +1014,11 @@ There are three save/restore profiles:
 The B and C scripts are thin wrappers that set `I3_RESURRECT_STATE_DIR` and
 `I3_RESURRECT_META_DIR`, then exec the main save/restore scripts.
 
+All profiles share a nonblocking operation lock for the current X display in
+`$XDG_RUNTIME_DIR` (falling back to `/run/user/$(id -u)`). A second save or
+restore reports that an operation is running and exits. It does not queue a
+second desktop replacement. `--check` only inspects dependencies and files.
+
 ### Save Script
 
 `i3-resurrect-save-all.sh` saves every active workspace listed by
@@ -1023,24 +1029,30 @@ Default environment and paths:
 - `I3_RESURRECT_STATE_DIR`: `~/.config/i3/resurrect`.
 - `I3_RESURRECT_META_DIR`: `~/.config/i3/resurrect-meta`.
 - `I3_RESURRECT_SWALLOW`: `class,instance,title`.
-- Workspace list: `workspaces.txt`.
+- Snapshot manifest: `snapshot.json` in the profile metadata directory.
+- Workspace list: `workspaces.txt` inside the selected generation's `meta/`.
 - Focused workspace: `focused-workspace.txt`.
 - Zathura state: `zathura-pages.json`.
 - Zen/Helium URL state: `zen-pages.json`.
 - Ghostty session state: `ghostty-sessions.json`.
 - Lab route state: `labroute.txt`.
-- Zen URL helper: `zen-url-state.py`.
+- Zen URL helper: sibling `zen-url-state.py`, overridable with
+  `I3_RESURRECT_ZEN_HELPER`.
 - `I3_RESURRECT_GHOSTTY_HELPER`: `ghostty-session-state.py`.
 - `TAILSCALE_REMOTE_MODE_FILE`:
   `$XDG_RUNTIME_DIR/tailscale-remote-proxy-required`, which `labroute on`
   creates.
 - Helium desktop file: `~/.local/share/applications/helium.desktop`.
 
-`--check` verifies that `i3-msg`, `jq`, and `i3-resurrect` are available.
+`--check` verifies `i3-msg`, `jq`, `flock`, `sha256sum`, `i3-resurrect`, the
+system Python interpreter, and the shared snapshot helper.
 
 Save behavior:
 
-- Creates state and metadata directories.
+- Takes the shared operation lock and creates a private staging generation
+  under `<state-directory>/snapshots/generation.*`, containing `state/` and
+  `meta/`. All files use a restrictive umask.
+- Captures one i3 tree for application metadata and window identities.
 - Captures Zathura page state through D-Bus when possible.
 - Captures Zen and Helium URL state through `zen-url-state.py`.
 - Captures each Ghostty window's directory and remote sessions through
@@ -1049,13 +1061,27 @@ Save behavior:
 - Writes sorted workspace names to `workspaces.txt`.
 - Writes the focused workspace to `focused-workspace.txt`.
 - Runs `i3-resurrect save` for each workspace.
+- Rejects the save if that workspace's window identities/properties changed
+  since capture; retry after the desktop settles.
 - Normalizes saved layout JSON after each save.
 - Ensures Zen Browser programs exist for Zen layout placeholders.
 - Rewrites Helium AppImage commands to stable launch commands.
 - Adds captured Zen/Helium URLs back into browser launch commands.
 - Adds captured Zathura page numbers back into Zathura launch commands.
 - Rewrites Ghostty launch commands and placeholders per window.
+- Validates all layouts, program lists, and present application metadata,
+  flushes the generation, then atomically replaces the profile's
+  `snapshot.json` manifest. The manifest selects both the current and previous
+  generations. Failed or interrupted saves leave the old selection usable.
+- On the first successful save, archives a valid legacy flat profile as the
+  previous generation. The original legacy files remain untouched. Invalid
+  legacy data is left in place but is not offered as a recovery generation.
 - Sends a desktop notification with the saved workspace count.
+
+Generations are immutable after publication. Older generations are retained;
+there is no automatic history pruning. Temporary staging directories from
+ordinary failures and caught signals are removed. A hard kill or power loss
+may leave an unselected staging directory, which restore ignores.
 
 Layout normalization removes titles from swallows for Ghostty, Zen, and Helium
 so restored windows are less likely to miss placeholders because of changed
@@ -1092,9 +1118,15 @@ It uses two strategies:
   - Handles Mozilla `jsonlz4` session files through Python `lz4.block`.
 
 The helper matches i3 browser windows to session pages by normalized title and
-browser class. It ignores blank URLs and writes JSON entries containing
+browser class, consuming same-title candidates in order. Live URLs override
+fallback results for the same window ID. It retains original window order and
+keeps entries with a null URL when capture fails, so missing URLs cannot shift
+later windows into earlier slots. It writes JSON entries containing
 workspace, window ID, title, URL, profile, session file, window index, and
-browser type.
+browser type when available. The save step joins this metadata to the captured
+tree by window ID before assigning URLs to program slots; it leaves commands
+alone when browser window/program counts disagree. Browser session files still
+provide only best-effort matching for indistinguishable same-title windows.
 
 ### Helium Command Stabilization
 
@@ -1164,29 +1196,56 @@ Default environment and paths:
 - `I3_RESURRECT_REMOTE_HELPERS`: `~/.zsh/rc.d/50-remote.zsh`.
 - `I3_RESURRECT_LABROUTE_TIMEOUT`: `45` seconds.
 
-`--check` verifies that `i3-msg`, `jq`, `i3-resurrect`, and a saved workspace
-list are available.
+`--check` resolves one generation and validates the complete saved workspace
+list, every referenced layout and program JSON file, filename collisions,
+focused workspace, route state, and present application metadata. It also
+checks required executables/helpers. It never closes windows, changes routing,
+or controls Polybar. Legacy flat profiles are supported when no manifest
+exists; an invalid manifest does not silently fall back to legacy data.
+
+`--previous` selects the previous generation. It can be combined with
+`--check` to inspect recovery data before restoring it:
+
+```sh
+~/.config/i3/i3-resurrect-restore-all.sh --previous --check
+~/.config/i3/i3-resurrect-restore-all.sh --previous
+```
+
+The B/C wrappers accept the same options.
 
 Restore behavior:
 
-- Aborts if no workspace list exists.
-- Hides Polybar during restore if it is visible.
-- Kills all existing windows and waits for them to close.
+- Takes the shared operation lock, resolves the snapshot once, and validates
+  it before changing the desktop. Invalid or missing files abort restore.
 - If `labroute.txt` says `on`, runs `labroute on` from the remote helpers
-  before any program starts, so reattaching sessions take the route. It never
-  turns the route off, and a failure or timeout counts as an error.
+  before closing any existing windows. A failure or timeout aborts restore
+  while leaving the current windows and Polybar alone. It never turns the
+  route off.
+- Hides Polybar during restore if it is visible.
+- Kills all existing windows and waits for them to close. Restore remains a
+  full desktop replacement, including windows outside saved workspaces.
 - Detects an active external output.
 - For each saved workspace:
   - Switches to the workspace.
-  - Moves workspaces `7` to `10` to the active external output if one exists.
+  - Moves workspaces `3` to `10` to the active external output if one exists.
   - Restores layout first.
   - Waits briefly.
   - Restores programs.
-  - Waits until i3-resurrect placeholders are swallowed.
+  - Checks i3 command results and records layout/program launch failures.
+  - Waits for the workspace to exist, all placeholders to be swallowed, and
+    the expected window count to appear. Ghostty's unique instances are
+    checked too. A missing workspace is a failure, not an empty success.
+- Rechecks successful workspaces after the last workspace finishes, catching
+  windows that closed or moved during later restoration steps.
 - Restores focus to the saved focused workspace.
 - Restores Polybar visibility on exit if it was visible before restore.
-- Sends a success or error notification that also names a lab route failure
-  and any saved sessions to reattach by hand.
+- Writes `last-restore.json` in the profile metadata directory with the
+  selected snapshot, per-workspace status/reason, and session retry guidance.
+- Sends a success or error notification identifying failed workspaces. Remote
+  sessions whose terminal launch completed are labelled
+  `Remote attach requested (unverified)`; this does not assert remote login or
+  attachment success. Unlaunched sessions and sessions on failed workspaces
+  are listed under `Reattach by hand`.
 
 ## Saved Session Profiles
 
@@ -1200,22 +1259,27 @@ To see what a profile currently holds:
 
 ```sh
 cd ~/.config/i3
-cat resurrect-meta/workspaces.txt          # which workspaces will restore
-cat resurrect-meta/focused-workspace.txt
-jq . resurrect-meta/zathura-pages.json     # captured PDF pages
-jq . resurrect-meta/zen-pages.json         # captured browser URLs
-jq . resurrect-meta/ghostty-sessions.json  # Ghostty dirs and sessions
-cat resurrect-meta/labroute.txt            # lab route at save time
+jq . resurrect-meta/snapshot.json         # current and previous generations
+snapshot=$(/usr/bin/python3 ./i3-resurrect-state.py resolve resurrect resurrect-meta)
+state=$(printf '%s' "$snapshot" | jq -r '.[0]')
+meta=$(printf '%s' "$snapshot" | jq -r '.[1]')
+cat "$meta/workspaces.txt"                 # which workspaces will restore
+cat "$meta/focused-workspace.txt"
+jq . "$meta/zathura-pages.json"            # captured PDF pages
+jq . "$meta/zen-pages.json"                # captured browser URLs
+jq . "$meta/ghostty-sessions.json"         # Ghostty dirs and sessions
+cat "$meta/labroute.txt"                   # route at save time
 jq -r '.[].command | if type=="array" then join(" ") else . end' \
-   resurrect/workspace_7_programs.json     # what workspace 7 relaunches
+   "$state/workspace_7_programs.json"      # what workspace 7 relaunches
+jq . resurrect-meta/last-restore.json      # last completed restore attempt
 ```
 
 Use `resurrect-meta-b` / `resurrect-b` and `resurrect-meta-c` / `resurrect-c`
 for the other two profiles.
 
-A state directory can hold saved files for workspaces that are absent from the
-matching `workspaces.txt`; those are leftovers from an earlier save and will not
-be restored.
+A legacy state directory can hold files for workspaces absent from its
+`workspaces.txt`; those leftovers are not restored or copied into recovery
+generations. New generations contain only the workspaces from that save.
 
 ## Autostart
 
@@ -1396,15 +1460,19 @@ Inside this directory:
 - `kakaotalk-float-watcher.sh`: repairs KakaoTalk floating state.
 - `i3-resurrect-save-all.sh`: main save profile script.
 - `i3-resurrect-restore-all.sh`: main restore profile script.
+- `_resurrect-common.sh`: shared operation lock, dependencies, and metadata paths.
+- `i3-resurrect-state.py`: snapshot validation/publication, browser pairing,
+  readiness checks, and session reporting.
 - `i3-resurrect-save-all-b.sh` and `i3-resurrect-restore-all-b.sh`: profile B.
 - `i3-resurrect-save-all-c.sh` and `i3-resurrect-restore-all-c.sh`: profile C.
 - `zen-url-state.py`: Zen/Helium URL capture helper.
 - `ghostty-session-state.py`: Ghostty window directory and remote session
   capture helper.
-- `resurrect`, `resurrect-b`, `resurrect-c`: saved i3-resurrect layouts and
-  program lists.
-- `resurrect-meta`, `resurrect-meta-b`, `resurrect-meta-c`: saved workspace,
-  focus, browser URL, Zathura page, Ghostty session, and lab route metadata.
+- `resurrect`, `resurrect-b`, `resurrect-c`: generation directories, each
+  containing saved layouts, program lists, and application metadata; legacy
+  flat layout/program files may also remain here.
+- `resurrect-meta`, `resurrect-meta-b`, `resurrect-meta-c`: snapshot manifests,
+  last-restore reports, and any original legacy metadata.
 - `tests/`: standalone checks for the watchers, hotplug trigger, and Polybar
   interaction helpers.
 
@@ -1413,6 +1481,7 @@ Runtime files outside this directory:
 - `$XDG_RUNTIME_DIR/i3-titles.state`
 - `$XDG_RUNTIME_DIR/i3-focus-history`
 - `$XDG_RUNTIME_DIR/i3-focus-tracker.lock`
+- `$XDG_RUNTIME_DIR/i3-resurrect-<display-hash>.lock`
 - `$XDG_RUNTIME_DIR/i3-snap-watcher.lock`
 - `$XDG_RUNTIME_DIR/i3-kakaotalk-float-watcher.lock`
 - `$XDG_RUNTIME_DIR/i3-randr-hotplug.lock`

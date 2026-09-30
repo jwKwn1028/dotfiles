@@ -325,6 +325,13 @@ class MatchPagesTests(unittest.TestCase):
         self.assertEqual([(m["window_id"], m["url"]) for m in matches],
                          [("1", "https://a.test"), ("2", "https://b.test")])
 
+    def test_three_same_titled_windows_do_not_skip_the_middle_page(self) -> None:
+        matches = ZEN.match_pages(
+            [self.window(n, "Docs") for n in (1, 2, 3)],
+            [self.page(f"https://{n}.test", "Docs") for n in (1, 2, 3)])
+        self.assertEqual([m["url"] for m in matches],
+                         [f"https://{n}.test" for n in (1, 2, 3)])
+
     def test_a_page_of_another_browser_is_not_used(self) -> None:
         self.assertEqual(
             ZEN.match_pages([self.window(1, "Mail", browser="helium")],
@@ -383,6 +390,41 @@ class LiveCaptureGateTests(unittest.TestCase):
 
 
 class MainTests(unittest.TestCase):
+    def mock_capture(self, live, pages):
+        self.addCleanup(setattr, ZEN, "live_page_state", ZEN.live_page_state)
+        self.addCleanup(setattr, ZEN, "active_pages", ZEN.active_pages)
+        ZEN.live_page_state = lambda windows: live
+        ZEN.active_pages = lambda: pages
+
+    @staticmethod
+    def tree(*titles):
+        return json.dumps({"type": "workspace", "name": "1", "nodes": [
+            {"window": i, "window_properties": {"class": "zen", "title": title}}
+            for i, title in enumerate(titles, 1)]})
+
+    def test_partial_live_capture_keeps_original_window_order(self):
+        self.mock_capture(
+            [{"window_id": "2", "workspace": "1", "url": "https://live.test"}],
+            [MatchPagesTests.page("https://fallback.test", "First")])
+        result = json.loads(self.run_main(self.tree("First", "Second")))
+        self.assertEqual([(item["window_id"], item["url"]) for item in result],
+                         [("1", "https://fallback.test"), ("2", "https://live.test")])
+
+    def test_unknown_url_retains_its_window_slot(self):
+        self.mock_capture([], [MatchPagesTests.page("https://known.test", "Known")])
+        result = json.loads(self.run_main(self.tree("Unknown", "Known")))
+        self.assertEqual([(item["window_id"], item["url"]) for item in result],
+                         [("1", None), ("2", "https://known.test")])
+
+    def test_live_same_title_window_does_not_donate_its_stale_page(self):
+        self.mock_capture(
+            [{"window_id": "1", "workspace": "1", "url": "https://live.test"}],
+            [MatchPagesTests.page("https://stale.test", "Same"),
+             MatchPagesTests.page("https://second.test", "Same")])
+        result = json.loads(self.run_main(self.tree("Same", "Same")))
+        self.assertEqual([item["url"] for item in result],
+                         ["https://live.test", "https://second.test"])
+
     def run_main(self, stdin_text):
         out, err = io.StringIO(), sys.stdout
         stdin = sys.stdin

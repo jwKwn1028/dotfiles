@@ -4,31 +4,31 @@
 
 set -euo pipefail
 
+DIR="$(dirname "$(readlink -f "$0")")"
+. "$DIR/_resurrect-common.sh"
+
 STATE_DIR="${I3_RESURRECT_STATE_DIR:-$HOME/.config/i3/resurrect}"
 META_DIR="${I3_RESURRECT_META_DIR:-$HOME/.config/i3/resurrect-meta}"
 SWALLOW="${I3_RESURRECT_SWALLOW:-class,instance,title}"
 SYSTEM_PYTHON="${I3_SYSTEM_PYTHON:-/usr/bin/python3}"
-WORKSPACES_FILE="$META_DIR/workspaces.txt"
-FOCUSED_FILE="$META_DIR/focused-workspace.txt"
-ZATHURA_PAGES_FILE="$META_DIR/zathura-pages.json"
-ZEN_PAGES_FILE="$META_DIR/zen-pages.json"
-GHOSTTY_SESSIONS_FILE="$META_DIR/ghostty-sessions.json"
-LABROUTE_FILE="$META_DIR/labroute.txt"
-ZEN_URL_STATE_HELPER="$HOME/.config/i3/zen-url-state.py"
-GHOSTTY_SESSION_HELPER="${I3_RESURRECT_GHOSTTY_HELPER:-$HOME/.config/i3/ghostty-session-state.py}"
+resurrect_paths
+ZEN_URL_STATE_HELPER="${I3_RESURRECT_ZEN_HELPER:-$DIR/zen-url-state.py}"
+[ -r "$ZEN_URL_STATE_HELPER" ] || ZEN_URL_STATE_HELPER="$DIR/executable_zen-url-state.py"
+GHOSTTY_SESSION_HELPER="${I3_RESURRECT_GHOSTTY_HELPER:-$DIR/ghostty-session-state.py}"
+[ -r "$GHOSTTY_SESSION_HELPER" ] || GHOSTTY_SESSION_HELPER="$DIR/executable_ghostty-session-state.py"
 HELIUM_DESKTOP_FILE="${HELIUM_DESKTOP_FILE:-$HOME/.local/share/applications/helium.desktop}"
 # Same default as tailscale-remote-connect.
 LABROUTE_MODE_FILE="${TAILSCALE_REMOTE_MODE_FILE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tailscale-remote-proxy-required}"
 
 notify() {
     if command -v notify-send >/dev/null 2>&1; then
-        notify-send "i3-resurrect" "$1"
+        notify-send "i3-resurrect" "$1" || true
     fi
 }
 
 find_i3_resurrect() {
     if [ -n "${I3_RESURRECT:-}" ]; then
-        printf '%s\n' "$I3_RESURRECT"
+        command -v "$I3_RESURRECT"
     elif command -v i3-resurrect >/dev/null 2>&1; then
         command -v i3-resurrect
     elif [ -x "$HOME/.local/bin/i3-resurrect" ]; then
@@ -142,7 +142,7 @@ capture_zathura_page_state() {
     fi
 
     local tree
-    tree="$(i3-msg -t get_tree 2>/dev/null)" || {
+    tree="$(cat "$META_DIR/tree.json")" || {
         printf '[]\n'
         return 0
     }
@@ -210,7 +210,7 @@ capture_zen_page_state() {
     fi
 
     local tree
-    tree="$(i3-msg -t get_tree 2>/dev/null)" || {
+    tree="$(cat "$META_DIR/tree.json")" || {
         printf '[]\n'
         return 0
     }
@@ -226,7 +226,7 @@ capture_ghostty_session_state() {
     fi
 
     local tree
-    tree="$(i3-msg -t get_tree 2>/dev/null)" || {
+    tree="$(cat "$META_DIR/tree.json")" || {
         printf '[]\n'
         return 0
     }
@@ -240,145 +240,6 @@ capture_labroute_state() {
     else
         printf 'off\n'
     fi
-}
-
-remember_zen_pages_for_workspace() {
-    local workspace="$1"
-    local workspace_id
-    local programs_file
-    local tmp
-
-    workspace_id="$(workspace_file_id "$workspace")"
-    programs_file="$STATE_DIR/workspace_${workspace_id}_programs.json"
-
-    [ -s "$programs_file" ] || return 0
-    [ -s "$ZEN_PAGES_FILE" ] || return 0
-
-    tmp="$programs_file.tmp"
-    jq --arg workspace "$workspace" --slurpfile zen_pages "$ZEN_PAGES_FILE" '
-        def is_zen_command($cmd):
-            (($cmd | type) == "array") and
-            (
-                ($cmd | index("app.zen_browser.zen")) != null or
-                (
-                    $cmd |
-                    map(select(type == "string") | split("/") | last) |
-                    any(. == "zen" or . == "zen-browser")
-                )
-            );
-
-        def is_url_arg($arg):
-            (($arg | type) == "string") and
-            ($arg | test("^[A-Za-z][A-Za-z0-9+.-]*:"));
-
-        def strip_zen_url_args($cmd):
-            if ($cmd | length) == 0 then
-                []
-            elif $cmd[0] == "--new-window" then
-                strip_zen_url_args($cmd[1:])
-            elif is_url_arg($cmd[0]) then
-                strip_zen_url_args($cmd[1:])
-            else
-                [$cmd[0]] + strip_zen_url_args($cmd[1:])
-            end;
-
-        def command_with_zen_url($cmd; $url):
-            (strip_zen_url_args($cmd)) + ["--new-window", $url];
-
-        ($zen_pages[0] // []) as $states |
-        . as $programs |
-        [
-            range(0; length) as $i |
-            .[$i] as $entry |
-            ($entry.command // []) as $cmd |
-            if is_zen_command($cmd) then
-                ([
-                    range(0; $i) |
-                    $programs[.] |
-                    select(is_zen_command(.command // []))
-                ] | length) as $occurrence |
-                ([
-                    $states[] |
-                    select(.workspace == $workspace and ((.browser // "zen") == "zen"))
-                ]) as $matches |
-                ($matches[$occurrence] // $matches[0] // null) as $state |
-                if $state == null or (($state.url // "") == "") then
-                    $entry
-                else
-                    $entry | .command = command_with_zen_url($cmd; $state.url)
-                end
-            else
-                $entry
-            end
-        ]
-    ' "$programs_file" > "$tmp"
-    mv "$tmp" "$programs_file"
-}
-
-remember_helium_pages_for_workspace() {
-    local workspace="$1"
-    local workspace_id
-    local programs_file
-    local tmp
-
-    workspace_id="$(workspace_file_id "$workspace")"
-    programs_file="$STATE_DIR/workspace_${workspace_id}_programs.json"
-
-    [ -s "$programs_file" ] || return 0
-    [ -s "$ZEN_PAGES_FILE" ] || return 0
-
-    tmp="$programs_file.tmp"
-    jq --arg workspace "$workspace" --slurpfile zen_pages "$ZEN_PAGES_FILE" '
-        def is_helium_command($cmd):
-            (($cmd | type) == "array") and
-            (($cmd | map(select(type == "string")) | join(" ")) | test("helium"; "i"));
-
-        def is_url_arg($arg):
-            (($arg | type) == "string") and
-            ($arg | test("^[A-Za-z][A-Za-z0-9+.-]*:"));
-
-        def strip_helium_url_args($cmd):
-            if ($cmd | length) == 0 then
-                []
-            elif $cmd[0] == "--new-window" then
-                strip_helium_url_args($cmd[1:])
-            elif is_url_arg($cmd[0]) then
-                strip_helium_url_args($cmd[1:])
-            else
-                [$cmd[0]] + strip_helium_url_args($cmd[1:])
-            end;
-
-        def command_with_helium_url($cmd; $url):
-            (strip_helium_url_args($cmd)) + ["--new-window", $url];
-
-        ($zen_pages[0] // []) as $states |
-        . as $programs |
-        [
-            range(0; length) as $i |
-            .[$i] as $entry |
-            ($entry.command // []) as $cmd |
-            if is_helium_command($cmd) then
-                ([
-                    range(0; $i) |
-                    $programs[.] |
-                    select(is_helium_command(.command // []))
-                ] | length) as $occurrence |
-                ([
-                    $states[] |
-                    select(.workspace == $workspace and ((.browser // "") == "helium"))
-                ]) as $matches |
-                ($matches[$occurrence] // $matches[0] // null) as $state |
-                if $state == null or (($state.url // "") == "") then
-                    $entry
-                else
-                    $entry | .command = command_with_helium_url($cmd; $state.url)
-                end
-            else
-                $entry
-            end
-        ]
-    ' "$programs_file" > "$tmp"
-    mv "$tmp" "$programs_file"
 }
 
 remember_zathura_pages_for_workspace() {
@@ -601,44 +462,69 @@ normalize_layout_after_save() {
     mv "$tmp" "$layout_file"
 }
 
+case "${1:-}" in
+    ""|--check) ;;
+    *) printf 'Usage: %s [--check]\n' "$0" >&2; exit 2 ;;
+esac
+resurrect_dependencies
+I3_RESURRECT="$(find_i3_resurrect)"
 if [ "${1:-}" = "--check" ]; then
-    command -v i3-msg >/dev/null
-    command -v jq >/dev/null
-    find_i3_resurrect >/dev/null
     exit 0
 fi
 
-I3_RESURRECT="$(find_i3_resurrect)"
+umask 077
+resurrect_lock || exit 1
+PROFILE_STATE_DIR="$STATE_DIR"
+PROFILE_META_DIR="$META_DIR"
+STAGING=""
+cleanup_save() {
+    local status=$?
+    if [ -n "$STAGING" ]; then
+        # A failure after the manifest rename must never remove published data.
+        if [ "$(jq -r '.current // empty' "$PROFILE_META_DIR/snapshot.json" 2>/dev/null)" != "${STAGING##*/}" ]; then
+            rm -rf -- "$STAGING"
+        fi
+    fi
+    if [ "$status" -ne 0 ]; then
+        notify 'Save failed; the previous snapshot is still available.'
+    fi
+}
+trap cleanup_save EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+mkdir -p "$STATE_DIR/snapshots" "$META_DIR"
+# Read the old pointer now; never overwrite an unreadable manifest.
+resurrect_state resolve "$STATE_DIR" "$META_DIR" >/dev/null
+STAGING="$(mktemp -d "$STATE_DIR/snapshots/generation.XXXXXXXXXX")"
+STATE_DIR="$STAGING/state"
+META_DIR="$STAGING/meta"
 mkdir -p "$STATE_DIR" "$META_DIR"
+resurrect_paths
 
-capture_zathura_page_state > "$ZATHURA_PAGES_FILE.tmp"
-mv "$ZATHURA_PAGES_FILE.tmp" "$ZATHURA_PAGES_FILE"
-capture_zen_page_state > "$ZEN_PAGES_FILE.tmp"
-mv "$ZEN_PAGES_FILE.tmp" "$ZEN_PAGES_FILE"
-capture_ghostty_session_state > "$GHOSTTY_SESSIONS_FILE.tmp"
-mv "$GHOSTTY_SESSIONS_FILE.tmp" "$GHOSTTY_SESSIONS_FILE"
-capture_labroute_state > "$LABROUTE_FILE.tmp"
-mv "$LABROUTE_FILE.tmp" "$LABROUTE_FILE"
+i3-msg -t get_tree > "$META_DIR/tree.json"
+capture_zathura_page_state > "$ZATHURA_PAGES_FILE"
+capture_zen_page_state > "$ZEN_PAGES_FILE"
+capture_ghostty_session_state > "$GHOSTTY_SESSIONS_FILE"
+capture_labroute_state > "$LABROUTE_FILE"
 
 workspaces_json="$(i3-msg -t get_workspaces)"
-printf '%s\n' "$workspaces_json" | jq -r 'sort_by(.num)[] | .name' > "$WORKSPACES_FILE.tmp"
-printf '%s\n' "$workspaces_json" | jq -r '.[] | select(.focused) | .name' > "$FOCUSED_FILE.tmp"
-
-mv "$WORKSPACES_FILE.tmp" "$WORKSPACES_FILE"
-mv "$FOCUSED_FILE.tmp" "$FOCUSED_FILE"
+printf '%s\n' "$workspaces_json" | jq -r 'sort_by(.num)[] | .name' > "$WORKSPACES_FILE"
+printf '%s\n' "$workspaces_json" | jq -r '.[] | select(.focused) | .name' > "$FOCUSED_FILE"
 
 saved=0
-while IFS= read -r workspace; do
+while IFS= read -r workspace || [ -n "$workspace" ]; do
     [ -n "$workspace" ] || continue
-    "$I3_RESURRECT" save -w "$workspace" -d "$STATE_DIR" --swallow="$SWALLOW"
+    "$I3_RESURRECT" save -w "$workspace" -d "$STATE_DIR" --swallow="$SWALLOW" 9>&-
+    i3-msg -t get_tree | resurrect_state stable "$STATE_DIR" "$META_DIR" "$workspace"
     normalize_layout_after_save "$workspace"
     ensure_zen_browser_programs "$workspace"
     ensure_helium_browser_programs "$workspace"
-    remember_zen_pages_for_workspace "$workspace"
-    remember_helium_pages_for_workspace "$workspace"
+    resurrect_state browsers "$STATE_DIR" "$META_DIR" "$workspace"
     remember_zathura_pages_for_workspace "$workspace"
     remember_ghostty_sessions_for_workspace "$workspace"
     saved=$((saved + 1))
 done < "$WORKSPACES_FILE"
 
+resurrect_state publish "$PROFILE_STATE_DIR" "$PROFILE_META_DIR" "${STAGING##*/}"
+STAGING=""
 notify "Saved $saved workspace(s)."

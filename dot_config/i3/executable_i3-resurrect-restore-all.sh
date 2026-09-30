@@ -8,6 +8,7 @@ set -euo pipefail
 
 DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_polybar-common.sh"
+. "$DIR/_resurrect-common.sh"
 
 STATE_DIR="${I3_RESURRECT_STATE_DIR:-$HOME/.config/i3/resurrect}"
 META_DIR="${I3_RESURRECT_META_DIR:-$HOME/.config/i3/resurrect-meta}"
@@ -16,10 +17,7 @@ KILL_WAIT_ATTEMPTS="${I3_RESURRECT_KILL_WAIT_ATTEMPTS:-40}"
 KILL_POLL_INTERVAL="${I3_RESURRECT_KILL_POLL_INTERVAL:-0.25}"
 PLACEHOLDER_WAIT_ATTEMPTS="${I3_RESURRECT_WAIT_ATTEMPTS:-48}"
 PLACEHOLDER_POLL_INTERVAL="${I3_RESURRECT_POLL_INTERVAL:-0.25}"
-WORKSPACES_FILE="$META_DIR/workspaces.txt"
-FOCUSED_FILE="$META_DIR/focused-workspace.txt"
-LABROUTE_FILE="$META_DIR/labroute.txt"
-GHOSTTY_SESSIONS_FILE="$META_DIR/ghostty-sessions.json"
+resurrect_paths
 REMOTE_HELPERS="${I3_RESURRECT_REMOTE_HELPERS:-$HOME/.zsh/rc.d/50-remote.zsh}"
 LABROUTE_TIMEOUT="${I3_RESURRECT_LABROUTE_TIMEOUT:-45}"
 LAPTOP_OUTPUT="${I3_LAPTOP_OUTPUT:-eDP}"
@@ -29,13 +27,13 @@ LABROUTE_ERROR=""
 
 notify() {
     if command -v notify-send >/dev/null 2>&1; then
-        notify-send "i3-resurrect" "$1"
+        notify-send "i3-resurrect" "$1" || true
     fi
 }
 
 find_i3_resurrect() {
     if [ -n "${I3_RESURRECT:-}" ]; then
-        printf '%s\n' "$I3_RESURRECT"
+        command -v "$I3_RESURRECT"
     elif command -v i3-resurrect >/dev/null 2>&1; then
         command -v i3-resurrect
     elif [ -x "$HOME/.local/bin/i3-resurrect" ]; then
@@ -44,29 +42,6 @@ find_i3_resurrect() {
         printf 'i3-resurrect not found\n' >&2
         exit 127
     fi
-}
-
-workspace_file_id() {
-    printf '%s' "$1" | tr -d '/\\:*"<>|'
-}
-
-programs_file_for_workspace() {
-    local workspace="$1"
-    local workspace_id
-
-    workspace_id="$(workspace_file_id "$workspace")"
-    printf '%s/workspace_%s_programs.json\n' "$STATE_DIR" "$workspace_id"
-}
-
-saved_program_count() {
-    local programs_file="$1"
-
-    if [ ! -s "$programs_file" ]; then
-        printf '0\n'
-        return 0
-    fi
-
-    jq 'length' "$programs_file"
 }
 
 window_ids() {
@@ -115,7 +90,7 @@ kill_existing_windows() {
     local id
 
     while [ "$attempts" -gt 0 ]; do
-        ids="$(window_ids)"
+        ids="$(window_ids)" || return 1
         if [ -z "$ids" ]; then
             return 0
         fi
@@ -129,41 +104,26 @@ kill_existing_windows() {
         attempts=$((attempts - 1))
     done
 
-    ids="$(window_ids 2>/dev/null || true)"
+    ids="$(window_ids)" || return 1
+    [ -n "$ids" ] || return 0
     printf 'Timed out waiting for existing window(s) to close before restore.\n' >&2
     [ -z "$ids" ] || printf 'Remaining container ids:\n%s\n' "$ids" >&2
     return 1
 }
 
-placeholder_count() {
-    local workspace="$1"
-
-    i3-msg -t get_tree | jq --arg workspace "$workspace" '
-        ([.. | objects | select(.type? == "workspace" and .name? == $workspace)][0] // {})
-        | [.. | objects | select(((.swallows? // []) | length) > 0)]
-        | length
-    '
-}
-
-wait_for_placeholders() {
+wait_for_workspace() {
     local workspace="$1"
     local attempts="$PLACEHOLDER_WAIT_ATTEMPTS"
-    local count
+    local reason="workspace was not checked"
 
     while [ "$attempts" -gt 0 ]; do
-        count="$(placeholder_count "$workspace" 2>/dev/null || true)"
-        if [ "$count" = "0" ]; then
+        if reason="$(i3-msg -t get_tree | resurrect_state ready "$STATE_DIR" "$META_DIR" "$workspace" 2>&1)"; then
             return 0
         fi
-        if [ -z "$count" ]; then
-            return 1
-        fi
-
         sleep "$PLACEHOLDER_POLL_INTERVAL"
         attempts=$((attempts - 1))
     done
-
-    printf 'Timed out waiting for %s placeholder(s) on workspace "%s".\n' "$count" "$workspace" >&2
+    printf 'Workspace "%s": %s\n' "$workspace" "$reason"
     return 1
 }
 
@@ -175,8 +135,8 @@ restore_labroute() {
     [ "$(head -n 1 "$LABROUTE_FILE" 2>/dev/null)" = on ] || return 0
 
     output="$(
-        timeout "$LABROUTE_TIMEOUT" zsh -fc 'source "$1" && labroute on' \
-            zsh "$REMOTE_HELPERS" 2>&1
+        timeout --kill-after=2 "$LABROUTE_TIMEOUT" zsh -fc 'source "$1" && labroute on' \
+            zsh "$REMOTE_HELPERS" 9>&- 2>&1
     )" || status="$?"
     [ "$status" -ne 0 ] || return 0
 
@@ -190,110 +150,152 @@ restore_labroute() {
     return 1
 }
 
-# Saved sessions no restored window reattaches: other splits, unpaired windows.
-unattached_sessions() {
-    local workspace index kind name
-    local -a found=()
-
-    [ -s "$GHOSTTY_SESSIONS_FILE" ] || return 0
-    while IFS=$'\t' read -r workspace index kind name; do
-        grep -Fqx -- "$workspace" "$WORKSPACES_FILE" || continue
-        if [ "$index" = 0 ] && grep -Fq -- \
-            "I3_RESURRECT_REMOTE_SESSION=$kind:$name " \
-            "$(programs_file_for_workspace "$workspace")" 2>/dev/null; then
-            continue
-        fi
-        case "$kind" in
-            tmux) found+=("hpc $name") ;;
-            zmx) found+=("hpcz $name") ;;
-        esac
-    done < <(
-        jq -r '.[] | .workspace as $workspace | (.sessions // []) | to_entries[] |
-            [$workspace, .key, .value.kind, .value.name] | map(tostring) | @tsv' \
-            "$GHOSTTY_SESSIONS_FILE" 2>/dev/null
-    )
-
-    [ "${#found[@]}" -gt 0 ] || return 0
-    printf '%s\n' "${found[@]}" | awk '!seen[$0]++' | paste -sd ',' - | sed 's/,/, /g'
+# Preserve i3's command grammar when workspace/output names contain quotes.
+i3_string() {
+    jq -Rn --arg value "$1" '$value'
 }
 
-if [ "${1:-}" = "--check" ]; then
-    command -v i3-msg >/dev/null
-    command -v jq >/dev/null
-    find_i3_resurrect >/dev/null
-    test -s "$WORKSPACES_FILE"
-    exit 0
-fi
+i3_command() {
+    i3-msg "$1" | jq -e 'type == "array" and length > 0 and all(.[]; .success == true)' >/dev/null
+}
 
+CHECK=0
+PREVIOUS=()
+for argument in "$@"; do
+    case "$argument" in
+        --check) CHECK=1 ;;
+        --previous) PREVIOUS=(--previous) ;;
+        *) printf 'Usage: %s [--check] [--previous]\n' "$0" >&2; exit 2 ;;
+    esac
+done
+resurrect_dependencies
 I3_RESURRECT="$(find_i3_resurrect)"
-trap restore_polybar_after_restore EXIT
-
-if [ ! -s "$WORKSPACES_FILE" ]; then
-    notify "No saved workspace list found."
-    printf 'No saved workspace list found: %s\n' "$WORKSPACES_FILE" >&2
+for attempts in "$KILL_WAIT_ATTEMPTS" "$PLACEHOLDER_WAIT_ATTEMPTS"; do
+    if ! [[ "$attempts" =~ ^[1-9][0-9]*$ ]]; then
+        printf 'Restore wait attempts must be positive integers.\n' >&2
+        exit 1
+    fi
+done
+for interval in "$KILL_POLL_INTERVAL" "$PLACEHOLDER_POLL_INTERVAL" "$LAYOUT_DELAY" "$LABROUTE_TIMEOUT"; do
+    if ! [[ "$interval" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        printf 'Restore delays must be nonnegative numbers of seconds.\n' >&2
+        exit 1
+    fi
+done
+if [[ "$LABROUTE_TIMEOUT" =~ ^0+([.]0+)?$ ]]; then
+    printf 'The lab route timeout must be greater than zero.\n' >&2
     exit 1
 fi
 
-hide_polybar_for_restore
+umask 077
+if [ "$CHECK" = 0 ]; then
+    resurrect_lock || exit 1
+fi
+PROFILE_META_DIR="$META_DIR"
+if ! resolved="$(resurrect_state resolve "$STATE_DIR" "$META_DIR" "${PREVIOUS[@]}")"; then
+    notify 'Restore aborted; invalid snapshot manifest.'
+    exit 1
+fi
+STATE_DIR="$(jq -r '.[0]' <<< "$resolved")"
+META_DIR="$(jq -r '.[1]' <<< "$resolved")"
+resurrect_paths
+if ! resurrect_state validate "$STATE_DIR" "$META_DIR"; then
+    notify 'Restore aborted; snapshot validation failed. Existing windows are unchanged.'
+    exit 1
+fi
+if [ "$(cat "$LABROUTE_FILE" 2>/dev/null)" = on ]; then
+    command -v timeout >/dev/null
+    command -v zsh >/dev/null
+    test -r "$REMOTE_HELPERS"
+fi
+[ "$CHECK" = 0 ] || exit 0
 
+# Routing must succeed before replacing the desktop, not just before launching.
+if ! restore_labroute; then
+    notify "Restore aborted; existing windows are unchanged."$'\n'"Lab route not restored: $LABROUTE_ERROR"
+    exit 1
+fi
+
+trap restore_polybar_after_restore EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+hide_polybar_for_restore
 if ! kill_existing_windows; then
-    notify "Restore aborted; existing windows are still open."
+    notify 'Restore aborted; existing windows are still open or i3 is unavailable.'
     exit 1
 fi
 
 failed=0
-
-if ! restore_labroute; then
-    failed=1
-fi
+results='[]'
+record_result() {
+    local workspace="$1" status="$2" detail="${3:-}"
+    results="$(jq --arg workspace "$workspace" --arg status "$status" --arg detail "$detail" \
+        '. + [{workspace: $workspace, status: $status, detail: $detail}]' <<< "$results")"
+    if [ "$status" != ready ]; then
+        failed=1
+        printf 'Workspace "%s": %s\n' "$workspace" "$detail" >&2
+    fi
+}
 
 EXTERNAL_OUTPUT="$(active_external_output || true)"
-
-while IFS= read -r workspace; do
-    [ -n "$workspace" ] || continue
-    programs_file="$(programs_file_for_workspace "$workspace")"
-    programs_to_restore="$(saved_program_count "$programs_file")"
-
-    i3-msg "workspace \"$workspace\"" >/dev/null
+while IFS= read -r workspace || [ -n "$workspace" ]; do
+    if ! i3_command "workspace --no-auto-back-and-forth $(i3_string "$workspace")"; then
+        record_result "$workspace" failed 'could not select workspace'
+        continue
+    fi
     if [ -n "$EXTERNAL_OUTPUT" ] && workspace_wants_external "$workspace"; then
-        i3-msg "move workspace to output \"$EXTERNAL_OUTPUT\"" >/dev/null || true
+        if ! i3_command "move workspace to output $(i3_string "$EXTERNAL_OUTPUT")"; then
+            record_result "$workspace" failed 'could not move workspace to saved output policy'
+            continue
+        fi
     fi
-    if ! "$I3_RESURRECT" restore -w "$workspace" -d "$STATE_DIR" --layout-only; then
-        failed=1
+    if ! detail="$("$I3_RESURRECT" restore -w "$workspace" -d "$STATE_DIR" --layout-only 9>&- 2>&1)"; then
+        record_result "$workspace" failed "layout restore failed: $detail"
         continue
     fi
-
     sleep "$LAYOUT_DELAY"
-
-    if ! "$I3_RESURRECT" restore -w "$workspace" -d "$STATE_DIR" --programs-only; then
-        failed=1
+    if ! detail="$("$I3_RESURRECT" restore -w "$workspace" -d "$STATE_DIR" --programs-only 9>&- 2>&1)"; then
+        record_result "$workspace" failed "program launch failed: $detail"
         continue
     fi
-
-    if [ "$programs_to_restore" -gt 0 ] && ! wait_for_placeholders "$workspace"; then
-        failed=1
+    if detail="$(wait_for_workspace "$workspace")"; then
+        record_result "$workspace" ready
+    else
+        record_result "$workspace" failed "$detail"
     fi
 done < "$WORKSPACES_FILE"
 
+# Recheck all successful workspaces: windows may close or move during later restores.
+while IFS= read -r workspace || [ -n "$workspace" ]; do
+    if ! detail="$(i3-msg -t get_tree | resurrect_state ready "$STATE_DIR" "$META_DIR" "$workspace" 2>&1)"; then
+        results="$(jq --arg workspace "$workspace" --arg detail "$detail" \
+            'map(if .workspace == $workspace then .status = "failed" | .detail = $detail else . end)' <<< "$results")"
+        failed=1
+    fi
+done < <(jq -r '.[] | select(.status == "ready") | .workspace' <<< "$results")
+
 if [ -s "$FOCUSED_FILE" ]; then
     focused_workspace="$(head -n 1 "$FOCUSED_FILE")"
-    if [ -n "$focused_workspace" ]; then
-        i3-msg "workspace \"$focused_workspace\"" >/dev/null
+    if [ -n "$focused_workspace" ] && ! i3_command "workspace --no-auto-back-and-forth $(i3_string "$focused_workspace")"; then
+        failed=1
+        results="$(jq '. + [{workspace: "(focus)", status: "failed", detail: "could not restore focus"}]' <<< "$results")"
     fi
 fi
 
 if [ "$failed" -eq 0 ]; then
-    summary="Restore complete."
+    summary='Restore complete.'
 else
-    summary="Restore finished with errors."
+    summary='Restore finished with errors.'$'\n'"$(jq -r '.[] | select(.status != "ready") | "Workspace \(.workspace): \(.detail)"' <<< "$results")"
 fi
-if [ -n "$LABROUTE_ERROR" ]; then
-    summary="$summary"$'\n'"Lab route not restored: $LABROUTE_ERROR"
-fi
-reattach="$(unattached_sessions || true)"
+completed="$(jq '[.[] | select(.status == "ready") | .workspace]' <<< "$results")"
+reattach="$(resurrect_state sessions "$STATE_DIR" "$META_DIR" "$completed")"
 if [ -n "$reattach" ]; then
-    summary="$summary"$'\n'"Reattach by hand: $reattach"
+    summary="$summary"$'\n'"$reattach"
 fi
+# Reports stay outside immutable generations; URLs and paths remain local.
+report="$(mktemp "$PROFILE_META_DIR/.restore-report.XXXXXXXX")"
+jq -n --arg snapshot "$STATE_DIR" --argjson workspaces "$results" --arg sessions "$reattach" \
+    '{snapshot: $snapshot, workspaces: $workspaces, sessions: $sessions}' > "$report"
+mv -- "$report" "$PROFILE_META_DIR/last-restore.json"
 notify "$summary"
-
 exit "$failed"

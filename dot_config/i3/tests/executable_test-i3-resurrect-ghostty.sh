@@ -35,6 +35,8 @@ if [ ! -r "$ROOT/_snap-common.sh" ]; then
     cp -p -- "$RESTORE" "$APPLIED_ROOT/i3-resurrect-restore-all.sh"
     cp -p -- "$ROOT/_polybar-common.sh" "$APPLIED_ROOT/_polybar-common.sh"
     cp -p -- "$ROOT/executable__snap-common.sh" "$APPLIED_ROOT/_snap-common.sh"
+    cp -p -- "$ROOT/_resurrect-common.sh" "$APPLIED_ROOT/_resurrect-common.sh"
+    cp -p -- "$ROOT/executable_i3-resurrect-state.py" "$APPLIED_ROOT/i3-resurrect-state.py"
     RESTORE="$APPLIED_ROOT/i3-resurrect-restore-all.sh"
 fi
 
@@ -72,18 +74,38 @@ case "$*" in
     '-t get_tree') cat "$TEST_TREE" ;;
     '-t get_workspaces') cat "$TEST_FIXTURES/workspaces.json" ;;
     '-t get_outputs') printf '%s\n' '[{"name":"eDP","active":true}]' ;;
+    *kill*)
+        printf '%s\n' '{"type":"root","nodes":[]}' > "$TEST_TREE"
+        printf '%s\n' '[{"success":true}]' ;;
     *) printf '%s\n' '[{"success":true}]' ;;
 esac
 EOF
 
 # i3-resurrect {save|restore} -w WORKSPACE -d DIRECTORY ...
 cat >"$MOCK_BIN/i3-resurrect" <<'EOF'
-#!/usr/bin/env bash
-printf 'i3-resurrect %s\n' "$*" >>"$TEST_EVENTS"
-if [ "$1" = save ]; then
-    cp -- "$TEST_FIXTURES/workspace_$3_layout.json" \
-        "$TEST_FIXTURES/workspace_$3_programs.json" "$5/"
-fi
+#!/usr/bin/python3
+import json, os, pathlib, shutil, sys
+with open(os.environ["TEST_EVENTS"], "a") as stream:
+    stream.write("i3-resurrect " + " ".join(sys.argv[1:]) + "\n")
+workspace, directory = sys.argv[3], pathlib.Path(sys.argv[5])
+if sys.argv[1] == "save":
+    for kind in ("layout", "programs"):
+        name = f"workspace_{workspace}_{kind}.json"
+        shutil.copyfile(pathlib.Path(os.environ["TEST_FIXTURES"]) / name, directory / name)
+elif "--programs-only" in sys.argv:
+    layout = json.loads((directory / f"workspace_{workspace}_layout.json").read_text())
+    def fill(node):
+        if node.get("swallows"):
+            rule = node["swallows"][0]
+            node.update(id=100, window=100, window_properties={
+                key: value.strip("^$").replace("\\", "") for key, value in rule.items()}, swallows=[])
+        for child in node.get("nodes", []) + node.get("floating_nodes", []):
+            fill(child)
+    fill(layout)
+    path = pathlib.Path(os.environ["TEST_TREE"])
+    tree = json.loads(path.read_text())
+    tree["nodes"].append(layout)
+    path.write_text(json.dumps(tree))
 EOF
 
 cat >"$MOCK_BIN/notify-send" <<'EOF'
@@ -271,6 +293,16 @@ assert_json 'captured Ghostty state' . "$TEST_TMP/state.json" "$(cat "$TEST_TMP/
 bash "$SAVE" 2>"$TEST_TMP/save-stderr" ||
     fail "save failed: $(cat "$TEST_TMP/save-stderr")"
 
+# Assertions inspect the committed generation; environment paths remain profile roots.
+resolve_generation() {
+    local resolved
+    resolved="$(/usr/bin/python3 "$(managed i3-resurrect-state.py)" resolve \
+        "$I3_RESURRECT_STATE_DIR" "$I3_RESURRECT_META_DIR")"
+    STATE_DIR="$(jq -r '.[0]' <<< "$resolved")"
+    META_DIR="$(jq -r '.[1]' <<< "$resolved")"
+}
+resolve_generation
+
 assert_json 'workspace 3 programs' . "$STATE_DIR/workspace_3_programs.json" '[
  {"command":["ghostty","--working-directory=/work/a","--x11-instance-name=ghostty-ws3-1",
    "--initial-command=env I3_RESURRECT_REMOTE_SESSION=tmux:dev zsh"],"working_directory":"/work/a"},
@@ -317,7 +349,7 @@ programs_line="$(grep -n -F -- '--programs-only' "$TEST_EVENTS" | head -n 1 | cu
     fail 'the lab route came up after programs started'
 grep -Fqx 'Restore complete.' "$TEST_NOTIFY" ||
     fail "the restore did not report success: $(cat "$TEST_NOTIFY")"
-grep -Fqx 'Reattach by hand: hpcz shell, hpc solo' "$TEST_NOTIFY" ||
+grep -Fqx 'Reattach by hand: hpc solo, hpcz shell' "$TEST_NOTIFY" ||
     fail "the restore listed the wrong sessions to reattach: $(cat "$TEST_NOTIFY")"
 
 export LABROUTE_TEST_FAIL=1
@@ -328,8 +360,8 @@ grep -Fqx "Lab route not restored: $reason" "$TEST_TMP/restore-stderr" ||
     fail 'a failed lab route was not reported on stderr'
 grep -Fqx "Lab route not restored: $reason" "$TEST_NOTIFY" ||
     fail "a failed lab route was not in the notification: $(cat "$TEST_NOTIFY")"
-[ "$(grep -c -F -- '--programs-only' "$TEST_EVENTS")" -eq 4 ] ||
-    fail 'programs were not restored after the lab route failed'
+! grep -q -F -- '--programs-only' "$TEST_EVENTS" ||
+    fail 'programs started after the lab route failed'
 
 export LABROUTE_TEST_HANG=1 I3_RESURRECT_LABROUTE_TIMEOUT=1
 run_restore 1
@@ -341,6 +373,7 @@ rm -f "$TAILSCALE_REMOTE_MODE_FILE"
 export TEST_TREE="$FIXTURES/tree.json"
 bash "$SAVE" 2>"$TEST_TMP/save-stderr" ||
     fail "save failed: $(cat "$TEST_TMP/save-stderr")"
+resolve_generation
 [ "$(cat "$META_DIR/labroute.txt")" = off ] ||
     fail 'the save did not record the lab route as off'
 export TEST_TREE="$FIXTURES/empty-tree.json"

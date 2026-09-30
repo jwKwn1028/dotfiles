@@ -25,11 +25,15 @@ if [ ! -r "$ROOT/_snap-common.sh" ]; then
     cp -p -- "$RESTORE" "$APPLIED_ROOT/i3-resurrect-restore-all.sh"
     cp -p -- "$ROOT/_polybar-common.sh" "$APPLIED_ROOT/_polybar-common.sh"
     cp -p -- "$ROOT/executable__snap-common.sh" "$APPLIED_ROOT/_snap-common.sh"
+    cp -p -- "$ROOT/_resurrect-common.sh" "$APPLIED_ROOT/_resurrect-common.sh"
+    cp -p -- "$ROOT/executable_i3-resurrect-state.py" "$APPLIED_ROOT/i3-resurrect-state.py"
     RESTORE="$APPLIED_ROOT/i3-resurrect-restore-all.sh"
 fi
 
 mkdir -p "$MOCK_BIN" "$MOCK_STATE/runtime" "$STATE_DIR" "$META_DIR"
 printf '1\n' >"$META_DIR/workspaces.txt"
+printf '{"name":"1","nodes":[]}\n' >"$STATE_DIR/workspace_1_layout.json"
+printf '[]\n' >"$STATE_DIR/workspace_1_programs.json"
 
 export PATH="$MOCK_BIN:/usr/bin:/bin"
 export XDG_RUNTIME_DIR="$MOCK_STATE/runtime"

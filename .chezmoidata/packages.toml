@@ -45,6 +45,7 @@ laptop = [
 # Installed only for class == "desktop" and profile == "linuxmint-i3-x11".
 i3_x11 = [
     "i3", "i3status", "polybar", "picom", "rofi", "dunst",
+    "util-linux",  # flock serializes i3 session saves/restores across profiles
     "feh", "flameshot", "xdotool", "wmctrl", "xclip", "xsel",
     "ghostty",
 # Direct i3/Polybar runtime dependencies.
