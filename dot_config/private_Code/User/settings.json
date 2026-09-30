@@ -87,8 +87,12 @@
     "workbench.openInAgents.enabled": false,
     "workbench.browser.showInTitleBar": false,
     "workbench.editor.editorActionsLocation": "hidden",
-    "window.menuBarVisibility": "compact",
+    "window.titleBarStyle": "native",
     "window.commandCenter": false,
+    // ~/.local/bin/code sets GTK_THEME for VS Code's own menus only.
+    "terminal.integrated.env.linux": {
+        "GTK_THEME": null
+    },
     "terminal.integrated.profiles.linux": {
         "bash": {
             "path": "bash",
@@ -110,5 +114,7 @@
         }
     },
     "claudeCode.preferredLocation": "panel",
-    "workbench.iconTheme": "material-icon-theme"
+    "workbench.iconTheme": "material-icon-theme",
+    "workbench.statusBar.visible": false,
+    "window.menuBarVisibility": "toggle"
 }

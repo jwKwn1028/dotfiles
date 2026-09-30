@@ -3,8 +3,10 @@
 A GTK3 theme that makes **Thunar** read like a Ghostty window, derived from
 `~/.config/ghostty/config`.
 
-It is **scoped to Thunar** — it activates only for processes launched through
-`~/.local/bin/thunar`. The global GTK theme is still Adwaita and the global icon
+It is **scoped to Thunar and VS Code** — it activates only for processes
+launched through `~/.local/bin/thunar` or `~/.local/bin/code`. VS Code borrows it
+only for the menus of its native title bar; its editor keeps its own color
+theme, and its integrated terminals drop `GTK_THEME`. The global GTK theme is still Adwaita and the global icon
 theme is still `ubuntu-mono-light`.
 
 ## What it matches
@@ -35,6 +37,10 @@ theme is still `ubuntu-mono-light`.
 ~/.local/bin/thunar                       wrapper that turns the theme on
 ~/.local/share/applications/thunar.desktop  menu/panel launches -> wrapper
 ~/.config/systemd/user/thunar.service.d/gtk-theme.conf  D-Bus activation -> wrapper
+
+~/.local/bin/code                         VS Code wrapper; shadows /usr/bin/code
+~/.local/share/applications/com.microsoft.VSCode{,.UrlHandler}.desktop
+                                          menu and vscode:// launches -> wrapper
 ```
 
 All three launch paths route through the one wrapper, so the theme applies
@@ -82,6 +88,10 @@ rm -r ~/.config/systemd/user/thunar.service.d
 rm -r ~/.themes/Ghostty-TokyoNight
 systemctl --user daemon-reload
 systemctl --user restart thunar.service
+rm ~/.local/bin/code
+rm ~/.local/share/applications/com.microsoft.VSCode.desktop
+rm ~/.local/share/applications/com.microsoft.VSCode.UrlHandler.desktop
 ```
 
-Nothing under `/usr` was modified, so that returns Thunar to stock.
+Nothing under `/usr` was modified, so that returns Thunar and VS Code to stock.
+VS Code picks up the change the next time it fully restarts.

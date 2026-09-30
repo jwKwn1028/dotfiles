@@ -103,12 +103,15 @@ snap/firefox/common/.mozilla/firefox/
 .config/systemd/user/task-notify.timer
 .config/task/MANUAL.md
 
-# Thunar's Ghostty-TokyoNight theme (~1M), the GTK_THEME wrapper that switches
-# it on, and both launch paths through it. Ship all or none.
+# The Ghostty-TokyoNight GTK theme (~1M), the Thunar and VS Code GTK_THEME
+# wrappers that switch it on, and the launch paths through them. Ship all or none.
 .themes/Ghostty-TokyoNight/
 .local/bin/thunar
 .local/share/applications/thunar.desktop
 .config/systemd/user/thunar.service.d/
+.local/bin/code
+.local/share/applications/com.microsoft.VSCode.desktop
+.local/share/applications/com.microsoft.VSCode.UrlHandler.desktop
 {{ end -}}
 
 # ─── Desktop-class payloads ───────────────────────────────────────────────

@@ -110,6 +110,10 @@
         "command": "workbench.action.toggleStatusbarVisibility"
     },
     {
+        "key": "ctrl+t ctrl+m",
+        "command": "workbench.action.toggleMenuBar"
+    },
+    {
         "key": "ctrl+t ctrl+b",
         "command": "markdown.extension.editing.toggleBold",
         "when": "editorTextFocus && !editorReadonly && editorLangId =~ /^markdown$|^rmd$|^quarto$/"

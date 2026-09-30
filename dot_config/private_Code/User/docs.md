@@ -20,6 +20,7 @@ twice. The `Ctrl+T` and `Ctrl+G` sequences are prefix chords.
 | `Ctrl+T Ctrl+H` | Toggle the auxiliary sidebar. |
 | `Ctrl+T Ctrl+P` | Toggle the integrated terminal. |
 | `Ctrl+T Ctrl+S` | Toggle the status bar. |
+| `Ctrl+T Ctrl+M` | Toggle the menu bar between Alt-only and always shown. |
 | `Ctrl+T Ctrl+\` | Toggle the split editor in the current editor group. |
 | `Ctrl+P Ctrl+M` | Maximize or restore the panel. |
 | `Ctrl+'` | Toggle the integrated terminal when a terminal is active. |
@@ -33,6 +34,14 @@ twice. The `Ctrl+T` and `Ctrl+G` sequences are prefix chords.
 terminal's default `Ctrl+Backtick` toggle and the default `Ctrl+Q` quit action are
 removed; use `Ctrl+'` or `Ctrl+T Ctrl+P` for the terminal and `Ctrl+Q` to close
 the current window.
+
+The status bar and menu bar start hidden. Tap left `Alt` to show the menu bar
+for one use; `Alt+`letter menu mnemonics yield to the `Alt` bindings below.
+VS Code uses the native title bar so it fills its i3 tile; `~/.local/bin/code`
+launches it with the Ghostty-TokyoNight GTK theme so those menus are dark (see
+`~/.themes/Ghostty-TokyoNight/README.md`). `Ctrl+T Ctrl+S`
+and `Ctrl+T Ctrl+M` save the new state to the live `settings.json`, so run
+`chezmoi re-add` to keep it or toggle back before the next `chezmoi apply`.
 
 ## Editing and notebooks
 

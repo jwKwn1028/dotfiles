@@ -1,0 +1,9 @@
+#!/bin/sh
+# Launch VS Code wearing the Ghostty-TokyoNight GTK theme, which colors the native
+# title bar's menus. Only the first launch counts: later ones hand off to the
+# running instance. See ~/.themes/Ghostty-TokyoNight/README.md
+
+GTK_THEME=Ghostty-TokyoNight
+export GTK_THEME
+
+exec /usr/bin/code "$@"
