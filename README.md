@@ -18,13 +18,6 @@ chezmoi update # git pull + apply
 
 Application guides, installed into their matching config directories:
 
-- [i3](dot_config/i3/MANUAL.md) and [Polybar](dot_config/polybar/docs.md)
-- [Ghostty](dot_config/ghostty/docs.md) and [Zsh](dot_zsh/docs.md)
-- [Helix](dot_config/helix/docs.md), [Micro](dot_config/micro/docs.md),
-  [Zed](dot_config/zed/docs.md), and [VS Code](dot_config/private_Code/User/docs.md)
-- [Yazi](dot_config/yazi/yazi_docs.md), [Taskwarrior](dot_config/task/MANUAL.md),
-  and [Restic](dot_config/private_restic/README.md)
-
 ## License
 
 Original work: [MIT](LICENSE). Third-party components retain their own licenses.
