@@ -188,26 +188,7 @@ alias hb='${EDITOR:-hx} ~/.bashrc'
 alias sb='source ~/.bashrc && echo "Bash config reloaded."'
 unalias scpo poweroff 2>/dev/null
 poweroff() {
-  local host reply
-
-  if [ "$#" -ne 0 ]; then
-    printf 'poweroff wrapper accepts no arguments\n' >&2
-    return 2
-  fi
-
-  host=$(command hostname -s) || return 1
-  printf 'Power off %s? [y/N] (10s timeout): ' "$host" >/dev/tty ||
-    return 1
-
-  IFS= read -r -t 10 reply </dev/tty || {
-    printf '\nNo confirmation received; cancelled.\n'
-    return 1
-  }
-
-  case "$reply" in
-    [yY] | [yY][eE][sS]) command systemctl poweroff ;;
-    *) printf 'Cancelled.\n'; return 1 ;;
-  esac
+  command poweroff-confirm "$@"
 }
 wtail() {   # absolutise args so tail -v headers name the full path
   local f
@@ -374,7 +355,7 @@ ex() {
 }
 
 # --- fzf integration ---
-# Uses $_bash_fd / $_bash_bat, resolved once above. Mirrors ~/.zsh/rc.d/40-fzf.zsh.
+# Uses $_bash_fd, resolved once above. Mirrors ~/.zsh/rc.d/40-fzf.zsh.
 if _have fzf; then
   if [ -n "$_bash_fd" ]; then
     export FZF_DEFAULT_COMMAND="$_bash_fd --hidden --follow --exclude .git --type f"
@@ -394,29 +375,11 @@ if _have fzf; then
   fi
   export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
 
-  # Built, not interpolated: plain `cat` takes none of bat's flags.
-  _fzf_preview_opts() {
-    local highlight='cat -- {}'
-    [ "$_bash_bat" != cat ] &&
-      highlight="$_bash_bat --color=always --style=numbers --line-range=:500 -- {}"
-
-    local prev_cmd="
-    if [ -d {} ]; then
-      eza --tree --level=2 --color=always --icons --group-directories-first -- {};
-    elif echo {} | grep -iq '\.pdf\$'; then
-      pdftotext -f 1 -l 10 -- {} - 2>/dev/null;
-    else
-      ${highlight};
-    fi"
-
-    export FZF_DEFAULT_OPTS="
-    --height 60%
-    --layout=reverse
-    --border
-    --preview 'sh -c \"${prev_cmd//$'\n'/ }\"'"
-  }
-  _fzf_preview_opts
-  unset -f _fzf_preview_opts
+  export FZF_DEFAULT_OPTS="
+  --height 60%
+  --layout=reverse
+  --border
+  --preview 'fzf-preview {}'"
 fi
 
 # Source fzf keybindings + completion (Ctrl-T, Ctrl-R, Alt-C, **<Tab>)

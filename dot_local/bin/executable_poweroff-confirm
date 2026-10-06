@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Shared terminal confirmation for the Bash and Zsh poweroff functions.
+
+if [ "$#" -ne 0 ]; then
+    printf 'poweroff wrapper accepts no arguments\n' >&2
+    exit 2
+fi
+
+host=$(command hostname -s) || exit 1
+if ! { exec 3<>/dev/tty; } 2>/dev/null; then
+    printf 'poweroff requires a controlling terminal; cancelled.\n' >&2
+    exit 1
+fi
+
+trap 'printf "\nCancelled.\n" >&3; exit 130' INT
+printf 'Power off %s? [y/N] (10s timeout): ' "$host" >&3 || exit 1
+
+IFS= read -r -t 10 reply <&3 || {
+    printf '\nNo confirmation received; cancelled.\n' >&3
+    exit 1
+}
+
+case "$reply" in
+    [yY] | [yY][eE][sS]) exec systemctl poweroff 3>&- ;;
+    *) printf 'Cancelled.\n' >&3; exit 1 ;;
+esac

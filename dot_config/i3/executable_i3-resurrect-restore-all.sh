@@ -44,8 +44,11 @@ find_i3_resurrect() {
     fi
 }
 
-window_ids() {
-    i3-msg -t get_tree | jq -r '.. | objects | select(.window? != null) | .id'
+replaced_window_ids() {
+    i3-msg -t get_tree | jq -r --argjson workspaces "$REPLACE_WORKSPACES" '
+        .. | objects | select(.type? == "workspace" and (.name | IN($workspaces[])))
+        | .. | objects | select(.window? != null) | .id
+    '
 }
 
 active_external_output() {
@@ -58,6 +61,7 @@ workspace_wants_external() {
     local workspace="$1"
     local candidate
 
+    [[ "$workspace" =~ ^([0-9]+) ]] && workspace="${BASH_REMATCH[1]}"
     for candidate in $EXTERNAL_WORKSPACES; do
         if [ "$workspace" = "$candidate" ]; then
             return 0
@@ -84,13 +88,18 @@ restore_polybar_after_restore() {
     return 0
 }
 
+cleanup_restore() {
+    restore_polybar_after_restore
+    [ -z "$RESTORE_STATE_DIR" ] || rm -rf -- "$RESTORE_STATE_DIR"
+}
+
 kill_existing_windows() {
     local attempts="$KILL_WAIT_ATTEMPTS"
     local ids
     local id
 
     while [ "$attempts" -gt 0 ]; do
-        ids="$(window_ids)" || return 1
+        ids="$(replaced_window_ids)" || return 1
         if [ -z "$ids" ]; then
             return 0
         fi
@@ -104,7 +113,7 @@ kill_existing_windows() {
         attempts=$((attempts - 1))
     done
 
-    ids="$(window_ids)" || return 1
+    ids="$(replaced_window_ids)" || return 1
     [ -n "$ids" ] || return 0
     printf 'Timed out waiting for existing window(s) to close before restore.\n' >&2
     [ -z "$ids" ] || printf 'Remaining container ids:\n%s\n' "$ids" >&2
@@ -117,7 +126,7 @@ wait_for_workspace() {
     local reason="workspace was not checked"
 
     while [ "$attempts" -gt 0 ]; do
-        if reason="$(i3-msg -t get_tree | resurrect_state ready "$STATE_DIR" "$META_DIR" "$workspace" 2>&1)"; then
+        if reason="$(i3-msg -t get_tree | resurrect_state ready "$RESTORE_STATE_DIR" "$META_DIR" "$workspace" 2>&1)"; then
             return 0
         fi
         sleep "$PLACEHOLDER_POLL_INTERVAL"
@@ -199,7 +208,8 @@ fi
 STATE_DIR="$(jq -r '.[0]' <<< "$resolved")"
 META_DIR="$(jq -r '.[1]' <<< "$resolved")"
 resurrect_paths
-if ! resurrect_state validate "$STATE_DIR" "$META_DIR"; then
+if ! resurrect_state validate "$STATE_DIR" "$META_DIR" ||
+    ! resurrect_state occupied "$STATE_DIR" "$META_DIR" >/dev/null; then
     notify 'Restore aborted; snapshot validation failed. Existing windows are unchanged.'
     exit 1
 fi
@@ -216,9 +226,17 @@ if ! restore_labroute; then
     exit 1
 fi
 
-trap restore_polybar_after_restore EXIT
+RESTORE_STATE_DIR=""
+trap cleanup_restore EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+RESTORE_STATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/i3-resurrect-restore.XXXXXXXX")"
+if ! RESTORE_PLAN="$(i3-msg -t get_tree | resurrect_state prepare-restore \
+    "$STATE_DIR" "$META_DIR" "$RESTORE_STATE_DIR")"; then
+    notify 'Restore aborted; could not plan workspace placement. Existing windows are unchanged.'
+    exit 1
+fi
+REPLACE_WORKSPACES="$(jq '[.[] | select(.replacing) | .workspace]' <<< "$RESTORE_PLAN")"
 hide_polybar_for_restore
 if ! kill_existing_windows; then
     notify 'Restore aborted; existing windows are still open or i3 is unavailable.'
@@ -229,8 +247,12 @@ failed=0
 results='[]'
 record_result() {
     local workspace="$1" status="$2" detail="${3:-}"
+    local source_workspace
+    source_workspace="$(jq -r --arg workspace "$workspace" \
+        '.[] | select(.workspace == $workspace) | .source_workspace' <<< "$RESTORE_PLAN")"
     results="$(jq --arg workspace "$workspace" --arg status "$status" --arg detail "$detail" \
-        '. + [{workspace: $workspace, status: $status, detail: $detail}]' <<< "$results")"
+        --arg source "$source_workspace" \
+        '. + [{source_workspace: $source, workspace: $workspace, status: $status, detail: $detail}]' <<< "$results")"
     if [ "$status" != ready ]; then
         failed=1
         printf 'Workspace "%s": %s\n' "$workspace" "$detail" >&2
@@ -239,6 +261,14 @@ record_result() {
 
 EXTERNAL_OUTPUT="$(active_external_output || true)"
 while IFS= read -r workspace || [ -n "$workspace" ]; do
+    # A window may have arrived since planning. Do not merge it into the saved layout.
+    if ! i3-msg -t get_tree | jq -e --arg workspace "$workspace" '
+        [.. | objects | select(.type? == "workspace" and .name == $workspace)
+         | .. | objects | select(.window? != null)] | length == 0
+    ' >/dev/null; then
+        record_result "$workspace" failed 'destination became occupied or i3 is unavailable'
+        continue
+    fi
     if ! i3_command "workspace --no-auto-back-and-forth $(i3_string "$workspace")"; then
         record_result "$workspace" failed 'could not select workspace'
         continue
@@ -249,12 +279,12 @@ while IFS= read -r workspace || [ -n "$workspace" ]; do
             continue
         fi
     fi
-    if ! detail="$("$I3_RESURRECT" restore -w "$workspace" -d "$STATE_DIR" --layout-only 9>&- 2>&1)"; then
+    if ! detail="$("$I3_RESURRECT" restore -w "$workspace" -d "$RESTORE_STATE_DIR" --layout-only 9>&- 2>&1)"; then
         record_result "$workspace" failed "layout restore failed: $detail"
         continue
     fi
     sleep "$LAYOUT_DELAY"
-    if ! detail="$("$I3_RESURRECT" restore -w "$workspace" -d "$STATE_DIR" --programs-only 9>&- 2>&1)"; then
+    if ! detail="$("$I3_RESURRECT" restore -w "$workspace" -d "$RESTORE_STATE_DIR" --programs-only 9>&- 2>&1)"; then
         record_result "$workspace" failed "program launch failed: $detail"
         continue
     fi
@@ -263,11 +293,11 @@ while IFS= read -r workspace || [ -n "$workspace" ]; do
     else
         record_result "$workspace" failed "$detail"
     fi
-done < "$WORKSPACES_FILE"
+done < <(jq -r '.[].workspace' <<< "$RESTORE_PLAN")
 
 # Recheck all successful workspaces: windows may close or move during later restores.
 while IFS= read -r workspace || [ -n "$workspace" ]; do
-    if ! detail="$(i3-msg -t get_tree | resurrect_state ready "$STATE_DIR" "$META_DIR" "$workspace" 2>&1)"; then
+    if ! detail="$(i3-msg -t get_tree | resurrect_state ready "$RESTORE_STATE_DIR" "$META_DIR" "$workspace" 2>&1)"; then
         results="$(jq --arg workspace "$workspace" --arg detail "$detail" \
             'map(if .workspace == $workspace then .status = "failed" | .detail = $detail else . end)' <<< "$results")"
         failed=1
@@ -275,7 +305,8 @@ while IFS= read -r workspace || [ -n "$workspace" ]; do
 done < <(jq -r '.[] | select(.status == "ready") | .workspace' <<< "$results")
 
 if [ -s "$FOCUSED_FILE" ]; then
-    focused_workspace="$(head -n 1 "$FOCUSED_FILE")"
+    focused_workspace="$(jq -r --arg source "$(head -n 1 "$FOCUSED_FILE")" \
+        '.[] | select(.source_workspace == $source) | .workspace' <<< "$RESTORE_PLAN")"
     if [ -n "$focused_workspace" ] && ! i3_command "workspace --no-auto-back-and-forth $(i3_string "$focused_workspace")"; then
         failed=1
         results="$(jq '. + [{workspace: "(focus)", status: "failed", detail: "could not restore focus"}]' <<< "$results")"
@@ -287,7 +318,14 @@ if [ "$failed" -eq 0 ]; then
 else
     summary='Restore finished with errors.'$'\n'"$(jq -r '.[] | select(.status != "ready") | "Workspace \(.workspace): \(.detail)"' <<< "$results")"
 fi
-completed="$(jq '[.[] | select(.status == "ready") | .workspace]' <<< "$results")"
+placement="$(jq -r 'map("\(.source_workspace)→\(.workspace)") | join(", ")' <<< "$RESTORE_PLAN")"
+if [ -n "$placement" ]; then
+    summary="$summary"$'\n'"Workspaces: $placement"
+fi
+if [ "$REPLACE_WORKSPACES" != '[]' ]; then
+    summary="$summary"$'\n'"Replaced occupied workspaces: $(jq -r 'join(", ")' <<< "$REPLACE_WORKSPACES")"
+fi
+completed="$(jq '[.[] | select(.status == "ready") | .source_workspace]' <<< "$results")"
 reattach="$(resurrect_state sessions "$STATE_DIR" "$META_DIR" "$completed")"
 if [ -n "$reattach" ]; then
     summary="$summary"$'\n'"$reattach"
@@ -295,7 +333,8 @@ fi
 # Reports stay outside immutable generations; URLs and paths remain local.
 report="$(mktemp "$PROFILE_META_DIR/.restore-report.XXXXXXXX")"
 jq -n --arg snapshot "$STATE_DIR" --argjson workspaces "$results" --arg sessions "$reattach" \
-    '{snapshot: $snapshot, workspaces: $workspaces, sessions: $sessions}' > "$report"
+    --argjson mapping "$RESTORE_PLAN" \
+    '{snapshot: $snapshot, mapping: $mapping, workspaces: $workspaces, sessions: $sessions}' > "$report"
 mv -- "$report" "$PROFILE_META_DIR/last-restore.json"
 notify "$summary"
 exit "$failed"

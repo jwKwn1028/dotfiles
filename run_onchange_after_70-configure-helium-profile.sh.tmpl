@@ -6,7 +6,7 @@
 # Merges the publishable subset of Helium's Chromium preferences into its
 # profile. Helium keeps settings, browsing data and identity in one JSON blob,
 # so the profile stays local (.chezmoiignore) and only UI chrome layout, theme,
-# fonts, languages, and the search/newtab toggles are carried in Git. Also
+# fonts, languages, and the search/newtab/download/spellcheck toggles are carried in Git. Also
 # installs the new-tab background and links the browserpass messaging host.
 # Deliberately excluded and not to be added: signin/sync/gcm, password_manager,
 # autofill, extensions, profile.content_settings, media.device_id_salt,
@@ -101,6 +101,7 @@ managed = {
     "side_panel": {"is_right_aligned": False},
     "browser": {
         "custom_chrome_frame": False,
+        "enable_spellchecking": False,
         "show_forward_button": False,
         # Clear-browsing-data range: "all time".
         "clear_data": {"time_period": 4},
@@ -120,6 +121,7 @@ managed = {
         "shortcust_visible": False,
         "shortcuts_auto_removal_disabled": True,
     },
+    "download_bubble": {"partial_view_enabled": False},
     "search": {"suggest_enabled": False},
     "tab_search": {"pinned_to_tabstrip": False},
     "savefile": {"default_directory": {{ joinPath .chezmoi.homeDir "Downloads" | quote }}},
@@ -130,9 +132,9 @@ managed = {
         "webprefs": {
             "fonts": {
                 "fixed": {
-                    "Hang": "JetBrainsMono Nerd Font",
-                    "Kore": "JetBrainsMono Nerd Font",
-                    "Zyyy": "JetBrainsMono Nerd Font",
+                    "Hang": "JuliaMono",
+                    "Kore": "JuliaMono",
+                    "Zyyy": "JuliaMono",
                 },
                 "sansserif": {
                     "Hang": "NanumGothic",

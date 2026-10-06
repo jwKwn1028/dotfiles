@@ -63,7 +63,7 @@ while true; do
     PREV="${CURR:-}"
     CURR="$NEW"
     write_history "$CURR" "$PREV"
-  done < <(i3-msg -t subscribe -m '["window"]' 2>/dev/null)
+  done < <(i3-msg -t subscribe -m '["window"]' 200>&- 2>/dev/null)
 
   snap_log "focus tracker subscription ended, reconnecting in 1s"
   sleep 1

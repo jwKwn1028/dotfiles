@@ -103,9 +103,9 @@ Blocking hazards still present:
   `~/.local/share/fonts` using fontconfig. `.config/fontconfig/fonts.conf`, the
   family-alias file it pairs with, is in the Darwin target as well.
 - `private_dot_codex/modify_private_config.toml` is a `modify_` script, so it
-  runs on Darwin, and all three of its sed calls are GNU-only: the `0,/^\[/`
-  address range, `sed -i` with no backup suffix, and the one-line `1i` insert.
-  BSD sed rejects the range and reads the next argument as a backup extension.
+  runs on Darwin. Its shebang is `/usr/bin/python3`, and it pins the two keys
+  only when that interpreter can import `tomlkit`; otherwise it warns and
+  passes the file through unchanged.
   `private_dot_claude/modify_private_settings.json` needs a real `python3` on
   `PATH`, which on macOS means the Command Line Tools or Homebrew.
 - `dot_local/bin/symlink_fd.tmpl` renders `{{ lookPath "fdfind" }}`, a Debian
@@ -133,8 +133,9 @@ Blocking hazards still present:
   `~/.zshenv`, although that file is now managed and already contains the hook.
   Its dependencies and setup must be folded into the Darwin profile rather than
   treated as a complete machine bootstrap.
-- `dot_gitconfig.tmpl` unconditionally selects the Linux `libsecret` helper,
-  and shared shell paths still name Linux/application-specific locations.
+- `dot_gitconfig.tmpl` selects a built Linux `libsecret` helper when one
+  exists and otherwise falls back to `cache`, never `osxkeychain`, and shared
+  shell paths still name Linux/application-specific locations.
 - `dot_bashrc` and `executable_dot_cleanup-agents.sh` require modern Bash; do
   not assume Apple's system Bash is sufficient.
 - GNU and BSD variants of `sed`, `stat`, `date`, `find`, `readlink`, and `xargs`
@@ -390,7 +391,7 @@ These are normally portable, but must still be rendered and tested on macOS:
 | Source | Darwin treatment |
 | --- | --- |
 | `dot_gitconfig.tmpl` | Share; keep the prompt/noreply identity and credential helper conditional. Linux `libsecret` is not available on macOS. |
-| `dot_profile` | Convert to a template or make every optional startup file conditional. The current unconditional `.local/bin/env` and Cargo sources can fail on a fresh Mac. |
+| `dot_profile` | Share; the optional `.local/bin/env` and Cargo sources are guarded, and the juliaup block only edits `PATH`. |
 | `dot_zshrc`, `dot_zprofile`, `dot_zshenv` | The modular Zsh loader and Darwin prelude now exist. Convert path-bearing files to templates; discover Homebrew/Go rather than retaining `/usr/local/go`, and treat FullProf, VESTA, and Quantum ESPRESSO paths as explicit optional software. Keep the existing guarded `macos/compat.zsh` source in `dot_zshenv`. |
 | `dot_zsh/macos/` | Keep the narrow shims and `doctor.zsh`. Move `coreutils`, `rsync`, and `fzf` ownership into the Darwin package manifest; stop the installer from modifying managed `.zshenv`. Test both Apple Silicon and Intel path resolution. |
 | `dot_bashrc` | Share only when a Homebrew Bash version is declared, or keep a reduced POSIX-compatible Darwin branch. Do not assume Apple's system Bash supports the current feature set. |

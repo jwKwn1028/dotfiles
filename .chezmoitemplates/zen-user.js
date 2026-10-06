@@ -11,6 +11,9 @@ user_pref("browser.startup.page", 1);
 user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
 
 // Zen UI behavior.
+user_pref("zen.downloads.download-animation", false);
+user_pref("zen.library.enabled", true);
+user_pref("zen.mediacontrols.enabled", false);
 user_pref("zen.urlbar.open-on-startup", false);
 user_pref("zen.urlbar.replace-newtab", true);
 user_pref("zen.view.compact.hide-tabbar", false);
@@ -23,11 +26,16 @@ user_pref("zen.theme.content-element-separation", 0);
 user_pref("zen.view.compact.animate-sidebar", false);
 user_pref("zen.view.compact.enable-at-startup", true);
 user_pref("zen.view.compact.hide-toolbar", true);
+user_pref("zen.view.compact.show-background-tab-toast", false);
 user_pref("zen.view.compact.show-sidebar-and-toolbar-on-hover", false);
+user_pref("zen.view.compact.toolbar-hide-after-hover.duration", 0);
 user_pref("zen.view.enable-loading-indicator", false);
+user_pref("zen.view.grey-out-inactive-windows", false);
 user_pref("zen.view.show-newtab-button-top", false);
+user_pref("zen.watermark.enabled", true);
 user_pref("zen.window-sync.enabled", false);
 user_pref("zen.workspaces.separate-essentials", false);
+user_pref("zen.workspaces.switch-animation-duration", 0);
 
 // URL bar: no suggestions of any kind, so keystrokes never leave the browser.
 user_pref("browser.urlbar.allowSearchSuggestionsForSimpleOrigins", false);
@@ -83,7 +91,7 @@ user_pref("network.http.speculative-parallel-limit", 0);
 user_pref("network.prefetch-next", false);
 
 // Firefox's own sidebar (not Zen's): right-hand side, static.
-user_pref("sidebar.animation.duration-ms", 100);
+user_pref("sidebar.animation.duration-ms", 0);
 user_pref("sidebar.animation.enabled", false);
 user_pref("sidebar.expandOnHover", false);
 user_pref("sidebar.position_start", false);
@@ -93,7 +101,7 @@ user_pref("sidebar.visibility", "hide-on-close");
 user_pref("accessibility.typeaheadfind.flashBar", 0);
 user_pref("browser.aboutConfig.showWarning", false);
 user_pref("browser.display.document_color_use", 0);
-user_pref("browser.toolbars.bookmarks.visibility", "always");
+user_pref("browser.toolbars.bookmarks.visibility", "never");
 user_pref("browser.warnOnQuitShortcut", false);
 user_pref("dom.forms.autocomplete.formautofill", true);
 user_pref("layout.spellcheckDefault", 0);
@@ -105,15 +113,14 @@ user_pref("browser.download.viewableInternally.typeWasRegistered.jxl", true);
 user_pref("browser.download.viewableInternally.typeWasRegistered.webp", true);
 
 // Locale and fonts -- the one language-revealing block; drop it as a unit for a
-// locale-neutral profile. The sans-serif/serif pairings are transcribed from the
-// live profile as-is, apparent swaps included.
+// locale-neutral profile. Keep font choices explicit for Korean and Western text.
 user_pref("browser.translations.automaticallyPopup", false);
 user_pref("browser.translations.neverTranslateLanguages", "ko");
 user_pref("font.default.ko", "serif");
 user_pref("font.language.group", "ko");
-user_pref("font.name.monospace.ko", "JetBrainsMono Nerd Font");
-user_pref("font.name.monospace.x-western", "JetBrainsMono Nerd Font");
+user_pref("font.name.monospace.ko", "JuliaMono");
+user_pref("font.name.monospace.x-western", "JuliaMono");
 user_pref("font.name.sans-serif.ko", "NanumGothic");
 user_pref("font.name.sans-serif.x-western", "Noto Serif");
-user_pref("font.name.serif.ko", "Noto Sans");
+user_pref("font.name.serif.ko", "NanumGothic");
 user_pref("font.name.serif.x-western", "Noto Serif");

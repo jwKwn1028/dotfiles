@@ -17,7 +17,7 @@ Type=Application
 Name=Helium
 GenericName=Web Browser
 Comment=Access the Internet
-Exec={{ $appimage }} %U
+Exec={{ $appimage }} --animation-duration-scale=0 --disable-features=TabHoverCardImages %U
 Icon={{ .chezmoi.homeDir }}/Applications/helium.png
 Terminal=false
 StartupNotify=true
@@ -29,8 +29,8 @@ X-AppImage-Version={{ $version }}
 
 [Desktop Action new-window]
 Name=New Window
-Exec={{ $appimage }}
+Exec={{ $appimage }} --animation-duration-scale=0 --disable-features=TabHoverCardImages
 
 [Desktop Action new-private-window]
 Name=New Incognito Window
-Exec={{ $appimage }} --incognito
+Exec={{ $appimage }} --animation-duration-scale=0 --disable-features=TabHoverCardImages --incognito

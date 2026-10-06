@@ -1,4 +1,7 @@
-{{- $credentialHelper := "/usr/share/doc/git/contrib/credential/libsecret/git-credential-libsecret" -}}
+{{- $credentialHelper := "cache" -}}
+{{- range list "/usr/share/doc/git/contrib/credential/libsecret/git-credential-libsecret" "/usr/lib/git-core/git-credential-libsecret" -}}
+{{-   if stat . -}}{{- $credentialHelper = . -}}{{- end -}}
+{{- end -}}
 [user]
 	email = {{ .email | quote }}
 	name = {{ .name | quote }}

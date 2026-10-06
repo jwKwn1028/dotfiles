@@ -105,26 +105,7 @@ if _have fdfind; then
 fi
 unalias scpo poweroff 2>/dev/null || true
 poweroff() {
-  local host reply
-
-  if [ "$#" -ne 0 ]; then
-    printf 'poweroff wrapper accepts no arguments\n' >&2
-    return 2
-  fi
-
-  host=$(command hostname -s) || return 1
-  printf 'Power off %s? [y/N] (10s timeout): ' "$host" >/dev/tty ||
-    return 1
-
-  IFS= read -r -t 10 reply </dev/tty || {
-    printf '\nNo confirmation received; cancelled.\n'
-    return 1
-  }
-
-  case "$reply" in
-    [yY] | [yY][eE][sS]) command systemctl poweroff ;;
-    *) printf 'Cancelled.\n'; return 1 ;;
-  esac
+  command poweroff-confirm "$@"
 }
 unalias wtail 2>/dev/null || true
 wtail() {   # absolutise args so tail -v headers name the full path

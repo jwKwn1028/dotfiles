@@ -10,8 +10,10 @@ fi
 
 case $(printf '%s' "$file" | tr '[:upper:]' '[:lower:]') in
   *.csv|*.tsv|*.json|*.jsonl|*.ndjson|*.xls|*.xlsx|*.sqlite|*.sqlite3|*.db|*.db3|*.parquet)
-    vd --batch -o - -- "$file" 2>/dev/null | sed -n '1,200p'
-    exit 0
+    if command -v vd >/dev/null 2>&1; then
+      vd --batch -o - -- "$file" 2>/dev/null | sed -n '1,200p'
+      exit 0
+    fi
     ;;
   *.pdf)
     pdftotext -f 1 -l 10 -- "$file" - 2>/dev/null | sed -n '1,200p'

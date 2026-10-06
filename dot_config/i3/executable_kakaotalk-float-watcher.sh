@@ -75,7 +75,7 @@ snap_log "kakaotalk watcher starting (pid $$)"
 while :; do
   fix_kakaotalk_windows startup
 
-  i3-msg -t subscribe -m '["window"]' 2>/dev/null | while IFS= read -r event; do
+  i3-msg -t subscribe -m '["window"]' 200>&- 2>/dev/null | while IFS= read -r event; do
     change=$(jq -r '.change // ""' <<<"$event" 2>/dev/null) || continue
     case "$change" in
       new|fullscreen_mode|floating)

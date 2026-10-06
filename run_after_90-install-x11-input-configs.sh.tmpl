@@ -1,3 +1,5 @@
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" -}}{{- $class = .class -}}{{- end -}}
 {{- $desktopProfile := "none" -}}
 {{- if eq .chezmoi.os "linux" -}}
 {{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
@@ -7,7 +9,7 @@
 {{- if hasKey . "desktopProfile" -}}
 {{-   $desktopProfile = .desktopProfile -}}
 {{- end -}}
-{{- if and (eq .chezmoi.os "linux") (eq $desktopProfile "linuxmint-i3-x11") -}}
+{{- if and (eq .chezmoi.os "linux") (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
 #!/bin/sh
 set -eu
 

@@ -251,13 +251,60 @@ def browser_commands(state, meta, workspace):
     path.write_text(json.dumps(programs, indent=2) + "\n")
 
 
+def expected_windows(state, workspace):
+    layout = read_json(state / f"workspace_{file_id(workspace)}_layout.json")
+    programs = read_json(state / f"workspace_{file_id(workspace)}_programs.json")
+    return max(len(programs), sum(bool(entry.get("swallows")) for entry in walk(layout)))
+
+
+def occupied_workspaces(state, meta):
+    workspaces = (meta / "workspaces.txt").read_text().splitlines()
+    occupied = [workspace for workspace in workspaces if expected_windows(state, workspace)]
+    require(len(occupied) <= 10, "snapshot has more than 10 nonempty workspaces")
+    return occupied
+
+
+def workspace_order(name):
+    match = re.match(r"^(\d+)", name)
+    return (int(match[1]) if match else float("inf"), name)
+
+
+def prepare_restore(state, meta, tree, directory):
+    """Pack saved workspaces into empty slots, then reuse occupied slots on overflow."""
+    require(isinstance(tree, dict) and tree.get("type") == "root", "invalid live i3 tree")
+    saved = sorted(occupied_workspaces(state, meta), key=workspace_order)
+    names, occupied = {}, set()
+    for node in walk(tree):
+        if node.get("type") != "workspace":
+            continue
+        number = workspace_order(node["name"])[0]
+        if number not in range(1, 11):
+            continue  # Scratchpad and workspaces outside the numbered pool stay untouched.
+        require(number not in names, f"multiple live workspaces use number {number}")
+        names[number] = node["name"]
+        if any(child.get("window") is not None for child in walk(node)):
+            occupied.add(number)
+
+    slots = [number for number in range(1, 11) if number not in occupied] + sorted(occupied)
+    plan = []
+    for source, number in zip(saved, slots):
+        destination = names.get(number, str(number))
+        plan.append(dict(source_workspace=source, workspace=destination, replacing=number in occupied))
+        layout = read_json(state / f"workspace_{file_id(source)}_layout.json")
+        # i3-resurrect selects the name embedded in the layout even when -w differs.
+        layout["name"] = destination
+        (directory / f"workspace_{file_id(destination)}_layout.json").write_text(json.dumps(layout) + "\n")
+        shutil.copyfile(state / f"workspace_{file_id(source)}_programs.json",
+                        directory / f"workspace_{file_id(destination)}_programs.json")
+    return plan
+
+
 def readiness(state, workspace, tree):
     node = workspace_node(tree, workspace)
     if node is None:
         return "workspace is missing"
     layout = read_json(state / f"workspace_{file_id(workspace)}_layout.json")
-    programs = read_json(state / f"workspace_{file_id(workspace)}_programs.json")
-    expected = max(len(programs), sum(bool(entry.get("swallows")) for entry in walk(layout)))
+    expected = expected_windows(state, workspace)
     remaining = sum(bool(entry.get("swallows")) for entry in walk(node))
     windows = sum(entry.get("window") is not None and not entry.get("swallows") for entry in walk(node))
     if remaining:
@@ -301,7 +348,8 @@ def session_report(state, meta, completed):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("validate", "resolve", "publish", "stable", "browsers", "ready", "sessions"))
+    parser.add_argument("action", choices=("validate", "resolve", "publish", "stable", "browsers", "ready",
+                                           "occupied", "prepare-restore", "sessions"))
     parser.add_argument("state", type=Path)
     parser.add_argument("meta", type=Path)
     parser.add_argument("value", nargs="?")
@@ -320,6 +368,10 @@ def main():
                     f"windows changed during save: {args.value}; retry save")
         elif args.action == "browsers":
             browser_commands(args.state, args.meta, args.value)
+        elif args.action == "occupied":
+            print(json.dumps(occupied_workspaces(args.state, args.meta)))
+        elif args.action == "prepare-restore":
+            print(json.dumps(prepare_restore(args.state, args.meta, json.load(sys.stdin), Path(args.value))))
         elif args.action == "ready":
             reason = readiness(args.state, args.value, json.load(sys.stdin))
             if reason:

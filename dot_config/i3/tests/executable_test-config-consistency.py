@@ -167,6 +167,18 @@ class ConfigConsistencyTests(unittest.TestCase):
         self.assertIn("polybar_set_state hide 0", self.restore)
         self.assertIn("polybar_set_state show 1", self.restore)
 
+    def test_locked_watchers_close_the_lock_in_their_subscribers(self) -> None:
+        checked = 0
+        for path in I3_ROOT.glob("*.sh"):
+            source = path.read_text(encoding="utf-8")
+            if "exec 200>" not in source:
+                continue
+            for line in source.splitlines():
+                if "i3-msg -t subscribe" in line and not line.lstrip().startswith("#"):
+                    self.assertIn("200>&-", line, str(path))
+                    checked += 1
+        self.assertGreaterEqual(checked, 4)
+
     def test_desktop_python_entrypoints_use_the_system_interpreter(self) -> None:
         entrypoints = [
             *I3_ROOT.glob("*.py"),

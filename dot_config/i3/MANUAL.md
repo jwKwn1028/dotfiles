@@ -537,7 +537,7 @@ ShellCheck (when installed), and `i3 -C`.
 | `test-bar-nav.sh` | Bar-mode navigation, selected-module actions, marker state, and prior-visibility restoration. |
 | `test-polybar-peek.sh` | `polybar-peek.sh` show/hide, ownership, and debounce behavior. |
 | `test-i3-resurrect-polybar.sh` | Successful, hidden-bar, and early-failure restore paths preserve the bar's prior visibility and raise it when restored. |
-| `test-resurrect-state.py` | Snapshot validation, atomic publication, previous-generation recovery, concurrent profiles, interrupted saves, route failures, browser pairing, and observed restore results. |
+| `test-resurrect-state.py` | Snapshot validation, atomic publication, previous-generation recovery, concurrent profiles, interrupted saves, route failures, browser pairing, placement around occupied workspaces, overflow replacement, and observed restore results. |
 | `test-randr-hotplug.sh` | Output-event coalescing, connected-set changes, mid-run hotplugs, and connection-status toast selection. |
 | `test-usb-hotplug.sh` | Connector classification and its refusal to guess an unrecognized topology, burst coalescing, hub arrivals, bounce suppression, Type-C partner correlation, wattage and alternate-mode detail, detach descriptions taken from cache, and lock handover when the watcher is replaced. |
 | `test-dunst-start.sh` | Dunst 1.9 runtime config generation, laptop/primary fallbacks, and restart-on-index-change behavior. |
@@ -1200,7 +1200,8 @@ Default environment and paths:
 list, every referenced layout and program JSON file, filename collisions,
 focused workspace, route state, and present application metadata. It also
 checks required executables/helpers. It never closes windows, changes routing,
-or controls Polybar. Legacy flat profiles are supported when no manifest
+or controls Polybar. More than ten nonempty saved workspaces is rejected before
+desktop changes. Legacy flat profiles are supported when no manifest
 exists; an invalid manifest does not silently fall back to legacy data.
 
 `--previous` selects the previous generation. It can be combined with
@@ -1222,12 +1223,22 @@ Restore behavior:
   while leaving the current windows and Polybar alone. It never turns the
   route off.
 - Hides Polybar during restore if it is visible.
-- Kills all existing windows and waits for them to close. Restore remains a
-  full desktop replacement, including windows outside saved workspaces.
+- Assigns nonempty saved workspaces, in workspace-number order, to empty
+  slots among workspaces `1`–`10`, starting at `1`. A live workspace with any
+  tiled or floating window reserves its slot. Empty saved workspaces are
+  skipped. Scratchpad windows and live workspaces outside `1`–`10` are left
+  alone.
+- If there are not enough empty slots, fills those first, then wraps to
+  occupied slots in ascending order. Closes windows only on the occupied
+  destinations needed for the overflow and waits for them to close. The
+  limit counts occupied workspaces, not individual windows.
+- Prepares temporary layout/program copies with the destination names; the
+  saved snapshot stays unchanged. Rechecks each destination before restoring
+  it; if it has gained a window since planning, skips it and reports a failure.
 - Detects an active external output.
-- For each saved workspace:
-  - Switches to the workspace.
-  - Moves workspaces `3` to `10` to the active external output if one exists.
+- For each saved workspace with saved windows:
+  - Switches to its assigned destination workspace.
+  - Moves destinations `3` to `10` to the active external output if one exists.
   - Restores layout first.
   - Waits briefly.
   - Restores programs.
@@ -1237,15 +1248,25 @@ Restore behavior:
     checked too. A missing workspace is a failure, not an empty success.
 - Rechecks successful workspaces after the last workspace finishes, catching
   windows that closed or moved during later restoration steps.
-- Restores focus to the saved focused workspace.
+- Restores focus to the new destination of the saved focused workspace,
+  when that workspace had saved windows.
 - Restores Polybar visibility on exit if it was visible before restore.
 - Writes `last-restore.json` in the profile metadata directory with the
-  selected snapshot, per-workspace status/reason, and session retry guidance.
-- Sends a success or error notification identifying failed workspaces. Remote
+  selected snapshot, source-to-destination mapping, which occupied destinations
+  were replaced, per-workspace status/reason, and session retry guidance.
+- Sends a success or error notification with the mapping, replaced occupied
+  workspaces, and any failed destinations. Remote
   sessions whose terminal launch completed are labelled
   `Remote attach requested (unverified)`; this does not assert remote login or
   attachment success. Unlaunched sessions and sessions on failed workspaces
   are listed under `Reattach by hand`.
+
+For example, with windows already on `1` and `4`, a snapshot containing
+windows on `1,2,3,4,5` restores them to `2,3,5,6,7` respectively. The existing
+windows on `1` and `4` stay where they are. With the same live desktop and
+nine saved nonempty workspaces, the destinations are `2,3,5,6,7,8,9,10,1`;
+only the existing windows on `1` close, and those on `4` remain open. This
+behavior applies to all three profiles (`Ctrl+Super+R`, `S`, and `T`).
 
 ## Saved Session Profiles
 

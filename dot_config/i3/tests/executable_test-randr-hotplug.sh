@@ -54,11 +54,14 @@ printf '%s\n' '#!/bin/sh' \
   > "$TEST_TMP/bin/xrandr"
 
 # i3-msg -t subscribe -m '["output"]': every event the test writes to the FIFO.
-printf '%s\n' '#!/bin/sh' "exec cat '$FIFO'" > "$TEST_TMP/bin/i3-msg"
+printf '%s\n' '#!/bin/sh' \
+  "if [ -e /proc/\$\$/fd/200 ]; then : > '$TEST_TMP/lock-leaked'; fi" \
+  "exec cat '$FIFO'" > "$TEST_TMP/bin/i3-msg"
 
 printf '%s\n' '#!/bin/sh' \
   "printf 'run\\n' >> '$RUN_LOG'" \
   "printf '%s\\n' \"\${I3_DISPLAY_TOAST:-}\" >> '$TOAST_LOG'" \
+  "if [ -e /proc/\$\$/fd/200 ]; then : > '$TEST_TMP/lock-leaked'; fi" \
   > "$TEST_TMP/bin/display-setup-mock"
 
 chmod +x "$TEST_TMP/bin/xrandr" "$TEST_TMP/bin/i3-msg" \
@@ -115,6 +118,8 @@ sleep "$SETTLE"
 [ "$(runs)" = 1 ] || fail "a hotplug burst produced $(runs) runs, want exactly 1"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display connected" ] ||
   fail "a plug did not request the connected toast"
+[ ! -e "$TEST_TMP/lock-leaked" ] ||
+  fail "a child of the watcher inherited its lock fd"
 
 # The churn display-setup.sh causes must not re-trigger it.
 emit_event

@@ -1,6 +1,6 @@
 # --- fzf integration ---
-# Default/CTRL-T/ALT-C commands, preview, keybindings, hf. Uses $_zsh_fd /
-# $_zsh_bat, resolved once in _lib.zsh.
+# Default/CTRL-T/ALT-C commands, preview, keybindings, hf. Uses $_zsh_fd,
+# resolved once in _lib.zsh.
 if _have fzf; then
 
   if [[ -n $_zsh_fd ]]; then
@@ -26,27 +26,12 @@ if _have fzf; then
     _fzf_compgen_dir()  { find "${1:-.}" -type d -not -path '*/.git/*'; }
   fi
 
-  # Built inside an anonymous function so the scratch variables stay local.
-  () {
-    local highlight='cat -- {}'
-    [[ $_zsh_bat != cat ]] && highlight="$_zsh_bat --color=always --style=numbers --line-range=:500 -- {}"
-
-    local prev_cmd="
-    if [ -d {} ]; then
-      eza --tree --level=2 --color=always --icons --group-directories-first -- {};
-    elif echo {} | grep -iq '\.pdf$'; then
-      pdftotext -f 1 -l 10 -- {} - 2>/dev/null;
-    else
-      ${highlight};
-    fi"
-
-    export FZF_DEFAULT_OPTS="
-    --height 60%
-    --layout=reverse
-    --border
-    --cycle
-    --preview 'sh -c \"${prev_cmd//$'\n'/ }\"'"
-  }
+  export FZF_DEFAULT_OPTS="
+  --height 60%
+  --layout=reverse
+  --border
+  --cycle
+  --preview 'fzf-preview {}'"
 fi
 
 # --- Source fzf keybindings ---

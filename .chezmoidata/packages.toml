@@ -6,6 +6,7 @@
 # PPAs added before the apt install pass, for packages not in the Mint repos.
 ppas = [
     "ppa:maveonair/helix-editor",   # helix editor
+    "ppa:zhangsongcui3371/fastfetch",
 ]
 
 ppas_i3_x11 = [
@@ -26,15 +27,20 @@ common = [
     "fd-find", "fzf", "ripgrep", "jq", "tree",
     "unzip", "zip", "7zip", "p7zip-full", "bzip2", "gzip",
     "nodejs", "pipx",
+    "python3", "python3-tomlkit",
     "ranger",
     # Host half of the browserpass integration below; must not drift from it.
     "pass",
-    # The TUI only -- `task` itself is deliberately absent: Ubuntu ships 2.6.2
-    # (flat-file) but dot_taskrc targets 3.x (sqlite). Install task by hand.
-    "taskwarrior-tui",
     # AGENTS.md requires linting the run_once_* scripts, so treat it as a
     # dependency of working in this repo, not an optional tool.
     "shellcheck",
+]
+
+# Installed for class == "desktop" on any profile.
+desktop = [
+    "flatpak",
+    # Browserpass host for Zen and Helium; after_60/after_70 wire the manifests.
+    "webext-browserpass",
 ]
 
 # Battery-only, gated at runtime: neither class nor desktopProfile encodes "laptop".
@@ -58,9 +64,6 @@ i3_x11 = [
     # without this the themed Thunar renders with missing icons.
     "papirus-icon-theme",
     "pavucontrol", "blueman", "brightnessctl", "playerctl", "thunderbird",
-    # Browserpass host for Zen and Helium; after_60/after_70 wire the manifests.
-    # Not i3-specific, but this is the only desktop-gated apt list.
-    "webext-browserpass",
     "fcitx5", "fcitx5-hangul", "fcitx5-frontend-all", "fcitx5-config-qt",
     # nm-applet supplies the graphical wifi menu embedded by Polybar's tray.
     "network-manager-gnome",
@@ -108,6 +111,7 @@ apps = [
 # Helix LSPs / formatters plus utilities. yazi-fm/yazi-cli provide `yazi`;
 # resvg renders its SVG previews.
 registry = [
+    { crate = "taskwarrior-tui", bin = "taskwarrior-tui" },
     { crate = "eza",           bin = "eza" },
     { crate = "yazi-fm",       bin = "yazi" },
     { crate = "yazi-cli",      bin = "ya" },

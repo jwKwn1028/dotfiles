@@ -420,7 +420,7 @@ flock -w 5 200 || exit 0
 
 seed_known
 
-# udevadm outlives its parent, unlike i3-msg. A survivor would hold the
+# udevadm outlives its parent. A survivor would hold the
 # inherited lock fd and silently block every later watcher.
 stop_monitor() {
     [ -n "${MONITOR_PID:-}" ] && kill "$MONITOR_PID" 2>/dev/null

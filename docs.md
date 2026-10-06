@@ -31,7 +31,7 @@ Install Mint 22.3 or Ubuntu 24.04, then:
 
 ```sh
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git curl
+sudo apt install -y git curl python3 python3-tomlkit
 ```
 
 On Ubuntu also run `sudo apt install -y flatpak`.
@@ -72,7 +72,7 @@ Run `chezmoi apply -v` in an interactive terminal. In order:
 2. `run_once_after_05`: point the source repo's Git hooks at `.githooks`.
 3. `run_once_after_20`: install Flathub apps.
 4. `run_once_after_30`: install profile-specific pipx apps, rustup, cargo
-   crates, Starship, zoxide, and Miniconda.
+   crates (including Taskwarrior TUI), Starship, zoxide, and Miniconda.
 5. `run_onchange_after_35`: install the Yazi plugins locked in
    `dot_config/yazi/package.toml`; re-runs once `ya` is on PATH.
 6. `run_once_after_40`: add zsh to `/etc/shells` and run `chsh` (password

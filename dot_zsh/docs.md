@@ -64,6 +64,11 @@ Short aliases include `h` for Helix in the current directory, `mo` for Micro,
 shell. `:qa` sends an Alt+F4 keypress to the active window on X11. `ls` uses
 eza, `rg` uses smart-case search, and `v` opens Vim in the current directory.
 
+Both Bash and Zsh delegate `poweroff` to `~/.local/bin/poweroff-confirm`.
+Enter `y` or `yes` to confirm; blank input, timeout, Ctrl-C, or a missing
+terminal cancels. Arguments are rejected. Run the mocked terminal checks with
+`python3 dot_local/bin/tests/executable_test-poweroff-confirm.py` from the repo.
+
 `cd --`, `cd ---`, and longer runs of `-` go back two, three, or more entries
 in Zsh's directory stack. With `zoxide` installed, ordinary `cd` also records
 navigation. `yp`, `np`, and `rp` start their file managers in the configured

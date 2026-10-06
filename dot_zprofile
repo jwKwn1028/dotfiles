@@ -1,15 +1,13 @@
 # Login-shell extras (zsh -l, and `zsh -lc` as used by coding agents).
 # The shared PATH + env moved to ~/.zshenv (read by every zsh, before this
-# file); here we only add what login shells need on top: miniconda on PATH
-# and the full lazy conda wrappers.
+# file); here we only add what login shells need on top: conda's condabin on
+# PATH and the full lazy conda wrappers.
 typeset -U path PATH
 
-# User-installed tools (uv, ruff in ~/.local/bin) stay ahead of conda's copies.
 path=(
   "$HOME/.pixi/bin"
   "$HOME/.local/bin"
   "$HOME/miniconda3/condabin"
-  "$HOME/miniconda3/bin"
   "${path[@]}"
 )
 export PATH

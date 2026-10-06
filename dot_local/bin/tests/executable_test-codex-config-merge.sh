@@ -33,6 +33,7 @@ chmod +x "$SUBJECT"
 IN="$TEST_TMP/in"
 OUT="$TEST_TMP/out"
 ERR="$TEST_TMP/err"
+BASELINE="$TEST_TMP/managed.toml"
 RC=0
 
 fail() {
@@ -50,24 +51,46 @@ run() {
 
 # `expr` is evaluated with the parsed output bound to d.
 tchk() {
-    python3 - "$OUT" "$1" <<'PY' || fail "$2"
+    /usr/bin/python3 - "$OUT" "$1" "$BASELINE" <<'PY' || fail "$2"
 import sys, tomllib
 with open(sys.argv[1], "rb") as fh:
     d = tomllib.load(fh)
-sys.exit(0 if eval(" ".join(sys.argv[2].split()), {"d": d}) else 1)
+with open(sys.argv[3], "rb") as fh:
+    expected = tomllib.load(fh)
+sys.exit(0 if eval(" ".join(sys.argv[2].split()), {"d": d, "expected": expected}) else 1)
 PY
 }
 
 count_top() {
-    sed -n "0,/^\[/p" "$OUT" | grep -Ec "^$1[[:space:]]*=" || true
+    /usr/bin/python3 - "$OUT" "$1" <<'PY'
+import sys, tomllib
+with open(sys.argv[1], "rb") as fh:
+    d = tomllib.load(fh)
+print(int(sys.argv[2] in d))
+PY
 }
 
-managed_ok='d["model"] == "gpt-6-astra" and d["model_reasoning_effort"] == "xhigh"'
+managed_ok='all(d.get(key) == value for key, value in expected.items())'
+
+# --- without tomlkit the config passes through and chezmoi keeps going ------
+printf 'model = "gpt-old"\n[features]\nweb_search = true\n' >"$IN"
+RC=0
+/usr/bin/python3 -I -S "$SUBJECT" <"$IN" >"$OUT" 2>"$ERR" || RC=$?
+[ "$RC" = 0 ] || fail "a missing tomlkit made the script exit $RC"
+cmp -s "$IN" "$OUT" || fail 'a missing tomlkit changed the config'
+grep -q 'python3-tomlkit' "$ERR" || fail 'a missing tomlkit was not reported'
+
+if ! /usr/bin/python3 -c 'import tomlkit' 2>/dev/null; then
+    echo "SKIP: python3-tomlkit is not installed; only the fallback was checked"
+    exit 0
+fi
 
 # --- an empty config becomes the two managed keys ----------------------------
 : >"$IN"
 run
-tchk "$managed_ok" 'an empty config did not gain the managed keys'
+cp -- "$OUT" "$BASELINE"
+tchk 'set(d) == {"model", "model_reasoning_effort"} and all(isinstance(value, str) and value.strip() for value in d.values())' \
+    'an empty config did not gain exactly the two nonempty managed settings'
 
 # --- existing top-level values are replaced, not duplicated ------------------
 cat >"$IN" <<'EOF'
@@ -135,7 +158,7 @@ trust_level = "trusted"
 run = "echo hi"
 EOF
 run
-python3 - "$IN" "$OUT" <<'PY' || fail 'installer-owned tables did not survive verbatim'
+/usr/bin/python3 - "$IN" "$OUT" <<'PY' || fail 'installer-owned tables did not survive verbatim'
 import sys, tomllib
 before = tomllib.load(open(sys.argv[1], "rb"))
 after = tomllib.load(open(sys.argv[2], "rb"))
@@ -164,6 +187,10 @@ model="gpt-old"
 model = "gpt-old"
 model	=	"gpt-old"
 model    =    "gpt-old"
+  model = "gpt-old"
+"model" = "gpt-old"
+'model' = 'gpt-old'
+"mo\u0064el" = "gpt-old"
 EOF
 
 # --- a longer key that merely starts with a managed name is left alone -------
@@ -195,5 +222,57 @@ run
 tchk "$managed_ok" 'a config without a trailing newline lost the managed keys'
 tchk 'd["personality"] == "pragmatic"' \
     'a config without a trailing newline lost an unmanaged key'
+
+for header in '  [features]' '  ["features"]' "  ['features']"; do
+    printf '%s\nmodel = "table-owned"\nmodel_reasoning_effort = "table-owned"\n' "$header" >"$IN"
+    run
+    tchk "$managed_ok" 'an indented table suppressed the top-level settings'
+    tchk 'd["features"] == {"model": "table-owned", "model_reasoning_effort": "table-owned"}' \
+        'an indented table was overwritten'
+    grep -Fqx "$header" "$OUT" || fail 'table header formatting changed'
+done
+
+cat >"$IN" <<'EOF'
+  "model" = "old" # preferred model
+  'model_reasoning_effort' = 'old' # preferred effort
+notes = """
+[features]
+model = "inside a string"
+"""
+
+  [profiles.work] # local profile
+  model = "local-model"
+  model_reasoning_effort = "local-effort"
+EOF
+run
+tchk "$managed_ok" 'quoted managed settings were not replaced'
+tchk 'd["notes"] == "[features]\nmodel = \"inside a string\"\n"' \
+    'an unrelated multiline string changed'
+tchk 'd["profiles"]["work"] == {"model": "local-model", "model_reasoning_effort": "local-effort"}' \
+    'profile settings were overwritten'
+for preserved in '# preferred model' '# preferred effort' '  [profiles.work] # local profile'; do
+    grep -Fq "$preserved" "$OUT" || fail 'comments or table formatting changed'
+done
+
+cp -- "$OUT" "$IN"
+cp -- "$OUT" "$TEST_TMP/first"
+run
+cmp -s "$TEST_TMP/first" "$OUT" || fail 'a matching formatted config was rewritten'
+
+/usr/bin/python3 - "$BASELINE" "$IN" <<'PY'
+import pathlib, sys
+raw = pathlib.Path(sys.argv[1]).read_bytes().replace(b"\n", b"\r\n")
+pathlib.Path(sys.argv[2]).write_bytes(raw)
+PY
+run
+cmp -s "$IN" "$OUT" || fail 'matching CRLF input was rewritten'
+
+for malformed in 'model = "unfinished' 'model = "one"\nmodel = "two"'; do
+    printf '%b\n' "$malformed" >"$IN"
+    RC=0
+    "$SUBJECT" <"$IN" >"$OUT" 2>"$ERR" || RC=$?
+    [ "$RC" -ne 0 ] || fail 'invalid TOML was accepted'
+    [ ! -s "$OUT" ] || fail 'invalid TOML produced replacement content'
+done
 
 echo 'PASS: Codex config merge pins two top-level keys and leaves tables alone'

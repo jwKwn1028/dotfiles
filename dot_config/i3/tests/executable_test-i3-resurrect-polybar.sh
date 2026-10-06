@@ -32,8 +32,10 @@ fi
 
 mkdir -p "$MOCK_BIN" "$MOCK_STATE/runtime" "$STATE_DIR" "$META_DIR"
 printf '1\n' >"$META_DIR/workspaces.txt"
-printf '{"name":"1","nodes":[]}\n' >"$STATE_DIR/workspace_1_layout.json"
-printf '[]\n' >"$STATE_DIR/workspace_1_programs.json"
+printf '{"name":"1","nodes":[{"swallows":[{"class":"^Example$"}]}]}\n' \
+    >"$STATE_DIR/workspace_1_layout.json"
+printf '[{"command":["example"],"working_directory":"/tmp"}]\n' \
+    >"$STATE_DIR/workspace_1_programs.json"
 
 export PATH="$MOCK_BIN:/usr/bin:/bin"
 export XDG_RUNTIME_DIR="$MOCK_STATE/runtime"
@@ -50,6 +52,9 @@ export RESTORE_TEST_STATE_DIR="$MOCK_STATE"
 cat >"$MOCK_BIN/i3-resurrect" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$RESTORE_TEST_STATE_DIR/resurrect-events"
+case "$*" in
+    *--programs-only*) : >"$RESTORE_TEST_STATE_DIR/launched" ;;
+esac
 exit 0
 EOF
 export I3_RESURRECT="$MOCK_BIN/i3-resurrect"
@@ -60,7 +65,11 @@ printf '%s\n' "$*" >>"$RESTORE_TEST_STATE_DIR/i3-events"
 case "$*" in
     '-t get_tree')
         if [ "${RESTORE_TREE_MODE:-empty}" = blocked ]; then
-            printf '%s\n' '{"id":1,"type":"root","nodes":[{"id":99,"type":"con","window":123,"nodes":[]}]}'
+            # A full desktop forces one collision; kill requests intentionally do nothing.
+            jq -n '{type:"root", nodes:[range(1;11) |
+                {type:"workspace", name:tostring, nodes:[{id:(90+.),window:(120+.)}]}]}'
+        elif [ -e "$RESTORE_TEST_STATE_DIR/launched" ]; then
+            printf '%s\n' '{"id":1,"type":"root","nodes":[{"id":10,"type":"workspace","name":"1","nodes":[{"id":99,"type":"con","window":123,"nodes":[]}],"floating_nodes":[]}]}'
         else
             printf '%s\n' '{"id":1,"type":"root","nodes":[{"id":10,"type":"workspace","name":"1","nodes":[],"floating_nodes":[]}]}'
         fi
@@ -131,6 +140,7 @@ reset_case() {
     : >"$MOCK_STATE/i3-events"
     : >"$MOCK_STATE/resurrect-events"
     : >"$MOCK_STATE/notify-events"
+    rm -f "$MOCK_STATE/launched"
 }
 
 assert_polybar_sequence() {

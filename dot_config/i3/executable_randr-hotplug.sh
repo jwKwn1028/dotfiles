@@ -59,10 +59,10 @@ while true; do
             toast_text="$(change_toast "$LAST_SIGNATURE" "$signature")"
             LAST_SIGNATURE="$signature"
 
-            I3_DISPLAY_TOAST="$toast_text" "$DISPLAY_SETUP"
+            I3_DISPLAY_TOAST="$toast_text" "$DISPLAY_SETUP" 3<&- 200>&-
             drain_events
         done
-    done 3< <(i3-msg -t subscribe -m '["output"]' 2>/dev/null)
+    done 3< <(i3-msg -t subscribe -m '["output"]' 200>&- 2>/dev/null)
 
     # exec_always respawns us on an i3 restart; this covers a transient socket drop.
     sleep 1

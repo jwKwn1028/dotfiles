@@ -490,9 +490,9 @@ The save path now preserves more than the old guide recorded: Zen and Helium
 URLs, stable Helium launch commands, Zathura page numbers, Ghostty working
 directories and first remote sessions, the lab route mode, focused workspace,
 and the list of workspaces to restore. The restore path hides Polybar, closes
-existing windows, re-enables a saved lab route, rebuilds each saved workspace,
-moves workspaces 7–10 to the active external output, and restores focus and
-prior bar visibility. A partial port must say explicitly which of those
+the windows on saved workspaces that had windows, re-enables a saved lab route,
+rebuilds those workspaces, moves workspaces 3–10 to the active external output,
+and restores focus and prior bar visibility. A partial port must say explicitly which of those
 behaviors it drops.
 
 Under Sway, some layout IPC can move to `swaymsg`, but the browser URL capture

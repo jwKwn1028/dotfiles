@@ -11,19 +11,71 @@
   background: transparent !important;
 }
 
-:root[zen-compact-mode="true"][zen-has-empty-tab="true"]:not([customizing]):not([inDOMFullscreen="true"])
-  #navigator-toolbox:not([animate="true"]):not([zen-has-hover]):not([zen-user-show]):not([has-popup-menu]):not([movingtab]):not([zen-compact-mode-active]) {
-  left: calc(-1 * var(--actual-zen-sidebar-width) + var(--zen-element-separation) / 2 + 1px) !important;
+/* Match the compact sidebar to the wallpaper and make reveal/hide instant. */
+:root[zen-compact-mode="true"]:not([customizing]):not([inDOMFullscreen="true"]) {
+  & #navigator-toolbox:not([animate="true"]),
+  & #navigator-toolbox:not([animate="true"]) #titlebar {
+    transition: none !important;
+  }
+
+  & #navigator-toolbox {
+    --toolbox-textcolor: #1d2021 !important;
+    color: var(--toolbox-textcolor) !important;
+    color-scheme: light !important;
+
+    & .zen-toolbar-background {
+      background: #f2f0e3 !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+
+      &::before,
+      &::after {
+        display: none !important;
+      }
+    }
+  }
 }
 
-:root[zen-compact-mode="true"][zen-has-empty-tab="true"][zen-right-side="true"]:not([customizing]):not([inDOMFullscreen="true"])
-  #navigator-toolbox:not([animate="true"]):not([zen-has-hover]):not([zen-user-show]):not([has-popup-menu]):not([movingtab]):not([zen-compact-mode-active]) {
-  right: calc(-1 * var(--actual-zen-sidebar-width) + var(--zen-element-separation) / 2 + 1px) !important;
-  left: auto !important;
+/* Remove the Library panel's sidebar shadow. */
+zen-library #zen-library-side {
+  box-shadow: none !important;
 }
 
-:root[zen-compact-mode="true"][zen-has-empty-tab="true"]:not([customizing]):not([inDOMFullscreen="true"])
-  #navigator-toolbox:not([animate="true"]):not([zen-has-hover]):not([zen-user-show]):not([has-popup-menu]):not([movingtab]):not([zen-compact-mode-active])
-  #titlebar {
-  visibility: hidden !important;
+/* Match bookmarks and history sidebars to the wallpaper without shadows. */
+#sidebar-box:is([sidebarcommand="viewBookmarksSidebar"], [sidebarcommand="viewHistorySidebar"]) {
+  --sidebar-background-color: #f2f0e3 !important;
+  --sidebar-text-color: #1d2021 !important;
+  background: #f2f0e3 !important;
+  color: #1d2021 !important;
+  color-scheme: light !important;
+  box-shadow: none !important;
+}
+
+#sidebar-box:is([sidebarcommand="viewBookmarksSidebar"], [sidebarcommand="viewHistorySidebar"]) #sidebar {
+  background: #f2f0e3 !important;
+  box-shadow: none !important;
+}
+
+@-moz-document url("chrome://browser/content/places/bookmarksSidebar.xhtml"),
+               url("chrome://browser/content/places/historySidebar.xhtml"),
+               url("chrome://browser/content/sidebar/sidebar-bookmarks.html"),
+               url("chrome://browser/content/sidebar/sidebar-history.html") {
+  :root {
+    --sidebar-background-color: #f2f0e3 !important;
+    --sidebar-text-color: #1d2021 !important;
+    background: #f2f0e3 !important;
+    color-scheme: light !important;
+  }
+}
+
+/* Zen 1.23 slides the compact sidebar with translate. Reuse its own hidden
+ * offset for either side, even on the empty start page. Explicit reveal and
+ * interaction states must still let Zen show the sidebar normally. */
+:root[zen-compact-mode="true"][zen-has-empty-tab="true"]:not([customizing]):not([inDOMFullscreen="true"]):not([zen-compact-animating]):not([zen-renaming-tab="true"])
+  #navigator-toolbox:not([animate="true"]):not([zen-has-hover]):not([zen-user-show]):not([flash-popup]):not([has-popup-menu]):not([movingtab]):not([zen-compact-mode-active]) {
+  translate: var(--zen-compact-hidden-translate) !important;
+
+  & #titlebar {
+    visibility: hidden !important;
+  }
 }

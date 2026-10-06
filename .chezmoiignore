@@ -83,7 +83,7 @@ snap/firefox/common/.mozilla/firefox/
 
 # ─── Desktop profiles ─────────────────────────────────────────────────────
 # Mint's i3 tree is the X11 desktop; any other profile must not receive it.
-{{ if ne $desktopProfile "linuxmint-i3-x11" -}}
+{{ if or (ne $class "desktop") (ne $desktopProfile "linuxmint-i3-x11") -}}
 .config/i3/
 .config/xfce4/
 .config/polybar/

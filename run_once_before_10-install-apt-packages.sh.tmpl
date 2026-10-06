@@ -52,6 +52,15 @@ else
     echo "No battery present; skipping the laptop power package set."
 fi
 
+{{ if eq $class "desktop" -}}
+# --- desktop class ---
+sudo apt-get install -y \
+{{- range .packages.apt.desktop }}
+    {{ . }} \
+{{- end }}
+    ;
+{{- end }}
+
 {{ if and (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
 # --- desktop / i3 stack ---
 sudo apt-get install -y \
