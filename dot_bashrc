@@ -464,10 +464,15 @@ bo() {
 }
 
 # --- File manager ---
-# Mirrors thunar() in ~/.zsh/rc.d/45-openers.zsh: bare `thunar` opens $PWD,
-# detached. `command` keeps the ~/.local/bin/thunar GTK_THEME wrapper in play.
+# Match the Zsh thunar opener.
 thunar() {
-  nohup command thunar "${@:-$PWD}" >/dev/null 2>&1 &
+  if (( $# == 0 )) && [[ $- == *i* && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]]; then
+    command systemctl --user start thunar.service >/dev/null 2>&1 || return
+    command thunar "$PWD" >/dev/null 2>&1 || return
+    _close_gui_terminal
+    return 0
+  fi
+  nohup thunar "${@:-$PWD}" >/dev/null 2>&1 &
 }
 
 # --- Zk ---

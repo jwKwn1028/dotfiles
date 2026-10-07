@@ -147,9 +147,15 @@ io() {
 }
 
 # --- File manager ---
-# Bare `thunar` opens $PWD, detached. `command` keeps the ~/.local/bin/thunar
-# GTK_THEME wrapper in play; .desktop and systemd launches never see this.
+# Bare thunar closes a local Ghostty shell after launch.
 thunar() {
   emulate -L zsh
+  if (( $# == 0 )) && [[ -o interactive && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]]; then
+    # Start the daemon so the client returns promptly.
+    command systemctl --user start thunar.service >/dev/null 2>&1 || return
+    command thunar "$PWD" >/dev/null 2>&1 || return
+    _close_gui_terminal
+    return 0
+  fi
   command thunar "${@:-$PWD}" >/dev/null 2>&1 &!
 }

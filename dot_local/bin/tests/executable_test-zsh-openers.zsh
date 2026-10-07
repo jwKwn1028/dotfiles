@@ -7,6 +7,10 @@ SCRIPT_DIR=${0:A:h}
 REPO_ROOT=${SCRIPT_DIR:h:h:h}
 OPENERS_FILE=${ZSH_OPENERS_FILE:-$REPO_ROOT/dot_zsh/rc.d/45-openers.zsh}
 [[ -r $OPENERS_FILE ]] || OPENERS_FILE=$HOME/.zsh/rc.d/45-openers.zsh
+ALIASES_FILE=${ZSH_ALIASES_FILE:-$REPO_ROOT/dot_zsh/rc.d/30-aliases.zsh}
+[[ -r $ALIASES_FILE ]] || ALIASES_FILE=$HOME/.zsh/rc.d/30-aliases.zsh
+BASHRC_FILE=${BASH_OPENERS_FILE:-$REPO_ROOT/dot_bashrc}
+[[ -r $BASHRC_FILE ]] || BASHRC_FILE=$HOME/.bashrc
 
 fail() {
   print -u2 -- "FAIL: $1"
@@ -148,4 +152,118 @@ expect_cancel_stays_open zo "$PDF_FILE"
 expect_cancel_stays_open bo "$EPUB_FILE"
 expect_cancel_stays_open io "$PNG_FILE"
 
-print 'PASS: Zsh GUI pickers close only their successful interactive surface'
+# External mocks exercise command/nohup lookup past the thunar function.
+mkdir -p "$TEST_TMP/bin" "$TEST_TMP/folder with spaces"
+SERVICE_LOG="$TEST_TMP/service.log"
+sed -n '/^_close_gui_terminal() {/,/^}/p' "$ALIASES_FILE" >| "$TEST_TMP/zsh-close"
+sed -n '/^_close_gui_terminal() {/,/^}/p' "$BASHRC_FILE" >| "$TEST_TMP/bash-close"
+sed -n '/^thunar() {/,/^}/p' "$BASHRC_FILE" >| "$TEST_TMP/bash-thunar"
+cat >| "$TEST_TMP/bin/thunar" <<'MOCK'
+#!/bin/sh
+{
+  printf 'viewer=thunar'
+  for arg in "$@"; do printf ' arg=<%s>' "$arg"; done
+  printf '\n'
+} >> "$OPEN_LOG"
+exit "$THUNAR_STATUS"
+MOCK
+cat >| "$TEST_TMP/bin/systemctl" <<'MOCK'
+#!/bin/sh
+printf '%s\n' "$*" >> "$SERVICE_LOG"
+exit "$SERVICE_STATUS"
+MOCK
+chmod +x "$TEST_TMP/bin/thunar" "$TEST_TMP/bin/systemctl"
+
+typeset -r THUNAR_SESSION_PROGRAM='
+source "$GUI_CLOSE_FILE"
+source "$THUNAR_OPENERS_FILE"
+cd -- "$THUNAR_CWD" || exit 1
+case $RUN_MODE in
+  direct) thunar "$THUNAR_CWD" ;;
+  multiple) thunar "$THUNAR_CWD" "$SECOND_FOLDER" ;;
+  *) thunar ;;
+esac
+printf "status=%s\nsurvived\n" "$?" >> "$CONTROL_LOG"
+'
+
+run_thunar_session() {
+  local shell=$1 mode=$2 interactive=${3:-interactive} openers_file
+  local -a shell_args
+  if [[ $shell == zsh ]]; then
+    shell_args=(-f)
+    openers_file=$OPENERS_FILE
+  else
+    shell_args=(--noprofile --norc)
+    openers_file=$TEST_TMP/bash-thunar
+  fi
+  [[ $interactive == interactive ]] && shell_args+=(-ic) || shell_args+=(-c)
+  : >| "$OPEN_LOG"
+  : >| "$CONTROL_LOG"
+  : >| "$SERVICE_LOG"
+  : >| "$SESSION_OUTPUT"
+  if ! env \
+      PATH="$TEST_TMP/bin:$PATH" \
+      GUI_CLOSE_FILE="$TEST_TMP/$shell-close" \
+      THUNAR_OPENERS_FILE="$openers_file" \
+      THUNAR_CWD="$TEST_TMP/folder with spaces" \
+      SECOND_FOLDER="$TEST_TMP" \
+      THUNAR_STATUS="${THUNAR_STATUS:-0}" \
+      SERVICE_STATUS="${SERVICE_STATUS:-0}" \
+      TERM_PROGRAM="${TEST_TERM_PROGRAM:-ghostty}" \
+      TMUX="${TEST_TMUX:-}" \
+      SSH_CONNECTION="${TEST_SSH_CONNECTION:-}" \
+      RUN_MODE="$mode" \
+      OPEN_LOG="$OPEN_LOG" \
+      CONTROL_LOG="$CONTROL_LOG" \
+      SERVICE_LOG="$SERVICE_LOG" \
+      "$shell" "${shell_args[@]}" "$THUNAR_SESSION_PROGRAM" </dev/null \
+      >| "$SESSION_OUTPUT" 2>&1; then
+    fail "$shell thunar $mode session failed: $(<"$SESSION_OUTPUT")"
+  fi
+}
+
+expect_thunar_stays_open() {
+  local shell=$1 mode=$2 interactive=${3:-interactive} contents
+  run_thunar_session "$shell" "$mode" "$interactive"
+  wait_for_viewer thunar
+  contents=$(<"$CONTROL_LOG")
+  [[ $contents == $'status=0\nsurvived' ]] ||
+    fail "$shell thunar $mode unexpectedly closed: $contents"
+  [[ ! -s $SERVICE_LOG ]] ||
+    fail "$shell thunar $mode unexpectedly started the service"
+  contents=$(<"$OPEN_LOG")
+  [[ $contents == *"arg=<$TEST_TMP/folder with spaces>"* ]] ||
+    fail "$shell thunar $mode did not preserve the folder: $contents"
+  if [[ $mode == multiple ]]; then
+    [[ $contents == *"arg=<$TEST_TMP>"* ]] ||
+      fail "$shell thunar lost its second argument: $contents"
+  fi
+}
+
+for test_shell in zsh bash; do
+  run_thunar_session "$test_shell" bare
+  wait_for_viewer thunar
+  [[ ! -s $CONTROL_LOG ]] || fail "$test_shell bare thunar did not close"
+  [[ $(<"$SERVICE_LOG") == '--user start thunar.service' ]] ||
+    fail "$test_shell bare thunar did not start its daemon"
+  [[ $(<"$OPEN_LOG") == "viewer=thunar arg=<$TEST_TMP/folder with spaces>" ]] ||
+    fail "$test_shell bare thunar did not open the current directory"
+
+  expect_thunar_stays_open "$test_shell" direct
+  expect_thunar_stays_open "$test_shell" multiple
+  TEST_TMUX=test-session expect_thunar_stays_open "$test_shell" bare
+  TEST_SSH_CONNECTION=test-session expect_thunar_stays_open "$test_shell" bare
+  TEST_TERM_PROGRAM=xterm expect_thunar_stays_open "$test_shell" bare
+  expect_thunar_stays_open "$test_shell" bare noninteractive
+
+  THUNAR_STATUS=23 run_thunar_session "$test_shell" bare
+  [[ $(<"$CONTROL_LOG") == $'status=23\nsurvived' ]] ||
+    fail "$test_shell closed or lost the failed launch status"
+
+  SERVICE_STATUS=31 run_thunar_session "$test_shell" bare
+  [[ $(<"$CONTROL_LOG") == $'status=31\nsurvived' ]] ||
+    fail "$test_shell closed or lost the failed daemon status"
+  [[ ! -s $OPEN_LOG ]] || fail "$test_shell launched Thunar after daemon failure"
+done
+
+print 'PASS: GUI pickers and Bash/Zsh Thunar close only the intended shell'

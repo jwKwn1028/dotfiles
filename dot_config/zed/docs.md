@@ -10,6 +10,12 @@ the same row.
 
 ## Workspace and panels
 
+The status bar is hidden by default, and the project sidebar starts closed on the
+right in new workspaces. Zed restores the saved sidebar visibility for projects
+opened before; close it with `Ctrl+T Ctrl+L` to save a closed layout for that
+project. Select the `Show status bar` profile to display the status bar, or return
+to the default profile to hide it.
+
 | Keys | Action |
 | --- | --- |
 | `Shift Shift` | Toggle the file finder. |
@@ -17,7 +23,7 @@ the same row.
 | `Ctrl+T Ctrl+L` | Toggle the right dock, where the project panel is configured to live. |
 | `Ctrl+T Ctrl+P` | Toggle the terminal panel. |
 | `Ctrl+T Ctrl+Shift+S` | Open the settings profile selector. |
-| `Ctrl+T Ctrl+S` | Open the profile selector, then send Down and Enter. The available custom profile is `No status bar`. |
+| `Ctrl+T Ctrl+S` | Open the profile selector, then send Down and Enter. The available custom profile is `Show status bar`. |
 | `Ctrl+H Ctrl+M` | Toggle Helix mode. |
 | `Ctrl+Q` | Close the Zed window when Vim control is active and no menu is open. |
 

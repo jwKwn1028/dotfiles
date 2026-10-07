@@ -50,7 +50,7 @@ separate from the editor keymaps in `~/.config/helix/docs.md`,
 | `so` / `zo` | Pick a PDF or pass one as an argument; prefer Sioyek / Zathura. |
 | `bo` | Pick or open an EPUB in ebook-viewer. |
 | `io` | Pick or open images in xviewer, falling back to feh. |
-| `thunar` | Open Thunar in the current directory when no path is given. |
+| `thunar` | Open the current directory in Thunar. With no arguments, close the current interactive Ghostty tab/split after a successful launch, outside tmux and SSH. Arguments keep the shell open. |
 | `crpf` / `crpd` | Pick a file / directory and copy its path to the clipboard. |
 | `COMMAND Y` | Global alias that pipes a command's output to `clipcopy`. |
 | `sysmon [SECONDS]` | Show live CPU, GPU, RAM, temperature, and fan readings. |
