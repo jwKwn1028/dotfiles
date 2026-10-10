@@ -16,8 +16,6 @@ chezmoi update # git pull + apply
 - [X2W.md](X2W.md) — Wayland plan
 - [AGENTS.md](AGENTS.md) — working rules for agents and contributors
 
-Application guides, installed into their matching config directories:
-
 ## License
 
 Original work: [MIT](LICENSE). Third-party components retain their own licenses.

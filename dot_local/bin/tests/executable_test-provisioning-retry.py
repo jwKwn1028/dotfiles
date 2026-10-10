@@ -39,7 +39,8 @@ class ProvisioningTests(unittest.TestCase):
         self.config = self.root / "config.toml"
         self.config.write_text("")
         self.log = self.root / "attempts"
-        self.env = dict(os.environ, PATH=f"{self.bin}:/usr/bin:/bin",
+        self.env = dict(os.environ, HOME=str(self.destination),
+                        PATH=f"{self.bin}:/usr/bin:/bin",
                         ATTEMPT_LOG=str(self.log), SIMULATE_FAILURE="0")
         mock = self.bin / "flatpak"
         mock.write_text(
@@ -56,15 +57,23 @@ class ProvisioningTests(unittest.TestCase):
                 "--destination", str(self.destination), "--persistent-state",
                 str(self.root / "state.boltdb"), "--cache", str(self.root / "cache")]
 
-    def render(self, machine_class="desktop"):
-        template = ROOT / "run_once_after_20-install-flatpaks.sh.tmpl"
+    def mock(self, name, body, interpreter="/bin/sh"):
+        path = self.bin / name
+        path.write_text(f"#!{interpreter}\n{body}")
+        path.chmod(0o755)
+
+    def render(self, machine_class="desktop", *,
+               script_name="run_once_after_20-install-flatpaks.sh", data=None):
+        template = ROOT / f"{script_name}.tmpl"
+        overrides = {"class": machine_class}
+        overrides.update(data or {})
         result = subprocess.run(
             self.command(ROOT) + ["execute-template", "--override-data",
-                                  json.dumps({"class": machine_class})],
+                                  json.dumps(overrides)],
             input=template.read_text(), text=True, capture_output=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        script = self.source / "run_once_after_20-install-flatpaks.sh"
+        script = self.source / script_name
         script.write_text(result.stdout)
 
     def apply(self, failure="0"):
@@ -85,6 +94,7 @@ class ProvisioningTests(unittest.TestCase):
 
     def test_desktop_class_installs_flatpak(self):
         self.assertIn("flatpak", self.packages["apt"]["desktop"])
+        self.assertIn("latexmk", self.packages["apt"]["desktop"])
         installer = ROOT / "run_once_before_10-install-apt-packages.sh.tmpl"
         self.assertIn("range .packages.apt.desktop", installer.read_text())
 
@@ -125,6 +135,120 @@ class ProvisioningTests(unittest.TestCase):
         result = self.apply("1")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.attempts(), [])
+
+    def assert_cargo_retry(self, failing_binary):
+        self.env.update(TEST_BIN=str(self.bin), FAILING_CARGO_BIN=failing_binary)
+        self.mock("cargo", '''
+if [ "$2" = --git ]; then binary=retry-test-git; else binary=retry-test-registry; fi
+printf '%s\\n' "$binary" >> "$ATTEMPT_LOG"
+if [ "$SIMULATE_FAILURE" = 1 ] && [ "$binary" = "$FAILING_CARGO_BIN" ]; then
+    exit 42
+fi
+printf '#!/bin/sh\\nexit 0\\n' > "$TEST_BIN/$binary"
+chmod +x "$TEST_BIN/$binary"
+''')
+        for name in ("starship", "zoxide"):
+            self.mock(name, "exit 0\n")
+        (self.destination / "miniconda3").mkdir()
+        self.render("server", script_name="run_once_after_30-install-cli-tools.sh",
+                    data={"packages": {"cargo": {
+                        "registry": [{"crate": "retry-test", "bin": "retry-test-registry"}],
+                        "git": [{"url": "https://example.invalid/retry.git",
+                                 "bin": "retry-test-git", "package": "retry-test"}],
+                    }}})
+        result = self.apply("1")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("provisioning incomplete", result.stderr)
+        self.assertEqual(self.attempts(), ["retry-test-registry", "retry-test-git"])
+        successful = "retry-test-git" if failing_binary == "retry-test-registry" else "retry-test-registry"
+        self.assertTrue((self.bin / successful).is_file())
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.attempts(), ["retry-test-registry", "retry-test-git", failing_binary])
+        result = self.apply("1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.attempts()), 3)
+
+    def test_registry_cargo_failure_retries(self):
+        self.assert_cargo_retry("retry-test-registry")
+
+    def test_git_cargo_failure_retries(self):
+        self.assert_cargo_retry("retry-test-git")
+
+    def font_fixture(self):
+        self.mock("curl", '''
+printf '%s\\n' "$4" >> "$ATTEMPT_LOG"
+[ "$SIMULATE_FAILURE" = 0 ] || exit 22
+printf '%s' "$4" > "$3"
+''')
+        self.mock("unzip", '''
+import os
+from pathlib import Path
+import sys
+if os.environ.get("UNPACK_FAILURE") == "1":
+    sys.exit(1)
+url = Path(sys.argv[2]).read_text()
+fonts = {
+    "JuliaMono": {"JuliaMono-Regular.ttf": "JuliaMono"},
+    "NanumGothicCoding": {"NanumGothicCoding.ttf": "NanumGothicCoding"},
+    "JetBrainsMono": {"JetBrainsMono.ttf": "JetBrainsMono Nerd Font"},
+}
+files = next((files for name, files in fonts.items() if name in url), {
+    "NewCMSans10-Regular.otf": "NewComputerModernSans10",
+    "NewCMMath-Regular.otf": "NewComputerModernMath",
+})
+directory = Path(sys.argv[4])
+directory.mkdir(parents=True)
+for name, family in files.items():
+    (directory / name).write_text(family)
+''', interpreter="/usr/bin/python3")
+        self.mock("fc-list", '''
+import os
+from pathlib import Path
+if os.environ.get("UNRESOLVED_FONTS") != "1":
+    for font in (Path(os.environ["HOME"]) / ".local/share/fonts").rglob("*"):
+        if font.is_file():
+            print(font.read_text())
+''', interpreter="/usr/bin/python3")
+        self.mock("fc-cache", "exit 0\n")
+        self.render(script_name="run_once_after_50-install-fonts.sh")
+        return 3 + len(self.packages["fonts"]["archives"])
+
+    def test_font_download_failure_retries(self):
+        count = self.font_fixture()
+        result = self.apply("1")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("Font provisioning incomplete", result.stderr)
+        self.assertEqual(len(self.attempts()), count)
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.attempts()), count * 2)
+        result = self.apply("1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.attempts()), count * 2)
+
+    def test_font_unpack_failure_retries(self):
+        count = self.font_fixture()
+        self.env["UNPACK_FAILURE"] = "1"
+        result = self.apply()
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(len(self.attempts()), count)
+        self.env["UNPACK_FAILURE"] = "0"
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.attempts()), count * 2)
+
+    def test_unresolved_fonts_remain_pending(self):
+        count = self.font_fixture()
+        self.env["UNRESOLVED_FONTS"] = "1"
+        result = self.apply()
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("still unresolved", result.stderr)
+        self.assertEqual(len(self.attempts()), count)
+        self.env["UNRESOLVED_FONTS"] = "0"
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.attempts()), count)
 
 
 if __name__ == "__main__":

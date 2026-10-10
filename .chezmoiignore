@@ -120,6 +120,8 @@ snap/firefox/common/.mozilla/firefox/
 {{ if ne $class "desktop" -}}
 .local/share/zen-chrome/
 .local/share/helium-newtab/
+.local/share/pandoc/
+.local/share/typst/packages/local/docstyle/
 {{ end -}}
 
 # Zen's flatpak override: `persistent=.mozilla` keeps the native messaging

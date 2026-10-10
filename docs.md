@@ -19,6 +19,9 @@ chezmoi re-add      # import local edits
 chezmoi update      # git pull + apply
 ```
 
+See [Pandoc and Typst presets](dot_local/share/pandoc/docs.md) for document
+conversion commands and native Typst layouts.
+
 ## Recover a Linux i3 desktop
 
 Use `class = desktop` and `desktopProfile = linuxmint-i3-x11` on x86_64.
@@ -85,6 +88,10 @@ Run `chezmoi apply -v` in an interactive terminal. In order:
 12. `run_once_after_95/96`: build pinned i3lock-color into `/usr/local` and
     zathura into `~/.local` from source; both install build dependencies with
     sudo.
+
+Cargo and font installers try remaining items after individual failures and
+report incomplete provisioning as an error. Fix the cause and rerun
+`chezmoi apply -v`; installed tools and fonts are skipped.
 
 ### 5. Start i3
 

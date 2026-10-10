@@ -9,8 +9,8 @@
 {{- if hasKey . "desktopProfile" -}}{{- $desktopProfile = .desktopProfile -}}{{- end -}}
 #!/usr/bin/env bash
 # Installs pipx apps, Rust tools, Starship, zoxide, and Miniconda.
-# Cargo installs are best-effort; required pipx installs are not.
 set -euo pipefail
+failed=0
 
 echo "==> CLI tools provisioning"
 
@@ -51,7 +51,10 @@ fi
 if command -v {{ .bin }} >/dev/null 2>&1; then
     echo "  {{ .bin }} already present; skipping crate {{ .crate }}"
 else
-    cargo install --locked {{ .crate }} || echo "WARN: cargo install {{ .crate }} failed"
+    if ! cargo install --locked {{ .crate }}; then
+        echo "WARN: cargo install {{ .crate }} failed" >&2
+        failed=1
+    fi
 fi
 {{- end }}
 
@@ -62,7 +65,10 @@ fi
 if command -v {{ .bin }} >/dev/null 2>&1; then
     echo "  {{ .bin }} already present; skipping {{ .url }}"
 else
-    cargo install --git {{ .url | quote }} --locked {{ if hasKey . "package" }}{{ .package }} {{ end }}|| echo "WARN: cargo install --git {{ .url }} failed"
+    if ! cargo install --git {{ .url | quote }} --locked {{ if hasKey . "package" }}{{ .package }}{{ end }}; then
+        echo "WARN: cargo install --git {{ .url }} failed" >&2
+        failed=1
+    fi
 fi
 {{- end }}
 
@@ -87,4 +93,8 @@ if [ ! -d "$HOME/miniconda3" ]; then
     rm -rf "$tmp"
 fi
 
+if [ "$failed" -ne 0 ]; then
+    echo "CLI tools provisioning incomplete; rerun chezmoi apply." >&2
+    exit 1
+fi
 echo "==> CLI tools provisioning done."

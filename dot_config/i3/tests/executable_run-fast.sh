@@ -56,7 +56,10 @@ run() {
 mapfile -d '' SHELL_FILES < <(
     find "$I3_ROOT" "$POLYBAR_ROOT" -type f -name '*.sh' -print0
 )
-run 'Bash syntax' bash -n "${SHELL_FILES[@]}"
+printf '%-34s' 'Bash syntax'
+for shell_file in "${SHELL_FILES[@]}"; do
+    bash -n "$shell_file"
+done
 printf 'PASS\n'
 
 if command -v shellcheck >/dev/null 2>&1; then

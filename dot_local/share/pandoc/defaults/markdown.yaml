@@ -1,0 +1,5 @@
+from: markdown+tex_math_single_backslash
+to: markdown
+standalone: true
+wrap: none
+markdown-headings: atx

@@ -41,6 +41,10 @@ desktop = [
     "flatpak",
     # Browserpass host for Zen and Helium; after_60/after_70 wire the manifests.
     "webext-browserpass",
+    # Pandoc PDF conversion.
+    "pandoc", "latexmk", "texlive-xetex", "texlive-latex-extra",
+    "texlive-fonts-recommended", "texlive-lang-chinese",
+    "fontconfig", "fonts-noto-core", "fonts-noto-cjk",
 ]
 
 # Battery-only, gated at runtime: neither class nor desktopProfile encodes "laptop".
@@ -81,6 +85,12 @@ i3_x11 = [
     "lightdm", "lightdm-settings", "light-locker",
 ]
 
+[packages.fonts]
+# Document fonts for after_50; specs are FAMILY=GLOB.
+archives = [
+    { directory = "NewComputerModern", url = "https://mirrors.ctan.org/fonts/newcomputermodern.zip", fonts = ["NewComputerModernSans10=NewCMSans10-*.otf", "NewComputerModernMath=NewCMMath-Regular.otf"] },
+]
+
 [packages.flatpak]
 # Installed only when class == "desktop", from Flathub.
 apps = [
@@ -119,6 +129,7 @@ registry = [
     { crate = "dprint",        bin = "dprint" },
     { crate = "taplo-cli",     bin = "taplo" },
     { crate = "typstyle",      bin = "typstyle" },
+    { crate = "typst-cli",     bin = "typst" },
     { crate = "texlab",        bin = "texlab" },
     { crate = "harper-ls",     bin = "harper-ls" },
     { crate = "watchexec-cli", bin = "watchexec" },

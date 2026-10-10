@@ -5,8 +5,8 @@
 # everywhere -- ghostty, polybar, rofi, editors, XSETTINGS, Thunar's GTK theme),
 # NanumGothicCoding (Korean monospace fallback in ghostty), and JetBrainsMono
 # Nerd Font (icon glyphs for polybar and starship). Installed to
-# ~/.local/share/fonts from upstream archives. New Computer Modern was the
-# previous UI face; no longer installed, existing copies left in place.
+# ~/.local/share/fonts from upstream archives. Supplemental document fonts in
+# packages.fonts.archives include New Computer Modern Sans and Math for Pandoc.
 set -euo pipefail
 
 {{ if ne $class "desktop" -}}
@@ -14,6 +14,7 @@ echo "Non-desktop class; skipping fonts."
 exit 0
 {{- else -}}
 fontdir="$HOME/.local/share/fonts"
+failed=0
 mkdir -p "$fontdir"
 
 # Test the family name recorded inside the file, never the filename: the
@@ -28,7 +29,7 @@ have_family() {
 
 # install_zip URL DESTDIR FAMILY=GLOB [FAMILY=GLOB ...] -- fetches a zip once
 # and copies each GLOB into DESTDIR, skipping the download when every named
-# family already resolves. Best-effort: a failure warns rather than aborting.
+# family already resolves.
 install_zip() {
     local url="$1" dest="$2"
     shift 2
@@ -72,7 +73,7 @@ install_zip() {
 install_zip \
     "https://github.com/cormullion/juliamono/releases/latest/download/JuliaMono-ttf.zip" \
     "$fontdir/JuliaMono" \
-    'JuliaMono=JuliaMono-*.ttf' || true
+    'JuliaMono=JuliaMono-*.ttf' || failed=1
 
 # --- NanumGothicCoding ---
 # Naver's own GitHub release. Not the AUR package or the older mirrors:
@@ -80,20 +81,32 @@ install_zip \
 install_zip \
     "https://github.com/naver/nanumfont/releases/download/VER2.5/NanumGothicCoding-2.5.zip" \
     "$fontdir/NanumGothicCoding" \
-    'NanumGothicCoding=*.ttf' || true
+    'NanumGothicCoding=*.ttf' || failed=1
 
 # --- JetBrainsMono Nerd Font ---
 install_zip \
     "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip" \
     "$fontdir/JetBrainsMonoNerd" \
-    'JetBrainsMono Nerd Font=*.ttf' || true
+    'JetBrainsMono Nerd Font=*.ttf' || failed=1
+
+# --- Document fonts ---
+{{ range .packages.fonts.archives -}}
+install_zip {{ .url | quote }} "$fontdir"/{{ .directory | quote }}{{ range .fonts }} {{ . | quote }}{{ end }} || failed=1
+{{ end }}
 
 fc-cache -f "$fontdir" >/dev/null
-echo "==> fonts done."
 
 # Surface anything the desktop configs still cannot resolve, rather than leaving
 # it to be discovered as tofu in the terminal later.
-for family in "JuliaMono" "NanumGothicCoding" "JetBrainsMono Nerd Font"; do
-    have_family "$family" || echo "WARN: $family is still unresolved."
+for family in "JuliaMono" "NanumGothicCoding" "JetBrainsMono Nerd Font"{{ range .packages.fonts.archives }}{{ range .fonts }} {{ index (splitList "=" .) 0 | quote }}{{ end }}{{ end }}; do
+    if ! have_family "$family"; then
+        echo "WARN: $family is still unresolved." >&2
+        failed=1
+    fi
 done
+if [ "$failed" -ne 0 ]; then
+    echo "Font provisioning incomplete; rerun chezmoi apply." >&2
+    exit 1
+fi
+echo "==> fonts done."
 {{- end }}

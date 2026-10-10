@@ -1,0 +1,8 @@
+from: markdown+tex_math_single_backslash
+to: typst
+standalone: true
+wrap: preserve
+template: ${.}/../templates/notes.typ
+filters:
+  - citeproc
+  - ${.}/../filters/typst-compat.lua
