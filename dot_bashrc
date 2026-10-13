@@ -1,11 +1,3 @@
-# ~/.bashrc — ported to mirror ~/.zshrc behavior where bash allows.
-#
-# Deliberately ONE file, unlike zsh's ~/.zsh/rc.d/ modules; section order matches
-# the rc.d numbering so each block has an obvious zsh counterpart. No bash
-# equivalent, intentionally omitted: zsh-helix-mode, autosuggestions, syntax
-# highlighting, zcompile, the AUTO_PUSHD `cd --`/`cd +N` trick, the global alias
-# `Y`, and 30-aliases.zsh's generated tt/tn shortcuts.
-
 # Bash-only file: bail out at once if another shell sources it.
 [ -n "$BASH_VERSION" ] || return 0 2>/dev/null
 
@@ -109,17 +101,37 @@ unset _path_dirs _i
 unset -f _path_prepend
 export PATH
 
-# --- Editor / env ---
-# Grouped like ~/.zshenv; bash has no equivalent (BASH_ENV is non-interactive only).
-export EDITOR=hx
-export VISUAL=hx
-export MICRO_TRUECOLOR=1
-export BAT_THEME="tokyonight_storm"
-export ZK_EDITOR="hx"
-
 # --- Shared helpers (mirrors ~/.zsh/rc.d/_lib.zsh) ---
 # _have <cmd> -> succeeds if <cmd> is an external command on PATH.
 _have() { type -P -- "$1" >/dev/null 2>&1; }
+
+# Recheck tools after module loads.
+_bash_require() {
+  local cmd
+  for cmd in "$@"; do
+    _have "$cmd" || {
+      printf '%s: %s not found\n' "${FUNCNAME[1]}" "$cmd" >&2
+      return 127
+    }
+  done
+}
+
+# --- Editor / env ---
+if [ -z "${EDITOR:-}" ]; then
+  for _editor in hx vim vi nano emacs; do
+    if _have "$_editor"; then
+      EDITOR=$_editor
+      break
+    fi
+  done
+  EDITOR=${EDITOR:-vi}
+  unset _editor
+fi
+export EDITOR
+export VISUAL="${VISUAL:-$EDITOR}"
+export MICRO_TRUECOLOR=1
+export BAT_THEME="tokyonight_storm"
+export ZK_EDITOR="${ZK_EDITOR:-$EDITOR}"
 
 # Resolve tool variants once so every block agrees on the same binary.
 #   $_bash_fd -> fd|fdfind|''   $_bash_bat -> bat|batcat|cat
@@ -163,12 +175,14 @@ _bash_ls_files() {
 }
 
 # --- Aliases ---
-alias twt='taskwarrior-tui'
-alias v='vim .'
-alias h='hx .'
-alias vi='vim'
-alias mo='micro'
-alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
+_have taskwarrior-tui && alias twt='taskwarrior-tui'
+if _have vim; then
+  alias v='vim .'
+  alias vi='vim'
+fi
+_have hx && alias h='hx .'
+_have micro && alias mo='micro'
+_have eza && alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 [ "$_bash_bat" = batcat ] && alias bat='batcat'
 [ "$_bash_fd" = fdfind ] && alias fd='fdfind'
 unalias c z 2>/dev/null
@@ -177,17 +191,19 @@ _close_gui_terminal() {
   return 0
 }
 _open_gui_editor() {
+  _bash_require "$1" || return
   command "$1" . || return
   _close_gui_terminal
 }
 c() { _open_gui_editor code; }
 z() { _open_gui_editor zed; }
 alias ':q'='exit'
-alias ':qa'='xdotool key --clearmodifiers alt+F4'
-alias hb='${EDITOR:-hx} ~/.bashrc'
+_have xdotool && alias ':qa'='xdotool key --clearmodifiers alt+F4'
+alias hb='${EDITOR:-vi} ~/.bashrc'
 alias sb='source ~/.bashrc && echo "Bash config reloaded."'
 unalias scpo poweroff 2>/dev/null
 poweroff() {
+  _bash_require poweroff-confirm || return
   command poweroff-confirm "$@"
 }
 wtail() {   # absolutise args so tail -v headers name the full path
@@ -198,18 +214,23 @@ wtail() {   # absolutise args so tail -v headers name the full path
     printf 'usage: wtail FILE...\n' >&2
     return 2
   fi
+  _bash_require realpath watch tail || return
 
   for f in "$@"; do
     files+=("$(realpath -m -- "$f")")
   done
   watch -x -d -n 10 tail -v -n 10 "${files[@]}"
 }
-alias mytop='watch -n 2 top -bn1 -u "$USER"'
+if _have watch && _have top; then
+  alias mytop='watch -n 2 top -bn1 -u "$USER"'
+fi
 if _have sinfo; then
   alias sidle='sinfo -t idle -o "%.20P %.6D %N"'
+  _have watch && alias wsidle='watch -d -n 10 '\''sinfo -t idle -o "%.20P %.6D %N"'\'''
+fi
+if _have squeue; then
   alias sq='squeue'
-  alias myq='watch -n 10 squeue -u "$USER"'
-  alias wsidle='watch -d -n 10 '\''sinfo -t idle -o "%.20P %.6D %N"'\'''
+  _have watch && alias myq='watch -n 10 squeue -u "$USER"'
 fi
 
 ssh-close() {
@@ -217,6 +238,7 @@ ssh-close() {
     printf '%s\n' 'usage: ssh-close HOST_ALIAS' >&2
     return 2
   fi
+  _bash_require ssh || return
   command ssh -O exit "$1"
 }
 
@@ -245,7 +267,7 @@ alias ....='cd ../../..'
 alias .....='cd ../../../..'
 
 # Ripgrep
-alias rg='rg --smart-case'
+_have rg && alias rg='rg --smart-case'
 
 # --- Completion ---
 if ! shopt -oq posix; then
@@ -256,7 +278,7 @@ if ! shopt -oq posix; then
   fi
 fi
 # Populate LS_COLORS so `colored-stats` completion is colorized.
-[ -x /usr/bin/dircolors ] && eval "$(dircolors -b)"
+[ -x /usr/bin/dircolors ] && eval "$(/usr/bin/dircolors -b)"
 
 # --- zoxide  (note: zsh's multi-dash `cd --`/+N needs AUTO_PUSHD; not ported) ---
 if _have zoxide; then
@@ -379,12 +401,15 @@ if _have fzf; then
   export FZF_DEFAULT_OPTS="
   --height 60%
   --layout=reverse
-  --border
+  --border"
+  if _have fzf-preview; then
+    FZF_DEFAULT_OPTS+="
   --preview 'fzf-preview {}'"
+  fi
 fi
 
 # Source fzf keybindings + completion (Ctrl-T, Ctrl-R, Alt-C, **<Tab>)
-if [[ $- == *i* ]]; then
+if _have fzf; then
   if [ -f "$HOME/.fzf.bash" ]; then
     source "$HOME/.fzf.bash"
   elif [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
@@ -399,6 +424,7 @@ fi
 
 # --- Helix + FZF ---
 hf() {
+  _bash_require fzf hx || return
   local file
   file="$(fzf --prompt='Open with Helix> ')" || return 1
   hx "$file"
@@ -428,6 +454,7 @@ _bash_open_pdf() {
     echo "$caller: neither sioyek nor zathura installed" >&2
     return 127
   }
+  _bash_require nohup || return
 
   if [ -n "$1" ]; then
     file="$1"
@@ -451,6 +478,7 @@ zo() { _bash_open_pdf zathura "$@"; }
 bo() {
   local file
   _have ebook-viewer || { echo "bo: ebook-viewer not found" >&2; return 127; }
+  _bash_require nohup || return
 
   if [ -n "$1" ]; then
     file="$1"
@@ -467,7 +495,9 @@ bo() {
 # --- File manager ---
 # Match the Zsh thunar opener.
 thunar() {
+  _bash_require thunar nohup || return
   if (( $# == 0 )) && [[ $- == *i* && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]]; then
+    _bash_require systemctl || return
     command systemctl --user start thunar.service >/dev/null 2>&1 || return
     command thunar "$PWD" >/dev/null 2>&1 || return
     _close_gui_terminal
@@ -479,6 +509,7 @@ thunar() {
 # --- Zk ---
 # Built, not interpolated: plain `cat` takes none of bat's flags.
 zn() {
+  _bash_require zk fzf hx || return
   local note preview='cat -- {}'
   [ "$_bash_bat" != cat ] &&
     preview="$_bash_bat --color=always --style=header,grid --line-range :500 {}"
@@ -493,6 +524,7 @@ zn() {
 }
 
 zs() {
+  _bash_require zk fzf hx || return
   local note preview='cat -- {}'
   [ "$_bash_bat" != cat ] &&
     preview="$_bash_bat --color=always --style=header,numbers --line-range :500 {}"
@@ -508,9 +540,10 @@ zs() {
 
 # --- Sensors watch ---
 tcheck () {
+  _bash_require watch sensors grep || return
   local interval="${1:-2}"
   watch -n "$interval" --color \
-    "sensors | egrep -i '(^core [0-9]+:|^package id [0-9]+:|^tctl:|^tdie:|^cpu temp|^fan[0-9]*:|fan.*rpm|rpm)'"
+    "sensors | grep -Ei '(^core [0-9]+:|^package id [0-9]+:|^tctl:|^tdie:|^cpu temp|^fan[0-9]*:|fan.*rpm|rpm)'"
 }
 
 # --- Clipboard helper: shared with tmux via ~/.local/bin/clipcopy ---
@@ -524,6 +557,7 @@ _clipcopy() {
 }
 
 crpf() {
+  _bash_require fzf clipcopy || return
   local p
   p="$(fzf --prompt='file> ')" || return 130
   printf '%s' "$p" | _clipcopy
@@ -531,6 +565,7 @@ crpf() {
 }
 
 crpd() {
+  _bash_require fzf clipcopy || return
   local p
   p="$(_bash_ls_files -d | fzf --prompt='dir> ')" || return 130
   printf '%s' "$p" | _clipcopy
@@ -538,7 +573,7 @@ crpd() {
 }
 
 # make less friendlier for non-text input
-[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh /usr/bin/lesspipe)"
 
 # --- Env / package managers ---
 [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
@@ -572,10 +607,12 @@ _conda_init_lazy() {
   "$@"
 }
 
-for _lazy_cmd in "${lazy_conda_commands[@]}"; do
-  eval "${_lazy_cmd}() { _conda_init_lazy ${_lazy_cmd} \"\$@\"; }"
-done
-unset _lazy_cmd
+if [ -x "$HOME/miniconda3/bin/conda" ]; then
+  for _lazy_cmd in "${lazy_conda_commands[@]}"; do
+    eval "${_lazy_cmd}() { _conda_init_lazy ${_lazy_cmd} \"\$@\"; }"
+  done
+  unset _lazy_cmd
+fi
 
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 

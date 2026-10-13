@@ -22,6 +22,17 @@ chezmoi update      # git pull + apply
 See [Pandoc and Typst presets](dot_local/share/pandoc/docs.md) for document
 conversion commands and native Typst layouts.
 
+## bashrc
+
+`dot_bashrc` is primarily for remote clusters with basic system tools. It can
+be copied to `~/.bashrc` independently of desktop provisioning.
+
+Verify the remote Bash behavior with:
+
+```sh
+bash dot_local/bin/tests/executable_test-bashrc.sh
+```
+
 ## Recover a Linux i3 desktop
 
 Use `class = desktop` and `desktopProfile = linuxmint-i3-x11` on x86_64.

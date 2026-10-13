@@ -157,7 +157,8 @@ mkdir -p "$TEST_TMP/bin" "$TEST_TMP/folder with spaces"
 SERVICE_LOG="$TEST_TMP/service.log"
 sed -n '/^_close_gui_terminal() {/,/^}/p' "$ALIASES_FILE" >| "$TEST_TMP/zsh-close"
 sed -n '/^_close_gui_terminal() {/,/^}/p' "$BASHRC_FILE" >| "$TEST_TMP/bash-close"
-sed -n '/^thunar() {/,/^}/p' "$BASHRC_FILE" >| "$TEST_TMP/bash-thunar"
+sed -n '/^_have() /p; /^_bash_require() {/,/^}/p; /^thunar() {/,/^}/p' \
+  "$BASHRC_FILE" >| "$TEST_TMP/bash-thunar"
 cat >| "$TEST_TMP/bin/thunar" <<'MOCK'
 #!/bin/sh
 {
