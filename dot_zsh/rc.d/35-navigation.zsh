@@ -102,3 +102,4 @@ y() {
   return $rc
 }
 alias yp='y "$HOME/Documents/Workspace/Project"'
+alias yd='y "$HOME/Downloads"'

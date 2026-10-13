@@ -72,7 +72,8 @@ terminal cancels. Arguments are rejected. Run the mocked terminal checks with
 `cd --`, `cd ---`, and longer runs of `-` go back two, three, or more entries
 in Zsh's directory stack. With `zoxide` installed, ordinary `cd` also records
 navigation. `yp`, `np`, and `rp` start their file managers in the configured
-workspace directory; `~/.config/yazi/yazi_docs.md` covers
+workspace directory, and `yd` starts Yazi in `~/Downloads`;
+`~/.config/yazi/yazi_docs.md` covers
 the Yazi wrapper in detail.
 
 The `t<W><D><d|s>` Taskwarrior shortcuts, their time and priority suffixes,
