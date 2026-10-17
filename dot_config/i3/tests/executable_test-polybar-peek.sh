@@ -261,7 +261,7 @@ printf '5\n' > "$MOCK_STATE/current-workspace"
 "$ROOT/workspace-action.sh" relative -1
 grep -Fqx 'get_workspaces' "$MOCK_STATE/i3-events" ||
   fail "relative workspace action did not inspect the focused workspace"
-grep -Fqx 'workspace number 4' "$MOCK_STATE/i3-events" ||
+grep -Fqx 'workspace --no-auto-back-and-forth number 4' "$MOCK_STATE/i3-events" ||
   fail "relative -1 did not select the exact numeric workspace on the left"
 assert_state visible
 wait_for_state hidden
@@ -270,7 +270,7 @@ wait_for_peek_exit
 reset_case hidden
 printf '5\n' > "$MOCK_STATE/current-workspace"
 "$ROOT/workspace-action.sh" relative 1
-grep -Fqx 'workspace number 6' "$MOCK_STATE/i3-events" ||
+grep -Fqx 'workspace --no-auto-back-and-forth number 6' "$MOCK_STATE/i3-events" ||
   fail "relative +1 did not select the exact numeric workspace on the right"
 assert_state visible
 wait_for_state hidden
@@ -279,7 +279,7 @@ wait_for_peek_exit
 reset_case hidden
 printf '1\n' > "$MOCK_STATE/current-workspace"
 "$ROOT/workspace-action.sh" relative -1
-if grep -Fq 'workspace number' "$MOCK_STATE/i3-events"; then
+if grep -Fq 'number ' "$MOCK_STATE/i3-events"; then
   fail "relative -1 moved past workspace 1"
 fi
 if [ -s "$MOCK_STATE/polybar-events" ]; then
@@ -289,12 +289,40 @@ fi
 reset_case hidden
 printf '10\n' > "$MOCK_STATE/current-workspace"
 "$ROOT/workspace-action.sh" relative 1
-if grep -Fq 'workspace number' "$MOCK_STATE/i3-events"; then
+if grep -Fq 'number ' "$MOCK_STATE/i3-events"; then
   fail "relative +1 moved past workspace 10"
 fi
 if [ -s "$MOCK_STATE/polybar-events" ]; then
   fail "relative +1 peeked Polybar at workspace 10"
 fi
+
+for monitor in eDP DP-1; do
+  for transition in '2 1 3' '3 -1 2' '10 1 1' '1 -1 10'; do
+    read -r current step expected <<< "$transition"
+    reset_case visible
+    printf '%s\n' "$current" > "$MOCK_STATE/current-workspace"
+    MONITOR="$monitor" "$ROOT/workspace-action.sh" cycle "$step"
+    grep -Fqx "workspace --no-auto-back-and-forth number $expected" \
+      "$MOCK_STATE/i3-events" ||
+      fail "cycle $step from $current on $monitor did not select $expected"
+    assert_state visible
+  done
+done
+
+reset_case hidden
+"$ROOT/polybar-peek.sh" --hold-start "$$"
+for monitor in eDP DP-1; do
+  for step in -1 1; do
+    MONITOR="$monitor" "$ROOT/workspace-action.sh" cycle "$step"
+    sleep 0.35
+    assert_state visible
+    [ "$(cat "$XDG_RUNTIME_DIR/i3-polybar-peek.hold")" = "$$" ] ||
+      fail "workspace scrolling replaced the active pointer hold"
+  done
+done
+"$ROOT/polybar-peek.sh" --hold-end "$$"
+assert_state hidden
+wait_for_peek_exit
 
 reset_case hidden
 printf '5\n' > "$MOCK_STATE/current-workspace"

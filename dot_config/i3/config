@@ -3,6 +3,7 @@
 set $mod Mod4
 font pango:DejaVu Sans 10
 focus_follows_mouse yes
+mouse_warping none
 focus_wrapping no
 workspace_auto_back_and_forth yes
 

@@ -1,51 +1,49 @@
 # Polybar controls
 
-`config.ini` defines the bar modules and their pointer actions. The i3
-`bar-nav.sh` helper makes most of those actions reachable from the keyboard.
-This guide describes the controls; the [i3 manual](../i3/MANUAL.md#bar-mode)
-explains how bar mode works.
-
-One bar runs per active output. The tray appears on the laptop output, or on
-the primary output when there is no laptop panel. The bar starts hidden and
-can be shown temporarily or toggled through i3.
+One bar per active output, hidden initially; the tray uses the laptop panel
+(primary output if absent). `config.ini` defines pointer actions; i3's
+[`bar-nav.sh`](../i3/MANUAL.md#bar-mode) provides keyboard access.
 
 ## Pointer actions
 
 | Area | Left click | Right click | Wheel |
 | --- | --- | --- | --- |
-| Workspace number | Switch to that workspace. | — | Scroll through workspaces. |
-| Date and time | No click action is configured. | Open Thunderbird mail. | — |
-| Volume | Toggle mute. | Open `pavucontrol`. | Adjust volume by 1% per step. |
-| Battery | Open XFCE power manager settings. | — | Adjust brightness by 5% per step. |
-| Network tray icon | Open its NetworkManager menu. | Open its context menu. | Applet-defined. |
-| Bluetooth tray icon | Open its Blueman menu. | Open its context menu. | Applet-defined. |
-| Power icon | Expand the power menu. | — | — |
+| Workspace | Switch workspace. | — | Up/down: previous/next number. |
+| Date/time | — | Thunderbird mail. | — |
+| Volume | Toggle mute. | `pavucontrol`. | ±1%. |
+| Battery | XFCE power settings. | — | Brightness ±5%. |
+| Network/Bluetooth tray | Applet menu. | Context menu. | Applet-defined. |
+| Power | Expand menu. | — | — |
 
-The CPU and memory modules display values only. The power menu offers shut
-down, restart, lock, and an exit-i3 submenu. Shut down and restart open a
-confirmation dialog; doing nothing cancels it.
+Both bars scroll globally through `1–10`, including empty workspaces, wrapping
+`10↔1`. Assignments stay laptop `1–2`, external `3–10`. The pointer stays in
+place across monitors, including keyboard workspace switches. Scrolling
+preserves the [top-edge hold](../i3/MANUAL.md#top-edge-peek): the bar stays up
+until the pointer moves away.
 
-In keyboard bar mode, `Enter` on the date toggles the long date and seconds
-display through Polybar IPC.
+CPU/memory are display-only. Power offers shutdown, restart, lock, and an
+exit-i3 submenu; shutdown/restart require confirmation, with timeout cancelling.
 
 ## Keyboard bar mode
 
 | Keys | Action |
 | --- | --- |
-| `Super+B` | Enter bar mode and reveal the bar if it was hidden. |
-| `H` / `L`, or Left / Right | Move the highlight between interactive modules. |
-| `J` / `K`, or Down / Up | Apply the module's wheel-down / wheel-up action. |
-| `Enter` / `Shift+Enter` | Left-click / right-click the highlighted module. |
-| `Escape` | Leave bar mode and restore the bar's previous visibility. |
-| `Super+Shift+B` | Toggle bar visibility and resize snapped windows to match. |
+| `Super+B` | Enter bar mode; reveal if hidden. |
+| `H/L` or Left/Right | Previous/next interactive module. |
+| `J/K` or Down/Up | Wheel down/up action. |
+| `Enter` / `Shift+Enter` | Left/right click; date `Enter` toggles long date/seconds. |
+| `Escape` | Exit and restore previous visibility. |
+| `Super+Shift+B` | Toggle visibility and resize snapped windows. |
 
-The keyboard stops, from left to right, are date, volume, battery, network,
-Bluetooth, and power. Workspace numbers use i3's own `Super+number` bindings.
-The power menu's entries are selected with the mouse after opening it.
+Stops: date, volume, battery, network, Bluetooth, power. Use `Super+number` for
+workspaces and the mouse for expanded power-menu entries. Window/menu-opening
+actions exit bar mode; in-place toggles stay active.
 
 ## If the bar needs a refresh
 
-`Super+Shift+I` validates and restarts the i3 session components, including
-Polybar. `launch.sh` starts the per-output bars and writes bounded logs under
-`$XDG_STATE_HOME/polybar` (or `~/.local/state/polybar`). The standalone
-launcher test is `~/.config/polybar/tests/test-launch.sh`.
+`Super+Shift+I` validates and restarts i3 session components, including Polybar.
+`launch.sh` starts the bars and bounds logs in `$XDG_STATE_HOME/polybar`
+(default `~/.local/state/polybar`). Launcher check:
+`~/.config/polybar/tests/test-launch.sh`. See the
+[i3 integration reference](../i3/MANUAL.md#polybar-integration) for lifecycle,
+peek gestures, and log overrides.

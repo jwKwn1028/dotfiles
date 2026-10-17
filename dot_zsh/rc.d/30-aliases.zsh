@@ -19,17 +19,6 @@ _open_gui_editor() {
 }
 c() { _open_gui_editor code }
 z() { _open_gui_editor zed }
-btop () {
-  emulate -L zsh
-  if [[ $TERM_PROGRAM != ghostty ]] || (( ! $+commands[xdotool] )); then
-    command btop "$@"
-    return
-  fi
-  xdotool key --clearmodifiers ctrl+minus ctrl+minus ctrl+minus
-  sleep 0.15
-  command btop "$@"
-  xdotool key --clearmodifiers ctrl+0
-}
 unalias hz 2>/dev/null || true
 hz() {   # edit zsh config in the chezmoi source; files differing from live open directly
   emulate -L zsh
