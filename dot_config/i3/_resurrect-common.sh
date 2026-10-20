@@ -33,10 +33,21 @@ resurrect_paths() {
     LABROUTE_FILE="$META_DIR/labroute.txt"
 }
 
+workspace_file_id() {
+    printf '%s' "$1" | tr -d '/\\:*"<>|'
+}
+
 resurrect_dependencies() {
     local command
     for command in i3-msg jq flock sha256sum; do
-        command -v "$command" >/dev/null || return 1
+        command -v "$command" >/dev/null || { printf '%s\n' "$command"; return 1; }
     done
-    [ -x "$RESURRECT_PYTHON" ] && [ -r "$RESURRECT_HELPER" ]
+    [ -x "$RESURRECT_PYTHON" ] || { printf '%s\n' "$RESURRECT_PYTHON"; return 1; }
+    [ -r "$RESURRECT_HELPER" ] || { printf '%s\n' "$RESURRECT_HELPER"; return 1; }
+}
+
+resurrect_fail() {
+    printf '%s\n' "$1" >&2
+    [ "${CHECK:-0}" = 1 ] || notify "$1"
+    exit 1
 }

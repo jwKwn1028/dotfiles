@@ -108,6 +108,7 @@ apps = [
 # linuxmint-i3-x11 apps; bin is the idempotency check.
 apps = [
     { package = "autotiling", bin = "autotiling" },
+    { package = "i3-resurrect==1.4.5", bin = "i3-resurrect" },
 ]
 
 [packages.cargo]

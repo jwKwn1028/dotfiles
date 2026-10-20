@@ -49,7 +49,7 @@ Related files elsewhere in the repo:
 
 | File | Purpose |
 | --- | --- |
-| `dot_zsh/rc.d/35-navigation.zsh`, `dot_bashrc` | The `y` wrapper and the `yp` and `yd` aliases. |
+| `dot_zsh/rc.d/35-navigation.zsh`, `dot_bashrc` | The `y` wrapper and launch shortcuts. |
 | `dot_local/bin/executable_hx-yazi`, `dot_config/helix/config.toml` | Helix's `Ctrl-y` file picker. |
 | `dot_config/starship.toml` | The `󰇥 yazi` prompt badge in shells opened from Yazi. |
 | `dot_local/bin/symlink_fd.tmpl` | `~/.local/bin/fd` → `fdfind`, so `s` search works on Ubuntu. |
@@ -63,6 +63,9 @@ Related files elsewhere in the repo:
 | `y [dir]` | Start Yazi. Quitting with `q` leaves your shell in Yazi's last directory; `Q` quits without changing it; `E` opens Zed and closes the terminal, like `z` (see [Shell and other programs](#shell-and-other-programs)). |
 | `yp` | `y` in `~/Documents/Workspace/Project`. |
 | `yd` | `y` in `~/Downloads` (sorted newest first). |
+| `yl` (Zsh) | `y` in `~/Documents/Workspace/Known/Paper/Library/Library`. |
+| `yc` (Zsh) | `y` in the chezmoi source directory. |
+| `yr` (Zsh) | `y` at the current Git root. |
 | `yazi [dir]` | Plain Yazi; the shell never changes directory. |
 | `Ctrl-y` in Helix | Yazi as a file picker (below). |
 
@@ -117,6 +120,8 @@ the preview. The mouse works too: click to hover or open, scroll to move.
 | `g d` | `~/Downloads` (sorted newest first) |
 | `g w` | `~/Documents/Workspace` |
 | `g p` | `~/Documents/Workspace/Project` |
+| `g l` | `~/Documents/Workspace/Known/Paper/Library/Library` |
+| `g .` | chezmoi source (`chezmoi source-path`) |
 | `g r` | Root of the current git repo |
 | `g s` | "Git changes" view (see [Git](#git)) |
 | `g t` | Trash (see [Trash](#trash)) |

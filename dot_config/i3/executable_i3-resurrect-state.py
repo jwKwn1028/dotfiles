@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import sys
 import tempfile
@@ -131,7 +132,7 @@ def resolve(state, meta, previous=False):
     require(isinstance(generation, str) and re.fullmatch(r"generation\.[A-Za-z0-9_-]+", generation),
             "snapshot generation is missing or invalid")
     directory = state / "snapshots" / generation
-    require(directory.is_dir(), f"missing snapshot generation: {generation}")
+    require(directory.is_dir(), f"missing snapshot generation: {generation}; delete {manifest} to start over")
     return directory / "state", directory / "meta"
 
 
@@ -205,13 +206,17 @@ def publish(state, meta, generation):
         if previous:
             sync_generation(state / "snapshots" / previous)
     atomic_json(meta / "snapshot.json", {"version": 1, "current": generation, "previous": previous})
+    for path in (state / "snapshots").glob("generation.*"):
+        if path.name not in (generation, previous):
+            shutil.rmtree(path, ignore_errors=True)
 
 
 def window_identity(tree, workspace):
     node = workspace_node(tree, workspace)
     require(node is not None, f"workspace disappeared during save: {workspace}")
-    return [(entry["window"], entry.get("window_properties", {})) for entry in walk(node)
-            if entry.get("window") is not None]
+    return [(entry["window"], {key: value for key, value in entry.get("window_properties", {}).items()
+                               if key != "title"})
+            for entry in walk(node) if entry.get("window") is not None]
 
 
 def browser_commands(state, meta, workspace):
@@ -264,16 +269,27 @@ def occupied_workspaces(state, meta):
     return occupied
 
 
+def quoted_program(entry):
+    command = entry["command"]
+    if isinstance(command, list):
+        command = shlex.join(arg for arg in command if arg)
+    directory = entry["working_directory"]
+    if re.search(r'["\\$`\x00-\x1f\x7f]', directory):
+        directory = str(Path.home())
+    return dict(entry, command=command.replace("\\", "\\\\").replace('"', '\\"'),
+                working_directory=directory)
+
+
 def workspace_order(name):
     match = re.match(r"^(\d+)", name)
     return (int(match[1]) if match else float("inf"), name)
 
 
 def prepare_restore(state, meta, tree, directory):
-    """Pack saved workspaces into empty slots, then reuse occupied slots on overflow."""
+    """Pack saved workspaces into empty slots, then share occupied slots on overflow."""
     require(isinstance(tree, dict) and tree.get("type") == "root", "invalid live i3 tree")
     saved = sorted(occupied_workspaces(state, meta), key=workspace_order)
-    names, occupied = {}, set()
+    names, occupied = {}, {}
     for node in walk(tree):
         if node.get("type") != "workspace":
             continue
@@ -282,20 +298,30 @@ def prepare_restore(state, meta, tree, directory):
             continue  # Scratchpad and workspaces outside the numbered pool stay untouched.
         require(number not in names, f"multiple live workspaces use number {number}")
         names[number] = node["name"]
-        if any(child.get("window") is not None for child in walk(node)):
-            occupied.add(number)
+        windows = [child["window"] for child in walk(node) if child.get("window") is not None]
+        if windows:
+            occupied[number] = windows
 
     slots = [number for number in range(1, 11) if number not in occupied] + sorted(occupied)
     plan = []
     for source, number in zip(saved, slots):
         destination = names.get(number, str(number))
-        plan.append(dict(source_workspace=source, workspace=destination, replacing=number in occupied))
+        plan.append(dict(source_workspace=source, workspace=destination, merging=number in occupied))
         layout = read_json(state / f"workspace_{file_id(source)}_layout.json")
+        for node in walk(layout):
+            for rule in node.get("swallows", []):
+                if len(rule) > 1:
+                    rule.pop("title", None)
         # i3-resurrect selects the name embedded in the layout even when -w differs.
         layout["name"] = destination
         (directory / f"workspace_{file_id(destination)}_layout.json").write_text(json.dumps(layout) + "\n")
-        shutil.copyfile(state / f"workspace_{file_id(source)}_programs.json",
-                        directory / f"workspace_{file_id(destination)}_programs.json")
+        programs = read_json(state / f"workspace_{file_id(source)}_programs.json")
+        programs = [quoted_program(entry) for entry in programs]
+        (directory / f"workspace_{file_id(destination)}_programs.json").write_text(json.dumps(programs) + "\n")
+        if number in occupied:
+            nodes = layout.get("nodes", []) + layout.get("floating_nodes", [])
+            (directory / f"append_{file_id(destination)}.json").write_text(json.dumps([nodes]) + "\n")
+            (directory / f"preserved_{file_id(destination)}.json").write_text(json.dumps(occupied[number]) + "\n")
     return plan
 
 
@@ -305,8 +331,11 @@ def readiness(state, workspace, tree):
         return "workspace is missing"
     layout = read_json(state / f"workspace_{file_id(workspace)}_layout.json")
     expected = expected_windows(state, workspace)
-    remaining = sum(bool(entry.get("swallows")) for entry in walk(node))
-    windows = sum(entry.get("window") is not None and not entry.get("swallows") for entry in walk(node))
+    path = state / f"preserved_{file_id(workspace)}.json"
+    preserved = set(read_json(path)) if path.exists() else set()
+    entries = [entry for entry in walk(node) if entry.get("window") not in preserved]
+    remaining = sum(bool(entry.get("swallows")) for entry in entries)
+    windows = sum(entry.get("window") is not None and not entry.get("swallows") for entry in entries)
     if remaining:
         return f"{remaining} placeholder(s) remain"
     if windows < expected:
@@ -314,7 +343,7 @@ def readiness(state, workspace, tree):
     # Unique Ghostty instances provide a stronger identity check than counts.
     expected_instances = [rule["instance"] for entry in walk(layout) for rule in entry.get("swallows", [])
                           if "ghostty-ws" in rule.get("instance", "")]
-    instances = [entry.get("window_properties", {}).get("instance", "") for entry in walk(node)
+    instances = [entry.get("window_properties", {}).get("instance", "") for entry in entries
                  if entry.get("window") is not None]
     if any(not any(re.fullmatch(pattern, instance) for instance in instances) for pattern in expected_instances):
         return "expected Ghostty window instance is missing"

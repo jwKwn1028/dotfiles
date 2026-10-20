@@ -14,10 +14,7 @@ cd() {
 }
 
 # --- Auto-list on cd ---
-# Names only: the `ls` alias in 30-aliases.zsh adds --long --git, a git status
-# per file, too costly on every cd. Skipped past AUTO_LS_MAX entries so
-# `cd /usr/bin` does not scroll the screen; counted with a glob so the common
-# case forks once, not twice. (N) matches eza's default of hiding dotfiles.
+# List names only, without per-file Git status; skip large directories.
 if _have eza; then
   AUTO_LS_MAX=${AUTO_LS_MAX:-50}
 
@@ -103,3 +100,18 @@ y() {
 }
 alias yp='y "$HOME/Documents/Workspace/Project"'
 alias yd='y "$HOME/Downloads"'
+alias yl='y "$HOME/Documents/Workspace/Known/Paper/Library/Library"'
+
+yc() {
+  emulate -L zsh
+  local source_dir
+  source_dir=$(command chezmoi source-path) || return
+  y "$source_dir" "$@"
+}
+
+yr() {
+  emulate -L zsh
+  local repo_root
+  repo_root=$(command git rev-parse --show-toplevel) || return
+  y "$repo_root" "$@"
+}

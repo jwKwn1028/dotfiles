@@ -42,8 +42,6 @@ export XDG_RUNTIME_DIR="$MOCK_STATE/runtime"
 export I3_RESURRECT_STATE_DIR="$STATE_DIR"
 export I3_RESURRECT_META_DIR="$META_DIR"
 export I3_RESURRECT_LAYOUT_DELAY=0
-export I3_RESURRECT_KILL_WAIT_ATTEMPTS=1
-export I3_RESURRECT_KILL_POLL_INTERVAL=0
 export I3_RESURRECT_WAIT_ATTEMPTS=1
 export I3_RESURRECT_POLL_INTERVAL=0
 export I3_POLYBAR_SETTLE_MS=10
@@ -64,8 +62,8 @@ cat >"$MOCK_BIN/i3-msg" <<'EOF'
 printf '%s\n' "$*" >>"$RESTORE_TEST_STATE_DIR/i3-events"
 case "$*" in
     '-t get_tree')
-        if [ "${RESTORE_TREE_MODE:-empty}" = blocked ]; then
-            # A full desktop forces one collision; kill requests intentionally do nothing.
+        if [ "${RESTORE_TREE_MODE:-empty}" = full ]; then
+            # A full desktop shares workspace 1, where the restored window never appears.
             jq -n '{type:"root", nodes:[range(1;11) |
                 {type:"workspace", name:tostring, nodes:[{id:(90+.),window:(120+.)}]}]}'
         elif [ -e "$RESTORE_TEST_STATE_DIR/launched" ]; then
@@ -183,15 +181,12 @@ run_restore 0
 [ ! -s "$MOCK_STATE/x-events" ] ||
     fail 'an initially hidden bar was raised during restore'
 
-reset_case visible blocked
+reset_case visible full
 run_restore 1
 assert_polybar_sequence 'cmd hide' 'cmd show'
-grep -Fq 'Timed out waiting for existing window(s) to close' \
-    "$MOCK_STATE/restore-stderr" ||
-    fail 'the early restore failure did not report its cause'
+grep -Fq '0/1 expected windows are present' "$MOCK_STATE/restore-stderr" ||
+    fail 'the failed restore did not report its cause'
 grep -Fqx 'windowraise 4242' "$MOCK_STATE/x-events" ||
-    fail 'the EXIT trap did not raise the bar after an early restore failure'
-[ ! -s "$MOCK_STATE/resurrect-events" ] ||
-    fail 'restore continued after existing windows failed to close'
+    fail 'the EXIT trap did not raise the bar after a failed restore'
 
 printf 'PASS: i3-resurrect preserves Polybar visibility\n'

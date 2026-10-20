@@ -103,8 +103,6 @@ Log out, pick **i3** in LightDM, and log back in.
 - **npm:** install NodeSource's `nodejs`, which bundles npm; apt's `npm`
   conflicts with it, so the manifest installs `nodejs` alone. `~/.npmrc` puts
   global packages in `~/.local/npm-global`.
-- **i3-resurrect:** `pipx install i3-resurrect`; helpers expect
-  `~/.local/bin/i3-resurrect`.
 - **Optional scientific software:** nothing installs it; `.zshenv` adds it to
   PATH only when present.
 

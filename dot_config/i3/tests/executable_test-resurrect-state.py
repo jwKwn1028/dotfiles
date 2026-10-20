@@ -5,6 +5,8 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -20,25 +22,26 @@ def source(name):
     return path if path.exists() else ROOT / ("executable_" + name)
 
 
+def i3_quoted_string(text):
+    end = 1
+    while end < len(text) and text[end] != '"':
+        end += 2 if text[end] == "\\" else 1
+    return re.sub(r'\\(["\\])', r"\1", text[1:end]), text[end + 1:]
+
+
 SPEC = importlib.util.spec_from_file_location("snapshot", source("i3-resurrect-state.py"))
 SNAPSHOT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SNAPSHOT)
 
 
 MOCK = r'''#!/usr/bin/python3
-import json, os, pathlib, re, shlex, shutil, sys, time
+import json, os, pathlib, shlex, shutil, sys, time
 root = pathlib.Path(os.environ["TEST_ROOT"])
 tool, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
 with (root / "events").open("a") as stream:
     stream.write(json.dumps({"tool": tool, "args": args}) + "\n")
 tree_path = root / "tree.json"
 tree = json.loads(tree_path.read_text())
-def close(node, con_id):
-    for key in ("nodes", "floating_nodes"):
-        if key in node:
-            node[key] = [child for child in node[key] if child.get("id") != con_id]
-            for child in node[key]:
-                close(child, con_id)
 if tool == "i3-msg":
     if args == ["-t", "get_tree"]:
         print(json.dumps(tree))
@@ -54,12 +57,15 @@ if tool == "i3-msg":
                          ([dict(name="DP-1", active=True)] if os.environ.get("EXTERNAL_OUTPUT") else [])))
     else:
         command = shlex.split(args[0])
-        if "kill" in command and not os.environ.get("BLOCK_KILL"):
-            close(tree, int(re.search(r"con_id=(\d+)", args[0]).group(1)))
         if command[0] == "workspace":
             name = command[-1]
+            (root / "focused").write_text(name)
             if not any(node["name"] == name for node in tree["nodes"]):
                 tree["nodes"].append(dict(type="workspace", name=name, nodes=[]))
+        if command[0] == "append_layout":
+            focused = (root / "focused").read_text()
+            node = next(node for node in tree["nodes"] if node["name"] == focused)
+            node.setdefault("nodes", []).extend(json.loads(pathlib.Path(command[1]).read_text())[0])
         tree_path.write_text(json.dumps(tree))
         print(json.dumps([dict(success=not bool(os.environ.get("IPC_FAILURE")))]))
 elif tool == "i3-resurrect":
@@ -78,6 +84,9 @@ elif tool == "i3-resurrect":
             shutil.copyfile(root / "fixtures" / name, directory / name)
         if os.environ.get("CHANGE_TREE"):
             tree["nodes"][0]["nodes"][0]["window"] += 1
+            tree_path.write_text(json.dumps(tree))
+        if os.environ.get("CHANGE_TITLE"):
+            tree["nodes"][0]["nodes"][0]["window_properties"]["title"] = "changed"
             tree_path.write_text(json.dumps(tree))
     elif "--layout-only" in args:
         if os.environ.get("FAIL_LAYOUT") == workspace:
@@ -181,6 +190,12 @@ class RestoreTests(unittest.TestCase):
     def killed(self):
         return any("kill" in " ".join(event["args"]) for event in self.events())
 
+    def notifications(self):
+        path = self.root / "notifications"
+        text = path.read_text() if path.exists() else ""
+        path.unlink(missing_ok=True)
+        return text
+
     def test_check_validates_without_desktop_calls_or_writes(self):
         before = set(self.root.rglob("*"))
         result = self.run_script("restore", "--check")
@@ -237,6 +252,24 @@ class RestoreTests(unittest.TestCase):
                     if event["tool"] == "i3-resurrect" and event["args"][0] == "restore"]
         self.assertEqual(restored, ["3", "3"])
 
+    def test_saves_keep_only_current_and_previous_generations(self):
+        (self.state / "snapshots").mkdir()
+        (self.state / "snapshots" / "generation.orphan").mkdir()
+        for _ in range(3):
+            self.assertEqual(self.run_script("save").returncode, 0)
+        manifest = SNAPSHOT.read_json(self.meta / "snapshot.json")
+        self.assertEqual({path.name for path in (self.state / "snapshots").iterdir()},
+                         {manifest["current"], manifest["previous"]})
+        self.assertEqual(self.run_script("restore", "--previous", "--check").returncode, 0)
+
+    def test_missing_current_generation_names_the_recovery(self):
+        self.assertEqual(self.run_script("save").returncode, 0)
+        manifest = SNAPSHOT.read_json(self.meta / "snapshot.json")
+        shutil.rmtree(self.state / "snapshots" / manifest["current"])
+        result = self.run_script("restore")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("snapshot.json to start over", result.stderr)
+
     def test_first_save_archives_valid_legacy_snapshot(self):
         self.assertEqual(self.run_script("save").returncode, 0)
         state, meta = SNAPSHOT.resolve(self.state, self.meta, True)
@@ -278,7 +311,50 @@ class RestoreTests(unittest.TestCase):
         result = self.run_script("save", CHANGE_TREE="1")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("windows changed", result.stderr)
+        self.assertIn("windows changed", self.notifications())
         self.assertFalse((self.meta / "snapshot.json").exists())
+
+    def test_title_changes_do_not_abort_save(self):
+        result = self.run_script("save", CHANGE_TITLE="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_unreadable_zathura_window_does_not_abort_save(self):
+        self.write(self.root / "tree.json", dict(type="root", nodes=[dict(type="workspace", name="1", nodes=[
+            dict(id=101, window=101, window_properties={"class": "Zathura", "instance": "org.pwmt.zathura"})])]))
+        for xprop in ("exit 1", "echo '_NET_WM_PID(CARDINAL) = 4242'"):
+            with self.subTest(xprop=xprop):
+                for name, body in (("xprop", xprop), ("busctl", "exit 1")):
+                    (self.bin / name).write_text(f"#!/bin/sh\n{body}\n")
+                    (self.bin / name).chmod(0o755)
+                result = self.run_script("save")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                _, meta = SNAPSHOT.resolve(self.state, self.meta)
+                self.assertEqual(SNAPSHOT.read_json(meta / "zathura-pages.json"), [])
+
+    def test_unavailable_dependency_is_notified_except_under_check(self):
+        for action in ("save", "restore"):
+            for args in ((), ("--check",)):
+                with self.subTest(action=action, args=args):
+                    result = self.run_script(action, *args, I3_RESURRECT=str(self.root / "missing"))
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("i3-resurrect not found", result.stderr)
+                    self.assertEqual("i3-resurrect not found" in self.notifications(), not args)
+
+    def test_restore_commands_reach_programs_literally(self):
+        marker = self.root / "injected"
+        args = [f"https://x.test/?q=$(touch${{IFS}}{marker})", f"`touch {marker}`", 'a"b', "c\\d",
+                'x\\"y', "end\\", "$HOME", "it's", "two words", "semi;colon,comma"]
+        entry = SNAPSHOT.quoted_program(dict(working_directory=str(self.root), command=[
+            "/usr/bin/python3", "-c", "import json, sys; print(json.dumps(sys.argv[1:]))", *args]))
+        directory, command = entry["working_directory"], entry["command"]
+        shell, rest = i3_quoted_string(f'"cd \\"{directory}\\" && {command}"')
+        self.assertEqual(rest, "")
+        result = subprocess.run(["sh", "-c", shell], capture_output=True, text=True, timeout=5)
+        self.assertEqual(json.loads(result.stdout), args, result.stderr)
+        self.assertFalse(marker.exists())
+        for directory in ("/tmp/$(x)", "/tmp/`x`", '/tmp/"x', "/tmp/x\\y"):
+            self.assertEqual(SNAPSHOT.quoted_program(dict(command=["x"], working_directory=directory))
+                             ["working_directory"], str(Path.home()))
 
     def blocked_save(self):
         process = subprocess.Popen(["bash", str(self.applied / "i3-resurrect-save-all.sh")],
@@ -367,7 +443,7 @@ class RestoreTests(unittest.TestCase):
                          list(zip(["1", "2", "3", "4", "5"], targets)))
         launches = [json.loads(line) for line in (self.root / "launches").read_text().splitlines()]
         self.assertEqual([(item["workspace"], item["programs"][0]["command"]) for item in launches],
-                         [(target, [f"example-{number}"]) for number, target in enumerate(targets, 1)])
+                         [(target, f"example-{number}") for number, target in enumerate(targets, 1)])
         current = SNAPSHOT.read_json(self.root / "tree.json")
         self.assertEqual([node for node in current["nodes"] if node["name"] in ("1", "4")], tree["nodes"])
         focus = [event["args"][0] for event in self.events()
@@ -389,7 +465,7 @@ class RestoreTests(unittest.TestCase):
         self.assertEqual([item["workspace"] for item in report["workspaces"]],
                          [str(number) for number in range(3, 11)])
 
-    def test_overflow_replaces_only_required_occupied_slots_from_one(self):
+    def test_overflow_opens_alongside_lowest_occupied_slots(self):
         self.live_tree(4)
         tree = SNAPSHOT.read_json(self.root / "tree.json")
         tree["nodes"] = [node for node in tree["nodes"] if node["name"] in ("1", "4")]
@@ -397,21 +473,43 @@ class RestoreTests(unittest.TestCase):
         self.profile(9)
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stderr)
-        kills = [event["args"][0] for event in self.events() if "kill" in " ".join(event["args"])]
-        self.assertEqual(kills, ["[con_id=101] kill"])
+        self.assertFalse(self.killed())
         report = SNAPSHOT.read_json(self.meta / "last-restore.json")
-        self.assertEqual([item["workspace"] for item in report["workspaces"]],
-                         ["2", "3", "5", "6", "7", "8", "9", "10", "1"])
-        self.assertEqual([item["workspace"] for item in report["mapping"] if item["replacing"]], ["1"])
-        self.assertEqual(SNAPSHOT.workspace_node(SNAPSHOT.read_json(self.root / "tree.json"), "4"), tree["nodes"][1])
+        self.assertEqual([(item["workspace"], item["status"]) for item in report["workspaces"]],
+                         [(name, "ready") for name in ("2", "3", "5", "6", "7", "8", "9", "10", "1")])
+        self.assertEqual([item["workspace"] for item in report["mapping"] if item["merging"]], ["1"])
+        current = SNAPSHOT.read_json(self.root / "tree.json")
+        self.assertEqual([child["window"] for child in SNAPSHOT.workspace_node(current, "1")["nodes"]], [101, 100])
+        self.assertEqual(SNAPSHOT.workspace_node(current, "4"), tree["nodes"][1])
+        self.assertIn("Opened alongside existing windows: 1", self.notifications())
 
-    def test_full_desktop_replaces_only_destinations_and_respects_close_failure(self):
+    def test_full_desktop_keeps_every_window(self):
         self.live_tree(10)
-        result = self.run_script(BLOCK_KILL="1")
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.killed())
+        restores = [event["args"] for event in self.events() if event["tool"] == "i3-resurrect"]
+        self.assertEqual([args[-1] for args in restores], ["--programs-only"])
+        current = SNAPSHOT.read_json(self.root / "tree.json")
+        self.assertEqual([child["window"] for child in SNAPSHOT.workspace_node(current, "1")["nodes"]], [101, 100])
+
+    def test_restore_copies_match_without_titles(self):
+        self.write(self.state / "workspace_1_layout.json", dict(type="workspace", name="1", nodes=[
+            {"swallows": [{"class": "^Zathura$", "title": "^/doc\\.pdf$"}]}, {"swallows": [{"title": "^only$"}]}]))
+        directory = self.root / "restore"
+        directory.mkdir()
+        SNAPSHOT.prepare_restore(self.state, self.meta, dict(type="root", nodes=[]), directory)
+        layout = SNAPSHOT.read_json(directory / "workspace_1_layout.json")
+        self.assertEqual([node["swallows"] for node in layout["nodes"]],
+                         [[{"class": "^Zathura$"}], [{"title": "^only$"}]])
+        self.assertIn("title", (self.state / "workspace_1_layout.json").read_text())
+
+    def test_preserved_windows_do_not_count_as_restored(self):
+        self.live_tree(10)
+        self.write(self.state / "workspace_1_layout.json", dict(type="workspace", name="1", nodes=[]))
+        result = self.run_script()
         self.assertNotEqual(result.returncode, 0)
-        kills = [event["args"][0] for event in self.events() if "kill" in " ".join(event["args"])]
-        self.assertEqual(kills, ["[con_id=101] kill"])
-        self.assertFalse(any(event["tool"] == "i3-resurrect" for event in self.events()))
+        self.assertIn("0/1 expected windows", (self.meta / "last-restore.json").read_text())
 
     def test_floating_windows_reserve_slots_but_empty_workspaces_do_not(self):
         tree = dict(type="root", nodes=[
@@ -435,6 +533,7 @@ class RestoreTests(unittest.TestCase):
                 result = self.run_script("restore", *args)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("more than 10", result.stderr)
+                self.assertEqual("more than 10" in self.notifications(), not args)
         self.assertFalse(self.killed())
         self.assertFalse(any(event["tool"] == "i3-resurrect" for event in self.events()))
 
@@ -490,15 +589,16 @@ class RestoreTests(unittest.TestCase):
                 self.assertFalse(self.killed())
                 self.assertFalse(any(event["tool"] == "i3-resurrect" for event in self.events()))
 
-    def test_route_is_ready_before_first_close(self):
+    def test_route_is_ready_before_first_desktop_change(self):
         self.live_tree(10)
         self.route("return 0")
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stderr)
         events = self.events()
         route = next(i for i, event in enumerate(events) if event["tool"] == "route")
-        close = next(i for i, event in enumerate(events) if "kill" in " ".join(event["args"]))
-        self.assertLess(route, close)
+        change = next(i for i, event in enumerate(events) if event["tool"] == "i3-resurrect" or
+                      (event["tool"] == "i3-msg" and not event["args"][0].startswith("-t")))
+        self.assertLess(route, change)
 
     def test_missing_windows_and_failed_commands_cannot_report_success(self):
         cases = [("MISSING_WORKSPACE", "workspace is missing"),

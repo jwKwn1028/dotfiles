@@ -34,13 +34,8 @@ find_i3_resurrect() {
     elif [ -x "$HOME/.local/bin/i3-resurrect" ]; then
         printf '%s\n' "$HOME/.local/bin/i3-resurrect"
     else
-        printf 'i3-resurrect not found\n' >&2
-        exit 127
+        return 1
     fi
-}
-
-workspace_file_id() {
-    printf '%s' "$1" | tr -d '/\\:*"<>|'
 }
 
 ensure_zen_browser_programs() {
@@ -168,7 +163,7 @@ capture_zathura_page_state() {
             pid="$(
                 xprop -id "$window_id" _NET_WM_PID 2>/dev/null |
                     awk -F'= ' '/_NET_WM_PID/ {print $2; exit}'
-            )"
+            )" || true
             [[ "$pid" =~ ^[0-9]+$ ]] || continue
 
             filename="$(
@@ -178,7 +173,7 @@ capture_zathura_page_state() {
                     org.pwmt.zathura \
                     filename 2>/dev/null |
                     jq -r '.data // empty'
-            )"
+            )" || true
             [ -n "$filename" ] || continue
 
             page_zero="$(
@@ -188,7 +183,7 @@ capture_zathura_page_state() {
                     org.pwmt.zathura \
                     pagenumber 2>/dev/null |
                     jq -r '.data // empty'
-            )"
+            )" || true
             [[ "$page_zero" =~ ^[0-9]+$ ]] || continue
 
             page_one=$((page_zero + 1))
@@ -462,23 +457,26 @@ normalize_layout_after_save() {
     mv "$tmp" "$layout_file"
 }
 
+CHECK=0
 case "${1:-}" in
-    ""|--check) ;;
+    "") ;;
+    --check) CHECK=1 ;;
     *) printf 'Usage: %s [--check]\n' "$0" >&2; exit 2 ;;
 esac
-resurrect_dependencies
-I3_RESURRECT="$(find_i3_resurrect)"
-if [ "${1:-}" = "--check" ]; then
-    exit 0
-fi
+missing="$(resurrect_dependencies)" || resurrect_fail "Save unavailable: $missing not found."
+I3_RESURRECT="$(find_i3_resurrect)" || resurrect_fail 'Save unavailable: i3-resurrect not found.'
+[ "$CHECK" = 0 ] || exit 0
 
 umask 077
 resurrect_lock || exit 1
+ERROR_LOG="$(mktemp "${TMPDIR:-/tmp}/i3-resurrect-save.XXXXXXXX")"
+exec 7>&2 2>"$ERROR_LOG"
 PROFILE_STATE_DIR="$STATE_DIR"
 PROFILE_META_DIR="$META_DIR"
 STAGING=""
 cleanup_save() {
     local status=$?
+    local reason
     if [ -n "$STAGING" ]; then
         # A failure after the manifest rename must never remove published data.
         if [ "$(jq -r '.current // empty' "$PROFILE_META_DIR/snapshot.json" 2>/dev/null)" != "${STAGING##*/}" ]; then
@@ -486,8 +484,14 @@ cleanup_save() {
         fi
     fi
     if [ "$status" -ne 0 ]; then
-        notify 'Save failed; the previous snapshot is still available.'
+        case "$status" in
+            130|143) reason='Interrupted.' ;;
+            *) reason="$(sed '/^[[:space:]]*$/d' "$ERROR_LOG" | tail -n 1)" ;;
+        esac
+        notify "Save failed; the previous snapshot is still available.${reason:+$'\n'$reason}"
     fi
+    cat "$ERROR_LOG" >&7
+    rm -f -- "$ERROR_LOG"
 }
 trap cleanup_save EXIT
 trap 'exit 130' INT

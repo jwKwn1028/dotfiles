@@ -21,6 +21,7 @@ dot_config/i3/MANUAL.pdf
 # Local operator documentation; also excluded from the target state in
 # .chezmoiignore.
 /CHEZMOI_UPDATE_WORKFLOW.md
+/IDEA.md
 
 # Local NixOS bootstrap module; copied manually to /etc/nixos when testing.
 /desktop.nix

@@ -328,18 +328,25 @@ def xdotool(*args, timeout=1.5):
     return run_command(["xdotool", *args], timeout=timeout)
 
 
+def window_active(window_id):
+    return (xdotool("getactivewindow") or "").strip() == str(window_id)
+
+
 def live_url_for_window(window_id):
     if not window_id:
         return None
 
-    xdotool("windowactivate", "--sync", str(window_id), timeout=2.0)
+    if xdotool("windowactivate", "--sync", str(window_id), timeout=2.0) is None:
+        return None
     time.sleep(0.08)
-    xdotool("key", "--clearmodifiers", "ctrl+l")
-    time.sleep(0.08)
-    xdotool("key", "--clearmodifiers", "ctrl+c")
-    time.sleep(0.08)
+    for key in ("ctrl+l", "ctrl+c"):
+        if not window_active(window_id):
+            return None
+        xdotool("key", "--clearmodifiers", key)
+        time.sleep(0.08)
     url = (clipboard_text() or "").strip()
-    xdotool("key", "--clearmodifiers", "Escape")
+    if window_active(window_id):
+        xdotool("key", "--clearmodifiers", "Escape")
 
     if is_reopenable_url(url):
         return url

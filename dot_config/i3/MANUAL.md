@@ -326,7 +326,7 @@ without touching live config; it also runs directly from `~/.config`.
 | `test-bar-nav.sh` | Bar-mode navigation, selected-module actions, marker state, and prior-visibility restoration. |
 | `test-polybar-peek.sh` | Peek show/hide, ownership, debounce, global workspace cycling, and pointer-hold preservation. |
 | `test-i3-resurrect-polybar.sh` | Successful, hidden-bar, and early-failure restore paths preserve the bar's prior visibility and raise it when restored. |
-| `test-resurrect-state.py` | Snapshot validation, atomic publication, previous-generation recovery, concurrent profiles, interrupted saves, route failures, browser pairing, placement around occupied workspaces, overflow replacement, and observed restore results. |
+| `test-resurrect-state.py` | Snapshot validation, atomic publication, previous-generation recovery, generation pruning, concurrent profiles, interrupted saves, route failures, browser pairing, placement around occupied workspaces, overflow sharing, and observed restore results. |
 | `test-randr-hotplug.sh` | Output-event coalescing, connected-set changes, mid-run hotplugs, and connection-status toast selection. |
 | `test-usb-hotplug.sh` | Connector classification and its refusal to guess an unrecognized topology, burst coalescing, hub arrivals, bounce suppression, Type-C partner correlation, wattage and alternate-mode detail, detach descriptions taken from cache, and lock handover when the watcher is replaced. |
 | `test-dunst-start.sh` | Dunst 1.9 runtime config generation, laptop/primary fallbacks, and restart-on-index-change behavior. |
@@ -335,7 +335,7 @@ without touching live config; it also runs directly from `~/.config`.
 | `test-top-edge-peek.py` | Top-edge pointer gesture: hysteresis and per-monitor tops. |
 | `test-tile-snap.sh` | Region geometry for all nine snaps including odd-sized workspaces, Polybar inset arithmetic, pseudo-output clamping, size-hint convergence, the `_presnap_`/`_pretiling_` mark protocol, unsnap, and the per-window lock. |
 | `test-snap-watcher.sh` | Auto-fill region choice, splitting the largest occupant to make room, the fallback to tiling when nothing can be split, and rebalancing survivors after a snapped window closes. |
-| `test-zen-url-state.py` | Session-store parsing for both Zen and Firefox layouts, profile discovery and dedup, i3 tree walking, window-to-page title matching, and the gates that keep a headless save out of the live address-bar capture. |
+| `test-zen-url-state.py` | Session-store parsing for both Zen and Firefox layouts, profile discovery and dedup, i3 tree walking, window-to-page title matching, the gates that keep a headless save out of the live address-bar capture, and its focus checks. |
 | `test-window-mode.sh` | Window mode's show-on-entry and restore-prior-Polybar-state contract. |
 | `test-session-reload.sh` | Service refresh, changed-dunstrc handling, Picom `SIGUSR1`, and single success/partial-failure toast coordination. |
 | `../../polybar/tests/test-launch.sh` | Multi-monitor launch, tray ordering, lock-fd closure, hung-bar kill escalation, log defaults and filename safety, and rotation. |
@@ -553,7 +553,8 @@ Keep `resurrect*` data local and out of this public repository/documentation.
 B/C wrappers set `I3_RESURRECT_STATE_DIR` and `I3_RESURRECT_META_DIR`, then exec
 the main scripts. All profiles share a nonblocking lock per X display in
 `${XDG_RUNTIME_DIR:-/run/user/$(id -u)}`: concurrent operations report busy and
-exit rather than queue. `--check` only inspects dependencies/files.
+exit rather than queue. `--check` only inspects dependencies/files; other
+failures notify with their reason.
 
 ### Save Script
 
@@ -576,8 +577,8 @@ Each generation under `<state-directory>/snapshots/generation.*` contains
 
 Save takes the operation lock and a restrictive umask, captures one i3 tree
 for identities/application metadata, records route state, and runs
-`i3-resurrect save` per workspace. Changed window identities/properties abort
-the save; retry once the desktop settles. It normalizes layouts, ensures Zen
+`i3-resurrect save` per workspace. Window changes other than titles abort the
+save; retry once the desktop settles. It normalizes layouts, ensures Zen
 programs exist for placeholders, stabilizes Helium commands, and inserts
 captured URLs, PDF pages, and per-window Ghostty launch state.
 
@@ -587,10 +588,9 @@ interrupted saves preserve the old selection. The first successful save can
 archive a valid legacy flat profile as the previous generation; original files
 stay intact and invalid legacy data is never offered for recovery.
 
-Published generations are immutable and retained without automatic pruning.
-Ordinary failures/caught signals remove staging data; hard kills/power loss
-may leave unselected directories that restore ignores. A notification reports
-the saved workspace count.
+Published generations are immutable. Each save keeps only the current and
+previous generations, removing older ones and interrupted-save leftovers. A
+notification reports the saved workspace count.
 
 Normalization removes Ghostty/Zen/Helium swallow titles and Ghostty's instance;
 Ghostty capture then assigns unique per-window instances.
@@ -600,12 +600,13 @@ Ghostty capture then assigns unique per-window instances.
 For each Zathura window, save gets the PID through `xprop`, queries
 `org.pwmt.zathura.PID-<pid>` with `busctl --user`, reads `filename` and zero-based
 `pagenumber`, and stores a one-based page. Restore commands receive
-`--page=<page>`.
+`--page=<page>`. Unreadable windows keep their plain command.
 
 ### Zen and Helium URL Capture
 
 `zen-url-state.py` first activates each browser with `xdotool`, copies its
 address with `Ctrl+L`, `Ctrl+C`, and `xclip`, then restores clipboard and focus.
+Keys are sent only while that browser is confirmed active.
 Set `ZEN_LIVE_URL_CAPTURE=0` to disable live capture.
 
 Fallback reads Zen/Firefox session files from
@@ -658,7 +659,6 @@ State/metadata paths use the [save defaults](#save-script).
 | Setting | Default |
 | --- | --- |
 | `I3_RESURRECT_LAYOUT_DELAY` | `0.25` seconds. |
-| `I3_RESURRECT_KILL_WAIT_ATTEMPTS` / `I3_RESURRECT_KILL_POLL_INTERVAL` | `40` attempts / `0.25` seconds. |
 | `I3_RESURRECT_WAIT_ATTEMPTS` / `I3_RESURRECT_POLL_INTERVAL` | `48` attempts / `0.25` seconds. |
 | `I3_LAPTOP_OUTPUT` | `eDP`. |
 | `I3_RESURRECT_EXTERNAL_WORKSPACES` | `3 4 5 6 7 8 9 10`. |
@@ -686,21 +686,25 @@ Restore takes the shared lock, resolves one snapshot, validates it, then:
 2. Hides a visible bar. Maps nonempty saved workspaces in number order to empty
    slots `1–10`, starting at `1`. Any tiled/floating window reserves a live
    slot; scratchpad and workspaces outside `1–10` are left alone.
-3. If empty slots are insufficient, fills them first, then replaces occupied
-   slots in ascending order. Only required overflow destinations are closed,
-   with a wait for closure; capacity counts workspaces, not windows.
+3. If empty slots are insufficient, fills them first, then opens the rest
+   alongside existing windows in occupied slots, lowest first. No window is
+   closed; capacity counts workspaces, not windows.
 4. Builds temporary renamed layout/program copies, preserving the snapshot.
-   Rechecks each destination; a newly occupied slot is skipped and reported.
+   Commands are shell-quoted; unsafe working directories become `$HOME`.
+   Swallow titles are dropped: apps such as Zathura set theirs after mapping.
+   Rechecks each empty destination; a newly occupied slot is skipped and
+   reported.
 5. Switches to each destination, moves `3–10` to an active external output when
-   available, restores layout, waits, and launches programs. Checks command
-   results, workspace existence, swallowed placeholders, expected window
-   count, and Ghostty's unique instances. A missing workspace is a failure.
+   available, restores layout (`append_layout` on shared slots), waits, and
+   launches programs. Checks command results, workspace existence, swallowed
+   placeholders, expected window count, and Ghostty's unique instances,
+   ignoring windows that were already there. A missing workspace is a failure.
 6. Rechecks successes after all restores, then focuses the mapped saved focused
    workspace if it contained saved windows. Restores/raises the bar on exit
    if it was previously visible.
-7. Writes `last-restore.json`: snapshot, source/destination mapping, replaced
-   occupied slots, status/reason per workspace, and session retry guidance.
-   The result notification lists mappings, replacements, and failures.
+7. Writes `last-restore.json`: snapshot, source/destination mapping, shared
+   slots, status/reason per workspace, and session retry guidance. The result
+   notification lists mappings, shared slots, and failures.
 
 Terminal launches report `Remote attach requested (unverified)`, not confirmed
 remote login/attachment. Unlaunched sessions and failed-workspace sessions
@@ -708,7 +712,7 @@ appear under `Reattach by hand`.
 
 Example: live windows on `1,4` and saved workspaces `1,2,3,4,5` map to
 `2,3,5,6,7`, preserving both live workspaces. Nine saved nonempty workspaces
-map to `2,3,5,6,7,8,9,10,1`, replacing only live workspace `1`. This applies
+map to `2,3,5,6,7,8,9,10,1`, sharing only live workspace `1`. This applies
 to all three profiles.
 
 ## Saved Session Profiles

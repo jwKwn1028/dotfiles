@@ -40,6 +40,9 @@ The fzf keys need fzf's installed widgets. Editor keymaps are separate: see
 | `n` / `r` / `y` | Run nnn / ranger / Yazi; on exit, `cd` to the directory chosen there. |
 | `np` / `rp` / `yp` | The same, starting in the configured workspace directory. |
 | `yd` | Yazi, starting in `~/Downloads`. |
+| `yl` | Yazi, starting in `~/Documents/Workspace/Known/Paper/Library/Library`. |
+| `yc` | Yazi in the chezmoi source directory. |
+| `yr` | Yazi at the current Git root. |
 | `hf` | Pick a file with fzf and open it in Helix. |
 | `zn` / `zs SEARCH` | Pick a note / search note contents, then open the choice in Helix. |
 | `so` / `zo` | Open a picked or given PDF, preferring Sioyek / Zathura. |

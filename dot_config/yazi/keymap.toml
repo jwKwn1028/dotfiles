@@ -10,6 +10,8 @@ prepend_keymap = [
 	{ on = "!",          run = 'shell "$SHELL" --block',                                                   desc = "Open $SHELL here", for = "unix" },
 	{ on = [ "g", "w" ], run = "cd ~/Documents/Workspace",                                                 desc = "Go to Workspace" },
 	{ on = [ "g", "p" ], run = "cd ~/Documents/Workspace/Project",                                         desc = "Go to Project" },
+	{ on = [ "g", "l" ], run = "cd ~/Documents/Workspace/Known/Paper/Library/Library",                     desc = "Go to paper library" },
+	{ on = [ "g", "." ], run = 'shell -- source_dir="$(chezmoi source-path)" && ya emit cd "$source_dir"', desc = "Go to chezmoi source" },
 	{ on = [ "g", "r" ], run = 'shell -- root="$(git rev-parse --show-toplevel)" && ya emit cd "$root"', desc = "Go to the git root" },
 	{ on = [ "g", "s" ], run = "plugin vcs-files",                                                         desc = "Show git changes" },
 

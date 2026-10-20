@@ -13,8 +13,6 @@ DIR="$(dirname "$(readlink -f "$0")")"
 STATE_DIR="${I3_RESURRECT_STATE_DIR:-$HOME/.config/i3/resurrect}"
 META_DIR="${I3_RESURRECT_META_DIR:-$HOME/.config/i3/resurrect-meta}"
 LAYOUT_DELAY="${I3_RESURRECT_LAYOUT_DELAY:-0.25}"
-KILL_WAIT_ATTEMPTS="${I3_RESURRECT_KILL_WAIT_ATTEMPTS:-40}"
-KILL_POLL_INTERVAL="${I3_RESURRECT_KILL_POLL_INTERVAL:-0.25}"
 PLACEHOLDER_WAIT_ATTEMPTS="${I3_RESURRECT_WAIT_ATTEMPTS:-48}"
 PLACEHOLDER_POLL_INTERVAL="${I3_RESURRECT_POLL_INTERVAL:-0.25}"
 resurrect_paths
@@ -39,16 +37,8 @@ find_i3_resurrect() {
     elif [ -x "$HOME/.local/bin/i3-resurrect" ]; then
         printf '%s\n' "$HOME/.local/bin/i3-resurrect"
     else
-        printf 'i3-resurrect not found\n' >&2
-        exit 127
+        return 1
     fi
-}
-
-replaced_window_ids() {
-    i3-msg -t get_tree | jq -r --argjson workspaces "$REPLACE_WORKSPACES" '
-        .. | objects | select(.type? == "workspace" and (.name | IN($workspaces[])))
-        | .. | objects | select(.window? != null) | .id
-    '
 }
 
 active_external_output() {
@@ -91,33 +81,6 @@ restore_polybar_after_restore() {
 cleanup_restore() {
     restore_polybar_after_restore
     [ -z "$RESTORE_STATE_DIR" ] || rm -rf -- "$RESTORE_STATE_DIR"
-}
-
-kill_existing_windows() {
-    local attempts="$KILL_WAIT_ATTEMPTS"
-    local ids
-    local id
-
-    while [ "$attempts" -gt 0 ]; do
-        ids="$(replaced_window_ids)" || return 1
-        if [ -z "$ids" ]; then
-            return 0
-        fi
-
-        while IFS= read -r id; do
-            [ -n "$id" ] || continue
-            i3-msg "[con_id=$id] kill" >/dev/null || true
-        done <<< "$ids"
-
-        sleep "$KILL_POLL_INTERVAL"
-        attempts=$((attempts - 1))
-    done
-
-    ids="$(replaced_window_ids)" || return 1
-    [ -n "$ids" ] || return 0
-    printf 'Timed out waiting for existing window(s) to close before restore.\n' >&2
-    [ -z "$ids" ] || printf 'Remaining container ids:\n%s\n' "$ids" >&2
-    return 1
 }
 
 wait_for_workspace() {
@@ -177,23 +140,18 @@ for argument in "$@"; do
         *) printf 'Usage: %s [--check] [--previous]\n' "$0" >&2; exit 2 ;;
     esac
 done
-resurrect_dependencies
-I3_RESURRECT="$(find_i3_resurrect)"
-for attempts in "$KILL_WAIT_ATTEMPTS" "$PLACEHOLDER_WAIT_ATTEMPTS"; do
-    if ! [[ "$attempts" =~ ^[1-9][0-9]*$ ]]; then
-        printf 'Restore wait attempts must be positive integers.\n' >&2
-        exit 1
-    fi
-done
-for interval in "$KILL_POLL_INTERVAL" "$PLACEHOLDER_POLL_INTERVAL" "$LAYOUT_DELAY" "$LABROUTE_TIMEOUT"; do
+missing="$(resurrect_dependencies)" || resurrect_fail "Restore unavailable: $missing not found."
+I3_RESURRECT="$(find_i3_resurrect)" || resurrect_fail 'Restore unavailable: i3-resurrect not found.'
+if ! [[ "$PLACEHOLDER_WAIT_ATTEMPTS" =~ ^[1-9][0-9]*$ ]]; then
+    resurrect_fail 'Restore wait attempts must be positive integers.'
+fi
+for interval in "$PLACEHOLDER_POLL_INTERVAL" "$LAYOUT_DELAY" "$LABROUTE_TIMEOUT"; do
     if ! [[ "$interval" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-        printf 'Restore delays must be nonnegative numbers of seconds.\n' >&2
-        exit 1
+        resurrect_fail 'Restore delays must be nonnegative numbers of seconds.'
     fi
 done
 if [[ "$LABROUTE_TIMEOUT" =~ ^0+([.]0+)?$ ]]; then
-    printf 'The lab route timeout must be greater than zero.\n' >&2
-    exit 1
+    resurrect_fail 'The lab route timeout must be greater than zero.'
 fi
 
 umask 077
@@ -201,26 +159,26 @@ if [ "$CHECK" = 0 ]; then
     resurrect_lock || exit 1
 fi
 PROFILE_META_DIR="$META_DIR"
-if ! resolved="$(resurrect_state resolve "$STATE_DIR" "$META_DIR" "${PREVIOUS[@]}")"; then
-    notify 'Restore aborted; invalid snapshot manifest.'
-    exit 1
+if ! resolved="$(resurrect_state resolve "$STATE_DIR" "$META_DIR" "${PREVIOUS[@]}" 2>&1)"; then
+    resurrect_fail 'Restore aborted; invalid snapshot manifest.'$'\n'"$resolved"
 fi
 STATE_DIR="$(jq -r '.[0]' <<< "$resolved")"
 META_DIR="$(jq -r '.[1]' <<< "$resolved")"
 resurrect_paths
-if ! resurrect_state validate "$STATE_DIR" "$META_DIR" ||
-    ! resurrect_state occupied "$STATE_DIR" "$META_DIR" >/dev/null; then
-    notify 'Restore aborted; snapshot validation failed. Existing windows are unchanged.'
-    exit 1
+if ! detail="$(resurrect_state validate "$STATE_DIR" "$META_DIR" 2>&1)" ||
+    ! detail="$(resurrect_state occupied "$STATE_DIR" "$META_DIR" 2>&1 >/dev/null)"; then
+    resurrect_fail 'Restore aborted; snapshot validation failed. Existing windows are unchanged.'$'\n'"$detail"
 fi
 if [ "$(cat "$LABROUTE_FILE" 2>/dev/null)" = on ]; then
-    command -v timeout >/dev/null
-    command -v zsh >/dev/null
-    test -r "$REMOTE_HELPERS"
+    for command in timeout zsh; do
+        command -v "$command" >/dev/null ||
+            resurrect_fail "Restore unavailable: $command not found for the lab route."
+    done
+    [ -r "$REMOTE_HELPERS" ] || resurrect_fail "Restore unavailable: cannot read $REMOTE_HELPERS."
 fi
 [ "$CHECK" = 0 ] || exit 0
 
-# Routing must succeed before replacing the desktop, not just before launching.
+# Routing must succeed before changing the desktop, not just before launching.
 if ! restore_labroute; then
     notify "Restore aborted; existing windows are unchanged."$'\n'"Lab route not restored: $LABROUTE_ERROR"
     exit 1
@@ -232,16 +190,11 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 RESTORE_STATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/i3-resurrect-restore.XXXXXXXX")"
 if ! RESTORE_PLAN="$(i3-msg -t get_tree | resurrect_state prepare-restore \
-    "$STATE_DIR" "$META_DIR" "$RESTORE_STATE_DIR")"; then
-    notify 'Restore aborted; could not plan workspace placement. Existing windows are unchanged.'
-    exit 1
+    "$STATE_DIR" "$META_DIR" "$RESTORE_STATE_DIR" 2>"$RESTORE_STATE_DIR/plan-error")"; then
+    resurrect_fail 'Restore aborted; could not plan workspace placement. Existing windows are unchanged.'$'\n'"$(cat "$RESTORE_STATE_DIR/plan-error")"
 fi
-REPLACE_WORKSPACES="$(jq '[.[] | select(.replacing) | .workspace]' <<< "$RESTORE_PLAN")"
+MERGE_WORKSPACES="$(jq '[.[] | select(.merging) | .workspace]' <<< "$RESTORE_PLAN")"
 hide_polybar_for_restore
-if ! kill_existing_windows; then
-    notify 'Restore aborted; existing windows are still open or i3 is unavailable.'
-    exit 1
-fi
 
 failed=0
 results='[]'
@@ -261,8 +214,9 @@ record_result() {
 
 EXTERNAL_OUTPUT="$(active_external_output || true)"
 while IFS= read -r workspace || [ -n "$workspace" ]; do
+    merging="$(jq -r --arg workspace "$workspace" '.[] | select(.workspace == $workspace) | .merging' <<< "$RESTORE_PLAN")"
     # A window may have arrived since planning. Do not merge it into the saved layout.
-    if ! i3-msg -t get_tree | jq -e --arg workspace "$workspace" '
+    if [ "$merging" = false ] && ! i3-msg -t get_tree | jq -e --arg workspace "$workspace" '
         [.. | objects | select(.type? == "workspace" and .name == $workspace)
          | .. | objects | select(.window? != null)] | length == 0
     ' >/dev/null; then
@@ -279,7 +233,12 @@ while IFS= read -r workspace || [ -n "$workspace" ]; do
             continue
         fi
     fi
-    if ! detail="$("$I3_RESURRECT" restore -w "$workspace" -d "$RESTORE_STATE_DIR" --layout-only 9>&- 2>&1)"; then
+    if [ "$merging" = true ]; then
+        if ! i3_command "append_layout $(i3_string "$RESTORE_STATE_DIR/append_$(workspace_file_id "$workspace").json")"; then
+            record_result "$workspace" failed 'layout restore failed: append_layout was rejected'
+            continue
+        fi
+    elif ! detail="$("$I3_RESURRECT" restore -w "$workspace" -d "$RESTORE_STATE_DIR" --layout-only 9>&- 2>&1)"; then
         record_result "$workspace" failed "layout restore failed: $detail"
         continue
     fi
@@ -322,8 +281,8 @@ placement="$(jq -r 'map("\(.source_workspace)→\(.workspace)") | join(", ")' <<
 if [ -n "$placement" ]; then
     summary="$summary"$'\n'"Workspaces: $placement"
 fi
-if [ "$REPLACE_WORKSPACES" != '[]' ]; then
-    summary="$summary"$'\n'"Replaced occupied workspaces: $(jq -r 'join(", ")' <<< "$REPLACE_WORKSPACES")"
+if [ "$MERGE_WORKSPACES" != '[]' ]; then
+    summary="$summary"$'\n'"Opened alongside existing windows: $(jq -r 'join(", ")' <<< "$MERGE_WORKSPACES")"
 fi
 completed="$(jq '[.[] | select(.status == "ready") | .source_workspace]' <<< "$results")"
 reattach="$(resurrect_state sessions "$STATE_DIR" "$META_DIR" "$completed")"

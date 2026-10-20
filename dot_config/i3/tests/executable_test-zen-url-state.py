@@ -2,9 +2,9 @@
 """URL recovery for i3-resurrect, as implemented by zen-url-state.py.
 
 Everything here runs off synthetic session stores and a synthetic i3 tree: no
-browser, no X11. The live address-bar fallback is covered only at its gates,
-since past them it drives xdotool and the clipboard; the point of the gates is
-that a headless save never reaches that code.
+browser, no X11. The live address-bar fallback is covered at its gates, so a
+headless save never reaches it, and against a fake xdotool, so keys only reach
+a confirmed browser window.
 """
 
 from __future__ import annotations
@@ -387,6 +387,35 @@ class LiveCaptureGateTests(unittest.TestCase):
         os.environ["DISPLAY"] = ":0"
         ZEN.command_available = lambda name: False
         self.assertEqual(ZEN.live_page_state([{"window_id": "1"}]), [])
+
+
+class LiveKeyTests(unittest.TestCase):
+    def capture(self, activated=True, active=()):
+        keys, answers = [], iter(active)
+
+        def xdotool(*args, timeout=1.5):
+            if args[0] == "windowactivate":
+                return "" if activated else None
+            if args[0] == "getactivewindow":
+                return next(answers, "7") + "\n"
+            keys.append(args[-1])
+            return ""
+
+        for name, value in (("xdotool", xdotool), ("clipboard_text", lambda: "https://live.test")):
+            self.addCleanup(setattr, ZEN, name, getattr(ZEN, name))
+            setattr(ZEN, name, value)
+        return ZEN.live_url_for_window("7"), keys
+
+    def test_a_confirmed_window_gets_every_key(self) -> None:
+        self.assertEqual(self.capture(), ("https://live.test", ["ctrl+l", "ctrl+c", "Escape"]))
+
+    def test_a_failed_activation_sends_no_keys(self) -> None:
+        self.assertEqual(self.capture(activated=False), (None, []))
+
+    def test_focus_lost_mid_capture_stops_the_keys(self) -> None:
+        self.assertEqual(self.capture(active=("9",)), (None, []))
+        self.assertEqual(self.capture(active=("7", "9")), (None, ["ctrl+l"]))
+        self.assertEqual(self.capture(active=("7", "7", "9")), ("https://live.test", ["ctrl+l", "ctrl+c"]))
 
 
 class MainTests(unittest.TestCase):
