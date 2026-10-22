@@ -81,6 +81,8 @@ run 'Super listener unit tests' \
     /usr/bin/python3 "$I3_ROOT/tests/test-super-polybar-listener.py"
 run 'top-edge peek unit tests' \
     /usr/bin/python3 "$I3_ROOT/tests/test-top-edge-peek.py"
+run 'quit key unit tests' \
+    /usr/bin/python3 "$I3_ROOT/tests/test-quit-key.py"
 run 'zen URL state unit tests' \
     /usr/bin/python3 "$I3_ROOT/tests/test-zen-url-state.py"
 run 'resurrect snapshot tests' \

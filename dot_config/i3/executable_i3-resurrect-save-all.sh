@@ -505,6 +505,8 @@ META_DIR="$STAGING/meta"
 mkdir -p "$STATE_DIR" "$META_DIR"
 resurrect_paths
 
+# Keep the Copilot terminal out of workspace snapshots.
+i3-msg '[class="^com[.]mitchellh[.]ghostty[.]scratchpad$"] move scratchpad' >/dev/null 2>&1 || true
 i3-msg -t get_tree > "$META_DIR/tree.json"
 capture_zathura_page_state > "$ZATHURA_PAGES_FILE"
 capture_zen_page_state > "$ZEN_PAGES_FILE"

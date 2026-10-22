@@ -93,4 +93,13 @@ Unsuffixed helpers use the default remote; `-gpu` / `-hpc` select a named role.
 | `hpc-detach SESSION`, `hpc-kill [-f] SESSION` | Detach a tmux session's clients, or terminate it. |
 | `hpcz-list`, `hpcz`, `hpcz-detach`, `hpcz-kill` | The same, for zmx sessions. |
 
+Use a leading `--host HOST` for one transfer, including with `-gpu` / `-hpc`.
+SSH config selects the user; use `--host USER@HOST` to override it.
+Separate rsync options from paths with `--`.
+
+```zsh
+grem --host server.example.org /remote/path/results.csv
+prem-hpc --host server.example.org --exclude='*.tmp' -- ./data/ /remote/path/
+```
+
 The kill helpers refuse a session with attached clients unless given `-f`.

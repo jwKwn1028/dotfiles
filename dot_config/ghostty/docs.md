@@ -37,6 +37,7 @@ tab).
 | Keys | Action |
 | --- | --- |
 | `Super+Enter` | Launch Ghostty. |
+| `Copilot` | Show/hide the [floating terminal](../i3/MANUAL.md#copilot-terminal). |
 | `Alt+Shift+T` | Toggle Ghostty's tab bar between automatic display and hidden. The i3 binding runs `toggle-tabbar.sh`, which reloads Ghostty's config. |
 
 `Alt+Shift+T` is a desktop shortcut, so it applies to Ghostty windows even

@@ -422,6 +422,7 @@ The migration surface is now much larger than `polybar/` itself:
   pointer with Python Xlib/XRandR. Both are intentionally blocked by Wayland's
   input model. Decide whether an explicit bar toggle is sufficient before
   building compositor- or layer-shell-specific replacements.
+- `quit-key.py` grabs `Ctrl+Q` on the X root; Wayland clients cannot.
 - `workspace-action.sh`, `focus-prev.sh`, `overflow-watcher.py`,
   `kill-workspace-mode.sh`, `window-mode.sh`, and
   `kill-all-windows.sh` are compositor workflows with a
@@ -682,7 +683,7 @@ Replace:
 - `picom -b`
 - `unclutter-xfixes`
 - `xss-lock -- xflock4`
-- `super-polybar-listener.py` and `top-edge-peek.py`
+- `super-polybar-listener.py`, `top-edge-peek.py`, and `quit-key.py`
 
 Likely Wayland equivalents:
 
@@ -795,7 +796,7 @@ migration deliverable, not an afterthought.
 They fall into three groups that need different treatment:
 
 - **Tests of X11 mechanics** — `test-polybar-peek.sh`, `test-bar-nav.sh`,
-  `test-super-polybar-listener.py`, `test-top-edge-peek.py`,
+  `test-super-polybar-listener.py`, `test-top-edge-peek.py`, `test-quit-key.py`,
   `test-randr-hotplug.sh`, `test-i3-resurrect-polybar.sh`. These die with the
   features they cover. Do not port them; retire each one alongside the decision
   about whether its feature survives.

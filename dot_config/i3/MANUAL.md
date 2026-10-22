@@ -31,6 +31,7 @@ notices, and utility-window floating rules.
 | Binding | Action |
 | --- | --- |
 | `Super+Return` / `Super+Shift+Return` | Ghostty / `xfce4-terminal`. |
+| `Copilot` | Show/hide the floating Ghostty terminal. |
 | `Super+Space` | Rofi drun (`XDG_CURRENT_DESKTOP=XFCE:i3`, `spotlight` theme). |
 | `Super+Tab` / `Super+Shift+Tab` | Previous window / Rofi window switcher. |
 | `Super+T` | Thunar. |
@@ -44,11 +45,22 @@ notices, and utility-window floating rules.
 reserved for numeric workspace navigation; the old Helium/lock bindings are
 disabled. Lock with `Super+Escape`.
 
+### Copilot Terminal
+
+Copilot toggles one floating Ghostty window, regardless of focus. Showing
+brings it to the current workspace/output; size, position, and running
+commands survive hiding. Closing it makes the next press open a fresh window.
+
+It skips the Zsh banner and needs no extra packages. Session saves hide it
+and exclude it from saved profiles. Binding: `Super+Shift+F23`
+(X11 keycode `201`), on release.
+
 ### Window Management
 
 | Binding | Action |
 | --- | --- |
 | `Super+Shift+Q` / `Alt+F4` | Close focused window. |
+| `Ctrl+Q` | Close apps that ignore it, listed in `QUIT_CLASSES` (`quit-key.py`). |
 | `Super+H/J/K/L` / `Super+Arrow keys` | Focus left/down/up/right. |
 | `Super+Shift+H/L` | Move to previous/next numbered workspace and follow; wrap 1↔10. |
 | `Super+Shift+M` / `Super+Ctrl+M` | Show scratchpad / move focused window to scratchpad. |
@@ -333,6 +345,7 @@ without touching live config; it also runs directly from `~/.config`.
 | `test-i3-restart.sh` | `Super+Shift+I` validates the candidate config before restart and reports validation/IPC failures once. |
 | `test-super-polybar-listener.py` | Standalone-Super tap/hold gesture detection. |
 | `test-top-edge-peek.py` | Top-edge pointer gesture: hysteresis and per-monitor tops. |
+| `test-quit-key.py` | Quit-key targets and grab masks. |
 | `test-tile-snap.sh` | Region geometry for all nine snaps including odd-sized workspaces, Polybar inset arithmetic, pseudo-output clamping, size-hint convergence, the `_presnap_`/`_pretiling_` mark protocol, unsnap, and the per-window lock. |
 | `test-snap-watcher.sh` | Auto-fill region choice, splitting the largest occupant to make room, the fallback to tiling when nothing can be split, and rebalancing survivors after a snapped window closes. |
 | `test-zen-url-state.py` | Session-store parsing for both Zen and Firefox layouts, profile discovery and dedup, i3 tree walking, window-to-page title matching, the gates that keep a headless save out of the live address-bar capture, and its focus checks. |
@@ -770,7 +783,8 @@ The `exec_always` setup:
   partial-failure toast.
 - Restarts `focus-tracker.sh`, `snap-watcher.sh`, `kakaotalk-float-watcher.sh`,
   `randr-hotplug.sh`, `usb-hotplug.sh`, `super-polybar-listener.py`,
-  `~/.local/bin/autotiling`, `overflow-watcher.py`, and `top-edge-peek.py`.
+  `~/.local/bin/autotiling`, `overflow-watcher.py`, `top-edge-peek.py`, and
+  `quit-key.py`.
 - Starts missing `xss-lock --transfer-sleep-lock -- lock.sh` and
   `/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1` (guarded by
   the `polkit-gnome` process).
@@ -815,7 +829,7 @@ Runtime files below use `${XDG_RUNTIME_DIR:-/run/user/$(id -u)}`:
 | Files | Purpose |
 | --- | --- |
 | `i3-titles.state`, `i3-focus-history` | Decorations and current/previous focus. |
-| `i3-focus-tracker.lock`, `i3-snap-watcher.lock`, `i3-kakaotalk-float-watcher.lock`, `i3-randr-hotplug.lock`, `i3-usb-hotplug.lock` | Watcher singleton locks. |
+| `i3-focus-tracker.lock`, `i3-snap-watcher.lock`, `i3-kakaotalk-float-watcher.lock`, `i3-randr-hotplug.lock`, `i3-usb-hotplug.lock`, `i3-quit-key.lock` | Watcher singleton locks. |
 | `i3-resurrect-<display-hash>.lock` | Shared save/restore operation. |
 | `i3-polybar-toggle.lock`, `i3-polybar-peek-worker.lock` | Visibility/peek serialization. |
 | `i3-polybar-peek.owner`, `i3-polybar-peek.trigger`, `i3-polybar-peek.hold` | Peek ownership, deadline, holder PID. |

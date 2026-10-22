@@ -3,8 +3,6 @@
 Personal [chezmoi](https://chezmoi.io) configuration and provisioning for a
 reproducible **Linux Mint 22.3 / Ubuntu 24.04** i3/X11 machine.
 
-Provisioning and configuration scripts live in [`.chezmoiscripts/`](.chezmoiscripts/).
-
 ```sh
 chezmoi diff   # preview changes
 chezmoi apply  # apply; reruns changed run_once_* scripts

@@ -368,10 +368,21 @@ cdcluster() {
 grem() {
   emulate -L zsh
 
+  local remote="${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
+  if [[ ${1-} == --host ]]; then
+    if (( $# < 2 )) || [[ -z $2 || $2 == -* ]]; then
+      print -u2 'grem: --host requires a hostname or SSH alias'
+      return 2
+    fi
+    # Let SSH select the alias's User unless USER@HOST is explicit.
+    remote=$2
+    shift 2
+  fi
+
   if (( $# < 1 )); then
     print -u2 "Usage:"
-    print -u2 "  grem <remote_path...>"
-    print -u2 "  grem [rsync_opts...] -- <remote_path...>"
+    print -u2 "  grem [--host HOST] <remote_path...>"
+    print -u2 "  grem [--host HOST] [rsync_opts...] -- <remote_path...>"
     return 1
   fi
 
@@ -398,11 +409,10 @@ grem() {
   fi
 
   if (( $# < 1 )); then
-    print -u2 "Usage: grem <remote_path...>  (or: grem [opts...] -- <remote_path...>)"
+    print -u2 "Usage: grem [--host HOST] [rsync_opts...] -- <remote_path...>"
     return 1
   fi
 
-  local remote="${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
   remotes=("${(@)argv/#/${remote}:}")
   rsync "${rsync_opts[@]}" -- "${remotes[@]}" ./
 }
@@ -411,10 +421,21 @@ grem() {
 prem() {
   emulate -L zsh
 
+  local remote="${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
+  if [[ ${1-} == --host ]]; then
+    if (( $# < 2 )) || [[ -z $2 || $2 == -* ]]; then
+      print -u2 'prem: --host requires a hostname or SSH alias'
+      return 2
+    fi
+    # Let SSH select the alias's User unless USER@HOST is explicit.
+    remote=$2
+    shift 2
+  fi
+
   if (( $# < 1 )); then
     print -u2 "Usage:"
-    print -u2 "  prem <local_path...> [remote_dest]"
-    print -u2 "  prem [rsync_opts...] -- <local_path...> [remote_dest]"
+    print -u2 "  prem [--host HOST] <local_path...> [remote_dest]"
+    print -u2 "  prem [--host HOST] [rsync_opts...] -- <local_path...> [remote_dest]"
     return 1
   fi
 
@@ -441,7 +462,7 @@ prem() {
   fi
 
   if (( $# < 1 )); then
-    print -u2 "Usage: prem <local_path...> [remote_dest]  (or: prem [opts...] -- <local_path...> [remote_dest])"
+    print -u2 "Usage: prem [--host HOST] [rsync_opts...] -- <local_path...> [remote_dest]"
     return 1
   fi
 
@@ -459,8 +480,6 @@ prem() {
   else
     srcs=("$@")
   fi
-
-  local remote="${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
 
   # Empty dst -> "host:" -> the remote home, so we do not rely on the remote
   # shell expanding "~". An explicit dst forces directory semantics.

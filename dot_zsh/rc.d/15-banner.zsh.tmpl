@@ -5,6 +5,7 @@
 # Startup banner: a centered, bold greeting drawn through the first live prompt.
 #
 # Optional configuration, set before this file is sourced:
+#   ZSH_BANNER_DISABLE=1  # skip the banner and task list
 #   ZSH_BANNER_SPECIAL_MESSAGES=("Message one" "Message two")
 #   ZSH_BANNER_SPECIAL_COLORS=("#FFAF00")
 #   ZSH_BANNER_SPECIAL_CHANCE=1/100  # ratio, or an integer percentage
@@ -22,6 +23,8 @@
 # a legacy percentage, falling back to 1/100; two RANDOM values are combined so
 # denominators above 32767 still work. Special messages are drawn without
 # replacement, tracked by a state file, and repeat only after a full cycle.
+
+[[ ${ZSH_BANNER_DISABLE:-0} == 1 ]] && return 0
 
 if (( ! ${+ZSH_BANNER_SPECIAL_MESSAGES} )); then
   typeset -ga ZSH_BANNER_SPECIAL_MESSAGES=(
