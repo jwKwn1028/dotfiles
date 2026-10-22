@@ -53,7 +53,7 @@ Related files elsewhere in the repo:
 | `dot_local/bin/executable_hx-yazi`, `dot_config/helix/config.toml` | Helix's `Ctrl-y` file picker. |
 | `dot_config/starship.toml` | The `󰇥 yazi` prompt badge in shells opened from Yazi. |
 | `dot_local/bin/symlink_fd.tmpl` | `~/.local/bin/fd` → `fdfind`, so `s` search works on Ubuntu. |
-| `run_onchange_after_35-install-yazi-plugins.sh.tmpl` | Runs `ya pkg install` when `package.toml` changes. |
+| `.chezmoiscripts/run_onchange_after_35-install-yazi-plugins.sh.tmpl` | Runs `ya pkg install` when `package.toml` changes; failures retry on the next apply. |
 | `.chezmoidata/packages.toml` | `yazi-fm`, `yazi-cli` and `resvg` cargo entries. |
 
 ## Starting Yazi

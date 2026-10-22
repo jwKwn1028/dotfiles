@@ -17,6 +17,8 @@ if not (ROOT / ".chezmoidata/packages.toml").is_file() and shutil.which("chezmoi
     if result.returncode == 0:
         ROOT = Path(result.stdout.strip())
 
+SCRIPTS = ROOT / ".chezmoiscripts"
+
 
 class ProvisioningTests(unittest.TestCase):
     @classmethod
@@ -64,7 +66,7 @@ class ProvisioningTests(unittest.TestCase):
 
     def render(self, machine_class="desktop", *,
                script_name="run_once_after_20-install-flatpaks.sh", data=None):
-        template = ROOT / f"{script_name}.tmpl"
+        template = SCRIPTS / f"{script_name}.tmpl"
         overrides = {"class": machine_class}
         overrides.update(data or {})
         result = subprocess.run(
@@ -73,7 +75,8 @@ class ProvisioningTests(unittest.TestCase):
             input=template.read_text(), text=True, capture_output=True, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        script = self.source / script_name
+        script = self.source / ".chezmoiscripts" / script_name
+        script.parent.mkdir(exist_ok=True)
         script.write_text(result.stdout)
 
     def apply(self, failure="0"):
@@ -95,7 +98,7 @@ class ProvisioningTests(unittest.TestCase):
     def test_desktop_class_installs_flatpak(self):
         self.assertIn("flatpak", self.packages["apt"]["desktop"])
         self.assertIn("latexmk", self.packages["apt"]["desktop"])
-        installer = ROOT / "run_once_before_10-install-apt-packages.sh.tmpl"
+        installer = SCRIPTS / "run_once_before_10-install-apt-packages.sh.tmpl"
         self.assertIn("range .packages.apt.desktop", installer.read_text())
 
     def test_codex_parser_dependencies(self):
@@ -129,6 +132,22 @@ class ProvisioningTests(unittest.TestCase):
         result = self.apply()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(self.attempts()), 1)
+
+    def test_failed_yazi_install_retries_until_success(self):
+        self.mock("ya", '''
+printf '%s\\n' "$*" >> "$ATTEMPT_LOG"
+[ "$SIMULATE_FAILURE" = 0 ] || exit 42
+''')
+        self.render(script_name="run_onchange_after_35-install-yazi-plugins.sh")
+        result = self.apply("1")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.attempts(), ["pkg install"])
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.attempts(), ["pkg install", "pkg install"])
+        result = self.apply("1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.attempts()), 2)
 
     def test_server_skips_desktop_apps(self):
         self.render("server")

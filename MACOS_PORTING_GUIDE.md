@@ -94,14 +94,16 @@ Already implemented:
 
 Blocking hazards still present:
 
-- `run_once_after_20-install-flatpaks.sh.tmpl` renders its Linux body on Darwin.
-- `run_once_after_30-install-cli-tools.sh.tmpl` renders on Darwin and downloads
-  `Miniconda3-latest-Linux-x86_64.sh`.
-- `run_once_after_40-set-default-shell.sh` is not a template and assumes
-  `getent`, Linux `/etc/shells` handling, and `sudo tee`.
-- `run_once_after_50-install-fonts.sh.tmpl` renders on Darwin and installs under
-  `~/.local/share/fonts` using fontconfig. `.config/fontconfig/fonts.conf`, the
-  family-alias file it pairs with, is in the Darwin target as well.
+- `.chezmoiscripts/run_once_after_20-install-flatpaks.sh.tmpl` renders its Linux
+  body on Darwin.
+- `.chezmoiscripts/run_once_after_30-install-cli-tools.sh.tmpl` renders on Darwin
+  and downloads `Miniconda3-latest-Linux-x86_64.sh`.
+- `.chezmoiscripts/run_once_after_40-set-default-shell.sh` is not a template and
+  assumes `getent`, Linux `/etc/shells` handling, and `sudo tee`.
+- `.chezmoiscripts/run_once_after_50-install-fonts.sh.tmpl` renders on Darwin and
+  installs under `~/.local/share/fonts` using fontconfig.
+  `.config/fontconfig/fonts.conf`, the family-alias file it pairs with, is in
+  the Darwin target as well.
 - `private_dot_codex/modify_private_config.toml` is a `modify_` script, so it
   runs on Darwin. Its shebang is `/usr/bin/python3`, and it pins the two keys
   only when that interpreter can import `tomlkit`; otherwise it warns and
@@ -114,8 +116,9 @@ Blocking hazards still present:
   and chezmoi then lists `.local/bin/fd` under `managed` while `status` reports
   nothing and `apply` creates nothing. Darwin must get `fd` from the package
   manifest; do not let the silent skip pass for a working `fd`.
-- `run_onchange_after_35-install-yazi-plugins.sh.tmpl` renders on Darwin and is
-  the one provisioning script that should: `ya pkg install` is cross-platform.
+- `.chezmoiscripts/run_onchange_after_35-install-yazi-plugins.sh.tmpl` renders on
+  Darwin and is the one provisioning script that should: `ya pkg install` is
+  cross-platform.
   It exits early while `ya` is absent, so the Darwin manifest has to own Yazi
   or the Yazi config lands without the plugins its keymap expects.
 - The synthetic Darwin target still includes the Linux Helium desktop/AppImage
@@ -153,9 +156,9 @@ to no script on Darwin. The official chezmoi pattern is:
 ```
 
 Rename the non-template default-shell script to
-`run_once_after_40-set-default-shell.sh.tmpl` before adding that guard. Do not
-rely only on “command not found” checks: the Miniconda URL is valid enough to
-download the wrong artifact before failing.
+`.chezmoiscripts/run_once_after_40-set-default-shell.sh.tmpl` before adding that
+guard. Do not rely only on “command not found” checks: the Miniconda URL is valid
+enough to download the wrong artifact before failing.
 
 ## Recommended source-state architecture
 
@@ -164,6 +167,8 @@ A mature layout should resemble:
 
 ```text
 .chezmoidata/packages.toml
+.chezmoiscripts/
+  run_onchange_before_15-install-homebrew-packages.sh.tmpl
 .chezmoitemplates/
   vscode-settings.jsonc
   shared-zshrc.tmpl
@@ -174,7 +179,6 @@ dot_config/
 Library/
   Application Support/
     Code/User/private_settings.json.tmpl
-run_onchange_before_15-install-homebrew-packages.sh.tmpl
 ```
 
 Chezmoi interprets `.chezmoiignore` as a template and matches target paths, not
@@ -581,7 +585,7 @@ directory so `include` and `lstat` calls still work:
 darwin_data='{"chezmoi":{"os":"darwin","arch":"arm64","homeDir":"/Users/audit"},"class":"desktop","desktopProfile":"none"}'
 chezmoi --override-data "$darwin_data" managed
 
-for source_file in run_*; do
+for source_file in .chezmoiscripts/run_*; do
     printf '%s: ' "$source_file"
     chezmoi --override-data "$darwin_data" execute-template --file "$source_file" |
         sed -n '1p'
@@ -599,9 +603,10 @@ facilities see through it. `lookPath` ignores the override completely and
 searches the host `PATH`, which is why `symlink_fd.tmpl` resolves
 `/usr/bin/fdfind` in this audit and renders empty on a Mac.
 `.chezmoi.sourceDir` stays the real source directory, so
-`run_once_after_05-enable-git-hooks.sh` prints a `/home/...` path here: check a
-`/home` path against its template before calling it a leak. And `lstat` and
-`include` follow the paths they are given, so an overridden `homeDir` sends the
+`.chezmoiscripts/run_once_after_05-enable-git-hooks.sh.tmpl` prints a `/home/...`
+path here: check a `/home` path against its template before calling it a leak.
+The `lstat` and `include` functions follow the paths they are given, so an
+overridden `homeDir` sends the
 `run_onchange_` browser scripts probing a directory that does not exist — their
 change-detection headers come back `missing`, and the audit cannot tell you
 whether those scripts would re-run on a Mac.

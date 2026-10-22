@@ -12,28 +12,10 @@ fi
 
 dropin=/etc/systemd/logind.conf.d/10-lid-switch.conf
 
-changed=0
-temporary=
-trap 'rm -f "${temporary:-}"' EXIT HUP INT TERM
-
-install_config() {
-    target=$1
-    temporary=$(mktemp)
-    cat >"$temporary"
-
-    metadata=$(stat -c '%u:%g:%a' "$target" 2>/dev/null || true)
-    if ! cmp -s "$temporary" "$target" || [ "$metadata" != "0:0:644" ]; then
-        echo "==> Installing $target (sudo may prompt for your password)"
-        sudo install -D -o root -g root -m 0644 "$temporary" "$target"
-        changed=1
-    fi
-
-    rm -f "$temporary"
-    temporary=
-}
+{{ template "script-helpers/install-root-config.sh" . }}
 
 # logind picks the first rule that matches: docked, then on mains, then plain.
-install_config "$dropin" <<'EOF'
+install_config "$dropin" -D <<'EOF'
 [Login]
 # Docked or a second display attached: the lid is just one more screen.
 HandleLidSwitchDocked=ignore

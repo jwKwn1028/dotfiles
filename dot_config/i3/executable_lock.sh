@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# i3lock-color comes from run_once_after_95; stock i3lock is the fallback.
+# i3lock-color comes from .chezmoiscripts/run_once_after_95-build-i3lock-color.sh.tmpl.
+# Stock i3lock is the fallback.
 case "$(i3lock --version 2>&1)" in
     *.c.*)
         exec i3lock -n -c 292d3e \

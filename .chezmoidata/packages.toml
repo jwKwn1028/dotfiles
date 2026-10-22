@@ -150,7 +150,8 @@ git = [
     { url = "https://github.com/itsjunetime/tdf.git",            bin = "tdf" },
 ]
 
-# Pinned source builds. run_once_after_95 installs i3lock-color into /usr/local.
+# Pinned source builds. .chezmoiscripts/run_once_after_95-build-i3lock-color.sh.tmpl
+# installs i3lock-color into /usr/local.
 [packages.source.i3lock_color]
 url = "https://github.com/Raymo111/i3lock-color.git"
 tag = "2.13.c.5"
@@ -163,7 +164,8 @@ build_deps = [
     "libxkbcommon-dev", "libxkbcommon-x11-dev",
 ]
 
-# Built in this order into ~/.local by run_once_after_96; apt ships zathura 0.5.4.
+# Built in this order into ~/.local by
+# .chezmoiscripts/run_once_after_96-build-zathura.sh.tmpl; apt ships zathura 0.5.4.
 [packages.source.girara]
 url = "https://github.com/pwmt/girara.git"
 tag = "0.4.5"

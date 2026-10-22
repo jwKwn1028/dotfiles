@@ -65,7 +65,10 @@ chezmoi apply --dry-run --force --verbose | less
 
 ### 4. Apply
 
-Run `chezmoi apply -v` in an interactive terminal. In order:
+Run `chezmoi apply -v` in an interactive terminal. All provisioning and
+configuration scripts live in [`.chezmoiscripts/`](.chezmoiscripts/); chezmoi
+executes them without creating that directory in the destination. Their
+`before_`/`after_` attributes and numeric filenames determine the order:
 
 1. `run_once_before_10`: apt sets from `.chezmoidata/packages.toml`, then the
    files and clones in `.chezmoiexternal.toml`.
@@ -81,8 +84,14 @@ Run `chezmoi apply -v` in an interactive terminal. In order:
 9. `run_after_90/91`: X11 keyboard/TrackPoint and TLP configuration.
 10. `run_onchange_after_92`: the Flameshot screenshot directory.
 11. `run_after_93`: the logind lid-switch drop-in.
-12. `run_once_after_95/96`: build pinned i3lock-color into `/usr/local` and
+12. `run_after_94`: enable Thunar per-folder settings and sort Downloads newest
+    first.
+13. `run_once_after_95/96`: build pinned i3lock-color into `/usr/local` and
     zathura into `~/.local`, installing build dependencies with sudo.
+
+`run_once_` tracks successful rendered content; `run_onchange_` also tracks the
+script path. Moving an unchanged `run_onchange_` script into `.chezmoiscripts/`
+can make it run once again on the next apply.
 
 The cargo and font installers continue past individual failures, then report
 provisioning as failed. Fix the cause and rerun `chezmoi apply -v`; installed

@@ -29,7 +29,8 @@ desktop.nix
 
 # ─── Browser profiles ──────────────────────────────────────────────────────
 # Browser profiles stay local: bookmarks, sync identifiers, engagement records.
-# The publishable settings are installed by the run_onchange_ profile scripts.
+# The publishable settings are installed by run_onchange_ profile scripts in
+# .chezmoiscripts/.
 .mozilla/firefox/
 snap/firefox/common/.mozilla/firefox/
 .var/app/org.mozilla.firefox/.mozilla/firefox/

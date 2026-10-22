@@ -16,25 +16,7 @@ if [ ! -f /sys/class/power_supply/BAT0/charge_control_end_threshold ]; then
     exit 0
 fi
 
-changed=0
-temporary=
-trap 'rm -f "${temporary:-}"' EXIT HUP INT TERM
-
-install_config() {
-    target=$1
-    temporary=$(mktemp)
-    cat >"$temporary"
-
-    metadata=$(stat -c '%u:%g:%a' "$target" 2>/dev/null || true)
-    if ! cmp -s "$temporary" "$target" || [ "$metadata" != "0:0:644" ]; then
-        echo "==> Installing $target (sudo may prompt for your password)"
-        sudo install -o root -g root -m 0644 "$temporary" "$target"
-        changed=1
-    fi
-
-    rm -f "$temporary"
-    temporary=
-}
+{{ template "script-helpers/install-root-config.sh" . }}
 
 install_config /etc/tlp.d/10-battery-charge-thresholds.conf <<'EOF'
 # Capping the pack at 80% trades ~20% runtime for slower capacity loss.

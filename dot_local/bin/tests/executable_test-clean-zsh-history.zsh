@@ -196,6 +196,33 @@ assert_kept "$hist" 'sudo -u postgres definitelynotacommand' 'wrappers'
 assert_kept "$hist" 'builtin cd /tmp' 'wrappers'
 assert_kept "$hist" 'FOO=1 sudo grep x /etc/hosts' 'wrappers'
 
+# --- Heads whence cannot resolve ------------------------------------------
+
+hist=$TEST_TMP/heads
+write_history "$hist" \
+  '(cd /tmp && make)' \
+  '(( 1 + 1 ))' \
+  '$EDITOR /etc/hosts' \
+  '"$HOME/bin/tool" --flag' \
+  '..' \
+  '~' \
+  "$TEST_TMP" \
+  "$TEST_TMP/missing" \
+  "$TEST_TMP extra" \
+  'definitelynotacommand'
+run_cleaner "$hist" >/dev/null
+
+assert_kept "$hist" '(cd /tmp && make)' 'heads'
+assert_kept "$hist" '(( 1 + 1 ))' 'heads'
+assert_kept "$hist" '$EDITOR /etc/hosts' 'heads'
+assert_kept "$hist" '"$HOME/bin/tool" --flag' 'heads'
+assert_kept "$hist" '..' 'heads'
+assert_kept "$hist" '~' 'heads'
+assert_kept "$hist" "$TEST_TMP" 'heads'
+assert_dropped "$hist" "$TEST_TMP/missing" 'heads'
+assert_dropped "$hist" "$TEST_TMP extra" 'heads'
+assert_dropped "$hist" 'definitelynotacommand' 'heads'
+
 # --- Raw record preservation ----------------------------------------------
 # Replaying with `print -s` would restamp these and fuse the continuation.
 
@@ -215,6 +242,16 @@ grep -qxF -- ': 1756400002:0;git status' "$hist" ||
   fail "records: newest duplicate should survive with its own timestamp"
 grep -qxF -- ': 1756400000:0;git status' "$hist" &&
   fail "records: older duplicate should have been dropped"
+
+hist=$TEST_TMP/records-written
+zsh -fi -c 'HISTFILE=$1 HISTSIZE=100 SAVEHIST=100
+  print -rs -- $2; print -rs -- "git status"; fc -W' \
+  records-test "$hist" $'echo one \\\ntwo'
+run_cleaner "$hist" >/dev/null ||
+  fail "records: refused a continuation written by zsh"
+grep -qxF -- 'echo one \\' "$hist" ||
+  fail "records: zsh-written continuation lost its backslashes"
+grep -qxF -- 'two' "$hist" || fail "records: zsh-written continuation line was dropped"
 
 # --- Entries appended by another shell while the cleaner runs --------------
 # Refusing the whole run discarded them; they are now carried over, but still
@@ -328,6 +365,30 @@ rewrite_output=$(
   fail "rewrite: unexpected message: $rewrite_output"
 [[ $(<"$hist") == 'totally different' ]] ||
   fail "rewrite: the concurrent write was clobbered"
+
+# --- An append during the backup waits for the replacement ----------------
+
+hist=$TEST_TMP/locked
+write_history "$hist" 'git status' 'definitelynotacommand'
+ZSH_HISTORY_CLEANER_INTERNAL=1 \
+ZSH_HISTORY_CLEANER_OUTPUT_FD=1 \
+XDG_CONFIG_HOME=$TEST_TMP/config \
+  zsh -fi -c '
+    cleaner=$1; hist=$2
+    cp() {
+      command cp "$@" || return
+      [[ $@[-1] == *.pre-autocomplete-cleanup-* ]] || return 0
+      zsh -fi -c "setopt HIST_FCNTL_LOCK; HISTFILE=\$1 HISTSIZE=100 SAVEHIST=100
+        print -rs -- \"echo during-backup\"; fc -AI" appender $hist &
+      sleep 1
+    }
+    source "$cleaner" "$hist"
+    wait
+  ' cleaner-test "$CLEANER" "$hist" >/dev/null 2>&1 ||
+  fail "lock: cleaner exited non-zero"
+assert_kept "$hist" 'git status' 'lock'
+assert_kept "$hist" 'echo during-backup' 'lock'
+assert_dropped "$hist" 'definitelynotacommand' 'lock'
 
 # --- Backup retention -----------------------------------------------------
 # Backups keep every credential the live history just lost, so they cannot

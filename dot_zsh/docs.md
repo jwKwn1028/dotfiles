@@ -52,6 +52,9 @@ The fzf keys need fzf's installed widgets. Editor keymaps are separate: see
 | `crpf` / `crpd` | Pick a file / directory and copy its path to the clipboard. |
 | `COMMAND Y` | Global alias that pipes the output to `clipcopy`. |
 | `sysmon [SECONDS]` | Live CPU, GPU, RAM, temperature, and fan readings. |
+| `tlp-bat` | Show battery statistics with `sudo tlp-stat -b`. |
+| `tlp-full` | Temporarily set BAT0 to 90% start / 95% stop until limits are restored or the machine reboots. |
+| `tlp-restore` | Restore BAT0's configured charge thresholds (currently 75% start / 80% stop). |
 | `wtail FILE...` | Watch each file's last ten lines, refreshing every ten seconds. |
 | `zpup` | Fast-forward Git-based Zsh plugins; `sz` loads the updates. |
 | `poweroff` | Shut down after a confirmation with a ten-second timeout. |

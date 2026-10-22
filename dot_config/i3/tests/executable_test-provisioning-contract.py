@@ -121,7 +121,8 @@ class ProvisioningContractTests(unittest.TestCase):
         config = source_file("config").read_text(encoding="utf-8")
         self.assertIn("~/.local/bin/autotiling", config)
 
-        installer = manifest.parent.parent / "run_once_after_30-install-cli-tools.sh.tmpl"
+        installer = (manifest.parent.parent / ".chezmoiscripts" /
+                     "run_once_after_30-install-cli-tools.sh.tmpl")
         self.assertTrue(installer.is_file(), f"missing pipx installer: {installer}")
         installer_source = installer.read_text(encoding="utf-8")
         self.assertIn("range .packages.pipx.apps", installer_source)
@@ -135,7 +136,8 @@ class ProvisioningContractTests(unittest.TestCase):
         self.assertIn("i3lock", data["packages"]["apt"]["i3_x11"], "apt i3lock ships /etc/pam.d/i3lock")
         self.assertIn("*.c.*)", source_file("lock.sh").read_text(encoding="utf-8"))
 
-        installer = manifest.parent.parent / "run_once_after_95-build-i3lock-color.sh.tmpl"
+        installer = (manifest.parent.parent / ".chezmoiscripts" /
+                     "run_once_after_95-build-i3lock-color.sh.tmpl")
         self.assertTrue(installer.is_file(), f"missing i3lock-color installer: {installer}")
         source = installer.read_text(encoding="utf-8")
         self.assertIn(".packages.source.i3lock_color", source)
@@ -152,7 +154,7 @@ class ProvisioningContractTests(unittest.TestCase):
         for package in ("zathura", "zathura-pdf-poppler"):
             self.assertNotIn(package, data["packages"]["apt"]["i3_x11"], "apt would add a second zathura")
 
-        installer = root / "run_once_after_96-build-zathura.sh.tmpl"
+        installer = root / ".chezmoiscripts" / "run_once_after_96-build-zathura.sh.tmpl"
         self.assertTrue(installer.is_file(), f"missing zathura installer: {installer}")
         source = installer.read_text(encoding="utf-8")
         for name in components:
@@ -169,7 +171,8 @@ class ProvisioningContractTests(unittest.TestCase):
 
     def test_helium_transient_deferrals_retry(self) -> None:
         manifest, _ = self.manifest_data()
-        template = manifest.parent.parent / "run_onchange_after_70-configure-helium-profile.sh.tmpl"
+        template = (manifest.parent.parent / ".chezmoiscripts" /
+                    "run_onchange_after_70-configure-helium-profile.sh.tmpl")
         source = template.read_text(encoding="utf-8")
         self.assertIn("# Preferences profile state:", source)
         self.assertIn("close it and rerun chezmoi apply", source)

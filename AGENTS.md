@@ -48,8 +48,8 @@ before creating files with a new prefix.
   - `.githooks/pre-commit` blocks staged chezmoi-data values, entries in
     `~/.config/chezmoi/denylist` (lab and institution names go there),
     literal home paths, private and Tailscale addresses, and SSH files.
-    `run_once_after_05-enable-git-hooks.sh.tmpl` wires it up. Fix a finding
-    rather than committing with `--no-verify`.
+    `.chezmoiscripts/run_once_after_05-enable-git-hooks.sh.tmpl` wires it up.
+    Fix a finding rather than committing with `--no-verify`.
 - `.gitignore` excludes agent scaffolding (`.claude`, `.codex`) on purpose;
   `AGENTS.md` and `CLAUDE.md` are the deliberate exceptions so a fresh clone
   gets these rules. Keep both free of secrets.
@@ -69,10 +69,14 @@ keys already present in the live files.
 ## Provisioning
 
 Software lists live in `.chezmoidata/packages.toml`, consumed by the
-`run_once_*` scripts and gated on `class` (`desktop` | `server`) from
-`.chezmoi.toml.tmpl` plus `desktopProfile` (`linuxmint-i3-x11` | `none`). Add
-software by editing that manifest, not the install scripts — they re-run on the
-next `apply` when the data changes.
+`run_once_*` scripts in `.chezmoiscripts/` and gated on `class`
+(`desktop` | `server`) from `.chezmoi.toml.tmpl` plus `desktopProfile`
+(`linuxmint-i3-x11` | `none`). Add software by editing that manifest, not the
+install scripts — they re-run on the next `apply` when the data changes.
+
+Keep all `run_*` scripts in `.chezmoiscripts/`, with their existing prefixes
+and numeric ordering. Chezmoi executes them without creating a destination
+directory for `.chezmoiscripts/`.
 
 `packages.apt` names are for Mint 22.3 / Ubuntu 24.04; verify with
 `apt-cache policy <pkg>`.

@@ -148,9 +148,9 @@ Further notes:
 - A Sway session needs a greeter entry. The `sway` package ships a
   wayland-session file, and lightdm can offer it alongside i3, but confirm the
   greeter actually lists both before relying on it.
-- `run_once_after_50-install-fonts.sh.tmpl` describes its fonts in terms of
-  polybar/rofi. The same Nerd Font serves Waybar, so only its comments need
-  updating.
+- `.chezmoiscripts/run_once_after_50-install-fonts.sh.tmpl` describes its fonts
+  in terms of polybar/rofi. The same Nerd Font serves Waybar, so only its
+  comments need updating.
 
 ## The `desktopProfile` Gating Trap
 
@@ -160,11 +160,11 @@ is not free. Eight files branch on the **exact string** `linuxmint-i3-x11`:
 | File | Test | What it gates |
 | --- | --- | --- |
 | `.chezmoiignore` | `ne` | the whole desktop config tree |
-| `run_once_before_10-install-apt-packages.sh.tmpl` | `eq` (twice) | the i3 PPA and the `i3_x11` apt list |
-| `run_once_after_30-install-cli-tools.sh.tmpl` | `eq` | desktop CLI tooling |
-| `run_after_90-install-x11-input-configs.sh.tmpl` | `eq` | the Xorg rule and `/etc/default/keyboard` |
-| `run_once_after_95-build-i3lock-color.sh.tmpl` | `eq` | the i3lock-color build |
-| `run_once_after_96-build-zathura.sh.tmpl` | `eq` | the zathura build |
+| `.chezmoiscripts/run_once_before_10-install-apt-packages.sh.tmpl` | `eq` (twice) | the i3 PPA and the `i3_x11` apt list |
+| `.chezmoiscripts/run_once_after_30-install-cli-tools.sh.tmpl` | `eq` | desktop CLI tooling |
+| `.chezmoiscripts/run_after_90-install-x11-input-configs.sh.tmpl` | `eq` | the Xorg rule and `/etc/default/keyboard` |
+| `.chezmoiscripts/run_once_after_95-build-i3lock-color.sh.tmpl` | `eq` | the i3lock-color build |
+| `.chezmoiscripts/run_once_after_96-build-zathura.sh.tmpl` | `eq` | the zathura build |
 | `.chezmoi.toml.tmpl` | — | the prompt that defines the value |
 | `.githooks/tests/test-pre-commit.sh` | — | fixture data |
 
@@ -337,8 +337,8 @@ There are also two more X11-owned input sources to account for now:
 
 - `dot_config/xfce4/xfconf/private_xfce-perchannel-xml/pointers.xml` disables
   the ELAN touchpad and carries pointer acceleration/tapping choices.
-- `run_after_90-install-x11-input-configs.sh.tmpl` installs an Xorg libinput
-  acceleration rule for the external TrackPoint keyboard and writes
+- `.chezmoiscripts/run_after_90-install-x11-input-configs.sh.tmpl` installs an
+  Xorg libinput acceleration rule for the external TrackPoint keyboard and writes
   `/etc/default/keyboard` with
   `XKBOPTIONS="ctrl:swapcaps,korean:ralt_hangul"`.
 
@@ -571,13 +571,14 @@ dependency is the toast it emits through `_toast-common.sh`. Resolve the toast
 layer and this script and its test follow with no other change; the i3
 `exec_always` line that starts it becomes the Sway equivalent.
 
-### `dot_config/i3/executable_lock.sh` and `run_once_after_95-build-i3lock-color.sh.tmpl`
+### `dot_config/i3/executable_lock.sh` and `.chezmoiscripts/run_once_after_95-build-i3lock-color.sh.tmpl`
 
 `lock.sh` probes `i3lock --version` for the `.c.` marker identifying
 i3lock-color and, when present, locks with the full theme — ring, inside,
 verify, wrong, and modifier colors, a 60px radius, and JuliaMono at three
-sizes. Stock i3lock is the fallback. `run_once_after_95` exists only to build
-i3lock-color from source, because Ubuntu does not package it.
+sizes. Stock i3lock is the fallback. The script
+`.chezmoiscripts/run_once_after_95-build-i3lock-color.sh.tmpl` exists only to
+build i3lock-color from source, because Ubuntu does not package it.
 
 `swaylock` *is* packaged (1.7.2) and takes the same class of options, so the
 Wayland side needs no build step — drop that dependency rather than porting it.

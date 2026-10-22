@@ -145,6 +145,8 @@ done
 
 zmodload -F zsh/stat b:zstat ||
   { fail "could not load zsh/stat" || return; }
+zmodload -F zsh/system b:zsystem ||
+  { fail "could not load zsh/system" || return; }
 
 if command -v -- sha256sum >/dev/null 2>&1; then
   digest() { local o; o=$(sha256sum -- "$1") || return 1; print -r -- ${o%%[[:space:]]*} }
@@ -225,24 +227,29 @@ if [[ $source_hash != $snapshot_hash || $source_hash != $current_hash ]]; then
   fail "history changed while it was being read; no changes made (run again)" || return
 fi
 
-records=()
-record=''
-record_line=''
-integer record_open=0
-while IFS= read -r record_line || [[ -n $record_line ]]; do
-  if (( record_open )); then
-    record+=$'\n'$record_line
-  else
-    record=$record_line
-    record_open=1
-  fi
-  record_trailing=${record##*[^\\]}
-  (( ${#record_trailing} % 2 )) && continue
-  records+=("$record")
-  record_open=0
-  record_line=''
-done < "$snapshot_file"
-(( record_open )) && records+=("$record")
+read_records() {
+  local line='' record=''
+  local -i open=0
+  reply=()
+  while IFS= read -r line || [[ -n $line ]]; do
+    if (( open )); then
+      record+=$'\n'$line
+    else
+      record=$line
+      open=1
+    fi
+    [[ $record == *\\ ]] && continue
+    reply+=("$record")
+    open=0
+    line=''
+  done < "$1"
+  (( open )) || return 0
+  reply+=("$record")
+  return 1
+}
+
+read_records "$snapshot_file"
+records=("${reply[@]}")
 
 unsetopt \
   APPEND_HISTORY \
@@ -381,7 +388,12 @@ for (( entry_index = 1; entry_index <= $#entries; entry_index++ )); do
     [[ -n ${keep_commands[$command_head]} ]] && recognized=1
 
     if (( ! recognized )); then
-      if [[ $command_head == ./* && $command_head != (./|./.) ]]; then
+      if [[ $command_head == (\(*|\$*) ]]; then
+        recognized=1
+      elif (( $#words == 1 )) &&
+           [[ $command_head == (/*|\~*|..|../*) && -d ${~command_head} ]]; then
+        recognized=1
+      elif [[ $command_head == ./* && $command_head != (./|./.) ]]; then
         recognized=1
       elif [[ $command_head == (../*|\~/*|/*) &&
               $command_head == *.(sh|py|AppImage) ]]; then
@@ -447,6 +459,9 @@ if (( dry_run )); then
   return 0
 fi
 
+zsystem flock -t 5 -f history_lock_fd "$history_file" ||
+  { fail "could not lock history; no changes made (run again)" || return; }
+
 current_hash=$(digest "$history_file") ||
   { fail "could not perform final history check" || return; }
 
@@ -473,26 +488,9 @@ if [[ $current_hash != $snapshot_hash ]]; then
     fail "history append ended mid-record; no replacement made (run again)" || return
   fi
 
-  appended_records=()
-  appended_record=''
-  appended_line=''
-  integer appended_record_open=0
-  while IFS= read -r appended_line || [[ -n $appended_line ]]; do
-    if (( appended_record_open )); then
-      appended_record+=$'\n'$appended_line
-    else
-      appended_record=$appended_line
-      appended_record_open=1
-    fi
-    appended_trailing=${appended_record##*[^\\]}
-    (( ${#appended_trailing} % 2 )) && continue
-    appended_records+=("$appended_record")
-    appended_record_open=0
-    appended_line=''
-  done < "$tail_file"
-  if (( appended_record_open )); then
-    fail "history append ended mid-record; no replacement made (run again)" || return
-  fi
+  read_records "$tail_file" ||
+    { fail "history append ended mid-record; no replacement made (run again)" || return; }
+  appended_records=("${reply[@]}")
 
   for appended_record in "${appended_records[@]}"; do
     is_sensitive "$appended_record" && continue
@@ -517,6 +515,7 @@ cp -p -- "$snapshot_file" "$backup_file" ||
 mv -f -- "$cleaned_file" "$history_file" ||
   { fail "could not replace history; backup is at $backup_file" || return; }
 cleaned_file=''
+zsystem flock -u $history_lock_fd
 
 integer keep_backups=${ZSH_HISTORY_CLEANER_KEEP_BACKUPS:-5}
 (( keep_backups < 1 )) && keep_backups=1

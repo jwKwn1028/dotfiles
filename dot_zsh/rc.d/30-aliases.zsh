@@ -7,6 +7,11 @@ alias vi='vim'
 alias mo='micro'
 alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 (( $+commands[batcat] )) && alias bat='batcat'
+if _have tlp; then
+  alias tlp-bat='sudo tlp-stat -b'
+  alias tlp-full='sudo tlp setcharge 90 95 BAT0'
+  alias tlp-restore='sudo tlp setcharge BAT0'
+fi
 unalias c z 2>/dev/null || true
 _close_gui_terminal() {
   [[ -o interactive && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]] && exit 0

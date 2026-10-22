@@ -22,8 +22,9 @@ Use `--from docx` or `--from latex` when importing another format.
 
 The desktop apt manifest provisions Pandoc, TeX Live, latexmk, and Noto fonts;
 `packages.fonts.archives` supplies the New Computer Modern faces through
-`run_once_after_50`. The PDF header resolves relative to the preset, so it
-works from any working directory. Settings and path syntax follow the
+`.chezmoiscripts/run_once_after_50-install-fonts.sh.tmpl`. The PDF header
+resolves relative to the preset, so it works from any working directory.
+Settings and path syntax follow the
 [Pandoc guide](https://pandoc.org/MANUAL.html#defaults-files); the font archive
 comes from [CTAN](https://ctan.org/pkg/newcomputermodern). The Cargo manifest
 provisions the Typst CLI.
