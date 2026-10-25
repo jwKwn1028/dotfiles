@@ -59,9 +59,19 @@ class ProvisioningContractTests(unittest.TestCase):
                 "from i3ipc import",
             ),
             (
+                "python3-i3ipc",
+                source_file("workspace-groups.py"),
+                "import i3ipc",
+            ),
+            (
                 "python3-xlib",
                 source_file("top-edge-peek.py"),
                 "from Xlib import",
+            ),
+            (
+                "python3-xlib",
+                source_file("group_restore.py"),
+                "from Xlib",
             ),
             (
                 "python3-lz4",
@@ -118,8 +128,8 @@ class ProvisioningContractTests(unittest.TestCase):
         apps = data["packages"]["pipx"]["apps"]
         self.assertIn({"package": "autotiling", "bin": "autotiling"}, apps)
 
-        config = source_file("config").read_text(encoding="utf-8")
-        self.assertIn("~/.local/bin/autotiling", config)
+        controller = source_file("group_controller.py").read_text(encoding="utf-8")
+        self.assertIn('".local/bin/autotiling"', controller)
 
         installer = (manifest.parent.parent / ".chezmoiscripts" /
                      "run_once_after_30-install-cli-tools.sh.tmpl")

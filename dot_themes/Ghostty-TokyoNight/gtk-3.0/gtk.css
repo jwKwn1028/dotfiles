@@ -301,6 +301,21 @@ treeview.view header button:hover { color: @gt_fg_dim; }
 treeview.view expander, expander arrow { color: @gt_muted; }
 treeview.view expander:hover, expander arrow:hover { color: @gt_fg; }
 
+/* --- yazi keys ------------------------------------------------------------ */
+@binding-set yazi-motion {
+  bind "h" { "move-cursor" (visual-positions, -1) };
+  bind "l" { "move-cursor" (visual-positions, 1) };
+  bind "j" { "move-cursor" (display-lines, 1) };
+  bind "k" { "move-cursor" (display-lines, -1) };
+  bind "<shift>j" { "move-cursor" (display-lines, 1) };
+  bind "<shift>k" { "move-cursor" (display-lines, -1) };
+  bind "<ctrl>j" { "move-cursor" (display-lines, 1) };
+  bind "<ctrl>k" { "move-cursor" (display-lines, -1) };
+  bind "g" { "move-cursor" (buffer-ends, -1) };
+  bind "<shift>g" { "move-cursor" (buffer-ends, 1) };
+}
+.standard-view treeview.view, .standard-view widget.view { -gtk-key-bindings: yazi-motion; }
+
 /* --- sidebar / shortcuts pane --------------------------------------------- */
 .sidebar, placessidebar, placessidebar list,
 paned > scrolledwindow, paned > scrolledwindow > viewport {

@@ -47,39 +47,17 @@ class ConfigConsistencyTests(unittest.TestCase):
         cls.polybar = POLYBAR_CONFIG.read_text(encoding="utf-8")
         cls.restore = RESTORE.read_text(encoding="utf-8")
 
-    def test_autotiling_restart_is_self_safe_and_unbounded(self) -> None:
-        startup = re.search(
-            r"(?m)^exec_always --no-startup-id sh -c '"
-            r'(?P<script>pkill -f "(?P<pattern>[^"]+)"; exec '
-            r"(?P<command>~/\.local/bin/autotiling(?: [^']*)?))'$",
-            self.i3_config,
-        )
-        self.assertIsNotNone(startup, "missing autotiling restart command")
-        assert startup is not None
-
-        kill_pattern = re.compile(startup["pattern"])
-        launcher = f"sh -c {startup['script']}"
-        self.assertIsNone(
-            kill_pattern.search(launcher),
-            "autotiling's pkill pattern also kills its launcher before exec",
-        )
-
-        workers = (
-            "/usr/bin/python3 /example/.local/bin/autotiling",
-            "/opt/pipx/venvs/autotiling/bin/python /example/.local/bin/autotiling",
-        )
-        for worker in workers:
-            with self.subTest(worker=worker):
-                self.assertIsNotNone(kill_pattern.search(worker))
-
-        self.assertEqual(
-            startup["command"],
-            "~/.local/bin/autotiling",
-            "workspace overflow handles capacity; autotiling should stay unbounded",
-        )
-
-        snap_common = SNAP_COMMON.read_text(encoding="utf-8")
-        self.assertIn('limit="${2:-0}"', snap_common)
+    def test_placement_workers_are_owned_by_session_controller(self) -> None:
+        self.assertIn("exec_always --no-startup-id ~/.config/i3/workspace-groups.py start", self.i3_config)
+        for line in self.i3_config.splitlines():
+            if line.startswith("exec_always"):
+                self.assertNotIn("autotiling", line)
+                self.assertNotIn("overflow-watcher", line)
+                self.assertNotIn("snap-watcher", line)
+        source = (I3_ROOT / "group_controller.py").read_text()
+        self.assertIn('".local/bin/autotiling"', source)
+        self.assertNotIn('"--limit"', source)
+        self.assertIn('limit="${2:-0}"', SNAP_COMMON.read_text())
 
     def test_process_guards_use_a_matchable_pgrep_pattern(self) -> None:
         names = re.findall(r"pgrep -x ([A-Za-z0-9_.-]+)", self.i3_config)
@@ -177,7 +155,7 @@ class ConfigConsistencyTests(unittest.TestCase):
                 if "i3-msg -t subscribe" in line and not line.lstrip().startswith("#"):
                     self.assertIn("200>&-", line, str(path))
                     checked += 1
-        self.assertGreaterEqual(checked, 4)
+        self.assertGreaterEqual(checked, 3)
 
     def test_desktop_python_entrypoints_use_the_system_interpreter(self) -> None:
         entrypoints = [

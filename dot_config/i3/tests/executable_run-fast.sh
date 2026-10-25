@@ -75,6 +75,7 @@ if command -v i3 >/dev/null 2>&1; then
     printf 'PASS\n'
 fi
 
+run 'workspace groups tests' /usr/bin/python3 "$I3_ROOT/tests/test-workspace-groups.py"
 run 'overflow watcher unit tests' \
     /usr/bin/python3 "$I3_ROOT/tests/test-overflow-watcher.py"
 run 'Super listener unit tests' \

@@ -12,11 +12,13 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 import unittest
+import sys
 
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 SPEC = importlib.util.spec_from_file_location(
-    "overflow_watcher", ROOT / "overflow-watcher.py"
+    "overflow_watcher", ROOT / ("overflow-watcher.py" if (ROOT / "overflow-watcher.py").exists() else "executable_overflow-watcher.py")
 )
 assert SPEC is not None and SPEC.loader is not None
 WATCHER = importlib.util.module_from_spec(SPEC)
@@ -56,8 +58,8 @@ class PickTargetTests(unittest.TestCase):
     def test_no_other_workspace_occupied_wraps(self) -> None:
         self.assertEqual(WATCHER.pick_target(10, {10: False}), 1)
 
-    def test_everything_packed_falls_back_to_next_number(self) -> None:
-        self.assertEqual(WATCHER.pick_target(3, {n: False for n in range(1, 11)}), 4)
+    def test_everything_packed_stays_in_place(self) -> None:
+        self.assertIsNone(WATCHER.pick_target(3, {n: False for n in range(1, 11)}))
 
 
 class RoomForOneMoreTests(unittest.TestCase):

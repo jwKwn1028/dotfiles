@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Toggle "show desktop": jump to a dedicated empty workspace and back.
-CURR=$(i3-msg -t get_workspaces | jq -r '.[] | select(.focused) | .name')
-if [ "$CURR" = "_desktop" ]; then
-  i3-msg "workspace back_and_forth" >/dev/null
-else
-  i3-msg "workspace _desktop" >/dev/null
-fi
+set -eu
+DIR="$(dirname "$(readlink -f "$0")")"
+HELPER="$DIR/workspace-groups.py"
+[ -r "$HELPER" ] || HELPER="$DIR/executable_workspace-groups.py"
+exec /usr/bin/python3 "$HELPER" desktop

@@ -8,18 +8,22 @@ One bar per active output, hidden initially; the tray uses the laptop panel
 
 | Area | Left click | Right click | Wheel |
 | --- | --- | --- | --- |
-| Workspace | Switch workspace. | — | Up/down: previous/next number. |
+| Group tab | Select that group on both screens. | — | Up/down: previous/next group; no wrap. |
+| Workspace | Switch to that slot of the selected group. | — | Up/down: previous/next slot. |
 | Date/time | — | Thunderbird mail. | — |
 | Volume | Toggle mute. | `pavucontrol`. | ±1%. |
 | Battery | XFCE power settings. | — | Brightness ±5%. |
 | Network/Bluetooth tray | Applet menu. | Context menu. | Applet-defined. |
 | Power | Expand menu. | — | — |
 
-Both bars scroll globally through `1–10`, including empty workspaces, wrapping
-`10↔1`. Assignments stay laptop `1–2`, external `3–10`. The pointer stays in
-place across monitors, including keyboard workspace switches. Scrolling
-preserves the [top-edge hold](../i3/MANUAL.md#top-edge-peek): the bar stays up
-until the pointer moves away.
+Both bars show tabs for the selected group and groups with windows, then the
+selected group's existing slots, e.g. `A [B] C | 1 2 [3] 7 10`: selected group
+and focused slot highlighted, a slot visible on the other screen dimmed, and a
+hidden group with an urgent window as `C!`. Slot scrolling includes empty slots
+and wraps `10↔1`; laptop `1–2`, external `3–10`. A click made just before a
+group switch is ignored. The pointer stays in place across monitors. Scrolling
+preserves the [top-edge hold](../i3/MANUAL.md#top-edge-peek) until the pointer
+moves away. See [Workspace Groups](../i3/MANUAL.md#workspace-groups).
 
 CPU/memory are display-only. Power offers shutdown, restart, lock, and an
 exit-i3 submenu; shutdown/restart require confirmation, with timeout cancelling.

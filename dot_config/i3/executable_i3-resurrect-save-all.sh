@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Save every i3 workspace layout, plus the extra state i3-resurrect misses.
-# Helium's ephemeral AppImage mount path is rewritten to a stable command.
+# Save the selected workspace group and application state.
 
 set -euo pipefail
 
@@ -458,14 +457,17 @@ normalize_layout_after_save() {
 }
 
 CHECK=0
-case "${1:-}" in
-    "") ;;
-    --check) CHECK=1 ;;
-    *) printf 'Usage: %s [--check]\n' "$0" >&2; exit 2 ;;
-esac
+for argument in "$@"; do
+    case "$argument" in
+        --check) CHECK=1 ;;
+        --group=*) I3_RESURRECT_GROUP="${argument#--group=}" ;;
+        *) printf 'Usage: %s [--check] [--group=A]\n' "$0" >&2; exit 2 ;;
+    esac
+done
 missing="$(resurrect_dependencies)" || resurrect_fail "Save unavailable: $missing not found."
 I3_RESURRECT="$(find_i3_resurrect)" || resurrect_fail 'Save unavailable: i3-resurrect not found.'
 [ "$CHECK" = 0 ] || exit 0
+SOURCE_GROUP="$(resurrect_selected_group)" || resurrect_fail "Cannot determine the source group."
 
 umask 077
 resurrect_lock || exit 1
@@ -505,23 +507,18 @@ META_DIR="$STAGING/meta"
 mkdir -p "$STATE_DIR" "$META_DIR"
 resurrect_paths
 
-# Keep the Copilot terminal out of workspace snapshots.
-i3-msg '[class="^com[.]mitchellh[.]ghostty[.]scratchpad$"] move scratchpad' >/dev/null 2>&1 || true
-i3-msg -t get_tree > "$META_DIR/tree.json"
+i3-msg -t get_tree | resurrect_state capture-group "$STATE_DIR" "$META_DIR" --group "$SOURCE_GROUP"
 capture_zathura_page_state > "$ZATHURA_PAGES_FILE"
 capture_zen_page_state > "$ZEN_PAGES_FILE"
 capture_ghostty_session_state > "$GHOSTTY_SESSIONS_FILE"
 capture_labroute_state > "$LABROUTE_FILE"
-
-workspaces_json="$(i3-msg -t get_workspaces)"
-printf '%s\n' "$workspaces_json" | jq -r 'sort_by(.num)[] | .name' > "$WORKSPACES_FILE"
-printf '%s\n' "$workspaces_json" | jq -r '.[] | select(.focused) | .name' > "$FOCUSED_FILE"
 
 saved=0
 while IFS= read -r workspace || [ -n "$workspace" ]; do
     [ -n "$workspace" ] || continue
     "$I3_RESURRECT" save -w "$workspace" -d "$STATE_DIR" --swallow="$SWALLOW" 9>&-
     i3-msg -t get_tree | resurrect_state stable "$STATE_DIR" "$META_DIR" "$workspace"
+    resurrect_state clean-save "$STATE_DIR" "$META_DIR" "$workspace"
     normalize_layout_after_save "$workspace"
     ensure_zen_browser_programs "$workspace"
     ensure_helium_browser_programs "$workspace"
@@ -531,6 +528,7 @@ while IFS= read -r workspace || [ -n "$workspace" ]; do
     saved=$((saved + 1))
 done < "$WORKSPACES_FILE"
 
+resurrect_state normalize-group "$STATE_DIR" "$META_DIR" --group "$SOURCE_GROUP"
 resurrect_state publish "$PROFILE_STATE_DIR" "$PROFILE_META_DIR" "${STAGING##*/}"
 STAGING=""
-notify "Saved $saved workspace(s)."
+notify "Saved group $SOURCE_GROUP: $saved workspace(s)."

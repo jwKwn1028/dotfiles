@@ -3,6 +3,7 @@
 # rect changes. One entry per window: the largest mark wins.
 
 set -u
+[ "${I3_GROUP_TRANSITION:-0}" != 1 ] || exit 0
 DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_snap-common.sh"
 
@@ -33,6 +34,9 @@ for e in "${entries[@]}"; do
   id="${e%% *}"
   region="${e##* }"
   {
+    if [ -r "$DIR/workspace-groups.py" ]; then
+      /usr/bin/python3 "$DIR/workspace-groups.py" placement "$id" || exit 0
+    fi
     i3-msg "[con_id=$id] unmark _snap_$region" >/dev/null 2>&1
     "$DIR/tile-snap.sh" "$region" "$id"
   } &

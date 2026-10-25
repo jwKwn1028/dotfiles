@@ -28,6 +28,8 @@ export HOME="$MOCK_STATE/home"
 export I3_POLYBAR_PEEK_MS=240
 export PATH="$MOCK_BIN:/usr/bin:/bin"
 export I3_SYSTEM_PYTHON="$MOCK_BIN/python3"
+export I3_GROUP_HELPER="$MOCK_BIN/groups.py"
+: > "$I3_GROUP_HELPER"
 
 cat > "$MOCK_BIN/xdotool" <<'EOF'
 #!/usr/bin/env bash
@@ -160,10 +162,8 @@ reset_case() {
 }
 
 reset_case hidden
-"$ROOT/workspace-action.sh" switch 3
+"$ROOT/polybar-peek.sh"
 assert_state visible
-grep -Fqx 'workspace number 3' "$MOCK_STATE/i3-events" ||
-  fail "workspace switch was not sent to i3"
 wait_for_state hidden
 wait_for_peek_exit
 grep -Fqx 'cmd show' "$MOCK_STATE/polybar-events" ||
@@ -202,7 +202,7 @@ wait_for_state hidden
 wait_for_peek_exit
 
 reset_case visible
-"$ROOT/workspace-action.sh" switch 4
+"$ROOT/polybar-peek.sh"
 sleep 0.3
 assert_state visible
 [ ! -s "$MOCK_STATE/polybar-events" ] ||
@@ -217,9 +217,9 @@ assert_state visible
   fail "a Super hold changed an already-visible bar"
 
 reset_case hidden
-"$ROOT/workspace-action.sh" switch 1
+"$ROOT/polybar-peek.sh"
 sleep 0.14
-"$ROOT/workspace-action.sh" switch 2
+"$ROOT/polybar-peek.sh"
 sleep 0.14
 assert_state visible
 wait_for_state hidden
@@ -230,8 +230,8 @@ wait_for_peek_exit
   fail "repeated keypress launched more than one hide"
 
 reset_case hidden
-for workspace in 1 2 3 4 5 6; do
-  "$ROOT/workspace-action.sh" switch "$workspace" &
+for _ in 1 2 3 4 5 6; do
+  "$ROOT/polybar-peek.sh" &
 done
 wait
 assert_state visible
@@ -243,141 +243,7 @@ wait_for_peek_exit
   fail "concurrent keypresses launched more than one hide"
 
 reset_case hidden
-"$ROOT/workspace-action.sh" prev
-grep -Fqx 'workspace prev' "$MOCK_STATE/i3-events" ||
-  fail "previous-workspace action was not sent to i3"
-wait_for_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-"$ROOT/workspace-action.sh" next
-grep -Fqx 'workspace next' "$MOCK_STATE/i3-events" ||
-  fail "next-workspace action was not sent to i3"
-wait_for_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-printf '5\n' > "$MOCK_STATE/current-workspace"
-"$ROOT/workspace-action.sh" relative -1
-grep -Fqx 'get_workspaces' "$MOCK_STATE/i3-events" ||
-  fail "relative workspace action did not inspect the focused workspace"
-grep -Fqx 'workspace --no-auto-back-and-forth number 4' "$MOCK_STATE/i3-events" ||
-  fail "relative -1 did not select the exact numeric workspace on the left"
-assert_state visible
-wait_for_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-printf '5\n' > "$MOCK_STATE/current-workspace"
-"$ROOT/workspace-action.sh" relative 1
-grep -Fqx 'workspace --no-auto-back-and-forth number 6' "$MOCK_STATE/i3-events" ||
-  fail "relative +1 did not select the exact numeric workspace on the right"
-assert_state visible
-wait_for_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-printf '1\n' > "$MOCK_STATE/current-workspace"
-"$ROOT/workspace-action.sh" relative -1
-if grep -Fq 'number ' "$MOCK_STATE/i3-events"; then
-  fail "relative -1 moved past workspace 1"
-fi
-if [ -s "$MOCK_STATE/polybar-events" ]; then
-  fail "relative -1 peeked Polybar at workspace 1"
-fi
-
-reset_case hidden
-printf '10\n' > "$MOCK_STATE/current-workspace"
-"$ROOT/workspace-action.sh" relative 1
-if grep -Fq 'number ' "$MOCK_STATE/i3-events"; then
-  fail "relative +1 moved past workspace 10"
-fi
-if [ -s "$MOCK_STATE/polybar-events" ]; then
-  fail "relative +1 peeked Polybar at workspace 10"
-fi
-
-for monitor in eDP DP-1; do
-  for transition in '2 1 3' '3 -1 2' '10 1 1' '1 -1 10'; do
-    read -r current step expected <<< "$transition"
-    reset_case visible
-    printf '%s\n' "$current" > "$MOCK_STATE/current-workspace"
-    MONITOR="$monitor" "$ROOT/workspace-action.sh" cycle "$step"
-    grep -Fqx "workspace --no-auto-back-and-forth number $expected" \
-      "$MOCK_STATE/i3-events" ||
-      fail "cycle $step from $current on $monitor did not select $expected"
-    assert_state visible
-  done
-done
-
-reset_case hidden
-"$ROOT/polybar-peek.sh" --hold-start "$$"
-for monitor in eDP DP-1; do
-  for step in -1 1; do
-    MONITOR="$monitor" "$ROOT/workspace-action.sh" cycle "$step"
-    sleep 0.35
-    assert_state visible
-    [ "$(cat "$XDG_RUNTIME_DIR/i3-polybar-peek.hold")" = "$$" ] ||
-      fail "workspace scrolling replaced the active pointer hold"
-  done
-done
-"$ROOT/polybar-peek.sh" --hold-end "$$"
-assert_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-printf '5\n' > "$MOCK_STATE/current-workspace"
-"$ROOT/workspace-action.sh" move-relative -1
-grep -Fqx 'move container to workspace number 4; workspace number 4' \
-  "$MOCK_STATE/i3-events" ||
-  fail "move-relative -1 did not move to workspace 4"
-wait_for_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-printf '5\n' > "$MOCK_STATE/current-workspace"
-"$ROOT/workspace-action.sh" move-relative 1
-grep -Fqx 'move container to workspace number 6; workspace number 6' \
-  "$MOCK_STATE/i3-events" ||
-  fail "move-relative +1 did not move to workspace 6"
-wait_for_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-printf '1\n' > "$MOCK_STATE/current-workspace"
-"$ROOT/workspace-action.sh" move-relative -1
-grep -Fqx 'move container to workspace number 10; workspace number 10' \
-  "$MOCK_STATE/i3-events" ||
-  fail "move-relative -1 did not wrap workspace 1 to 10"
-wait_for_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-printf '10\n' > "$MOCK_STATE/current-workspace"
-"$ROOT/workspace-action.sh" move-relative 1
-grep -Fqx 'move container to workspace number 1; workspace number 1' \
-  "$MOCK_STATE/i3-events" ||
-  fail "move-relative +1 did not wrap workspace 10 to 1"
-wait_for_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-"$ROOT/workspace-action.sh" move 2
-grep -Fqx 'move container to workspace number 2; workspace number 2' \
-  "$MOCK_STATE/i3-events" ||
-  fail "move action did not delegate to move-to-workspace.sh"
-wait_for_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-"$ROOT/workspace-action.sh" move 7
-grep -Fqx 'move container to workspace number 7; workspace number 7' \
-  "$MOCK_STATE/i3-events" ||
-  fail "move to workspace 7 was blocked without an external output"
-wait_for_state hidden
-wait_for_peek_exit
-
-reset_case hidden
-"$ROOT/workspace-action.sh" switch 5
+"$ROOT/polybar-peek.sh"
 assert_state visible
 "$ROOT/toggle-polybar-resnap.sh"
 assert_state hidden
@@ -388,7 +254,7 @@ sleep 0.35
   fail "peek worker hid the bar after the explicit toggle"
 
 reset_case hidden
-"$ROOT/workspace-action.sh" switch 6
+"$ROOT/polybar-peek.sh"
 assert_state visible
 "$ROOT/kill-workspace-mode.sh" open
 assert_state visible
@@ -444,7 +310,7 @@ for exit_key in Return Escape; do
 done
 # The number keys are the one exit that deliberately does not restore.
 # shellcheck disable=SC2016
-grep -Fq 'bindsym 1 [workspace=$ws1] kill, mode "default"' "$ROOT/config" ||
+grep -Fq 'bindsym 1 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 1' "$ROOT/config" ||
   fail "a kill-workspace number key no longer exits straight to default mode"
 
 reset_case hidden
@@ -454,27 +320,30 @@ reset_case hidden
 "$ROOT/kill-workspace-mode.sh" open
 assert_state visible
 grep -Fq \
-  'bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-all-windows.sh' \
-  "$ROOT/config" || fail "Shift+K is not bound to the global-kill helper"
-"$ROOT/kill-all-windows.sh"
+  'bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-group-windows.sh' \
+  "$ROOT/config" || fail "Shift+K is not bound to the group-kill helper"
+grep -Fq \
+  'bindsym Shift+a exec --no-startup-id ~/.config/i3/kill-group-windows.sh all' \
+  "$ROOT/config" || fail "Shift+A is not bound to the all-groups kill helper"
+"$ROOT/kill-group-windows.sh"
 assert_state hidden
 [ ! -e "$XDG_RUNTIME_DIR/i3-kill-workspace.restore-hidden" ] ||
-  fail "the global kill left kill-workspace mode's restore marker behind"
+  fail "the group kill left kill-workspace mode's restore marker behind"
 mapfile -t final_kill_events < <(tail -n 2 "$MOCK_STATE/i3-events")
-[ "${final_kill_events[0]:-}" = '[all] kill; mode "default"' ] ||
-  fail "Shift+K helper did not kill every window and leave kill-workspace mode"
+[ "${final_kill_events[0]:-}" = 'mode "default"' ] ||
+  fail "Shift+K helper did not leave kill-workspace mode"
 [ "${final_kill_events[1]:-}" = 'get_tree' ] ||
-  fail "Shift+K helper did not restore Polybar after the global kill"
+  fail "Shift+K helper did not restore Polybar after the group kill"
 
 # ...and one the user had up on purpose survives it, which the old
 # unconditional hide got wrong.
 reset_case visible
 "$ROOT/kill-workspace-mode.sh" open
 assert_state visible
-"$ROOT/kill-all-windows.sh"
+"$ROOT/kill-group-windows.sh"
 assert_state visible
-grep -Fqx '[all] kill; mode "default"' "$MOCK_STATE/i3-events" ||
-  fail "the global kill did not run against an already-persistent bar"
+grep -Fqx 'mode "default"' "$MOCK_STATE/i3-events" ||
+  fail "the group kill did not run against an already-persistent bar"
 
 # Hiding a bar i3 already unmapped for fullscreen: polybar clears its flag
 # without unmapping, so the withdraw has to take the dock away now.

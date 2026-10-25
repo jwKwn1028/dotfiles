@@ -71,10 +71,11 @@ i3_x11 = [
     "fcitx5", "fcitx5-hangul", "fcitx5-frontend-all", "fcitx5-config-qt",
     # nm-applet supplies the graphical wifi menu embedded by Polybar's tray.
     "network-manager-gnome",
-    # i3ipc bindings for overflow-watcher.py; without it the watcher dies on
-    # import and windows that land too small are never moved.
+    # i3ipc for the workspace-group controller and overflow-watcher.py; without
+    # it workspace keys and overflow stop.
     "python3-i3ipc",
-    # X bindings for top-edge-peek.py; without it the edge peek does nothing.
+    # X bindings for top-edge-peek.py and restore placeholders; both fail
+    # without it.
     "python3-xlib",
     # Mozilla's jsonlz4 envelope for browser session files. Keep it in the
     # distro Python used by the i3 helpers.

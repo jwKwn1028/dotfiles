@@ -115,6 +115,11 @@ if [ -z "$TARGET" ]; then
   fi
 fi
 
+GROUP_HELPER="$DIR/workspace-groups.py"
+if [ -r "$GROUP_HELPER" ]; then
+  /usr/bin/python3 "$GROUP_HELPER" placement "$TARGET" || exit 0
+fi
+
 # Serialize per window: two unsnaps would read the same _presnap_ mark.
 exec {LOCK_FD}>"$SNAP_RUNTIME_DIR/tile-snap-$TARGET.lock" 2>/dev/null
 if [ -n "${LOCK_FD:-}" ] && ! flock -n "$LOCK_FD"; then

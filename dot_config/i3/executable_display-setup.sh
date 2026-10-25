@@ -54,6 +54,11 @@ fi
 
 sleep 0.2
 
+GROUP_HELPER="$DIR/workspace-groups.py"
+if [ -r "$GROUP_HELPER" ]; then
+    /usr/bin/python3 "$GROUP_HELPER" reconcile --quiet || true
+fi
+
 # Keep dunst 1.9's numeric monitor index in sync.
 DUNST_START="${I3_DUNST_START:-$DIR/dunst-start.sh}"
 if [ -x "$DUNST_START" ]; then

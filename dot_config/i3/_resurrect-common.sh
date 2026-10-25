@@ -51,3 +51,18 @@ resurrect_fail() {
     [ "${CHECK:-0}" = 1 ] || notify "$1"
     exit 1
 }
+
+resurrect_group() {
+    local helper="$DIR/workspace-groups.py"
+    [ -r "$helper" ] || helper="$DIR/executable_workspace-groups.py"
+    helper="${I3_RESURRECT_GROUP_HELPER:-$helper}"
+    "$RESURRECT_PYTHON" "$helper" request
+}
+
+resurrect_selected_group() {
+    if [ -n "${I3_RESURRECT_GROUP:-}" ]; then
+        printf '%s\n' "$I3_RESURRECT_GROUP"
+    else
+        printf '%s\n' '{"action":"status"}' | resurrect_group | jq -er '.selected'
+    fi
+}

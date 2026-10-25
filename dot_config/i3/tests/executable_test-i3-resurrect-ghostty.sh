@@ -37,6 +37,7 @@ if [ ! -r "$ROOT/_snap-common.sh" ]; then
     cp -p -- "$ROOT/executable__snap-common.sh" "$APPLIED_ROOT/_snap-common.sh"
     cp -p -- "$ROOT/_resurrect-common.sh" "$APPLIED_ROOT/_resurrect-common.sh"
     cp -p -- "$ROOT/executable_i3-resurrect-state.py" "$APPLIED_ROOT/i3-resurrect-state.py"
+    cp -p -- "$ROOT/workspace_groups.py" "$APPLIED_ROOT/workspace_groups.py"
     RESTORE="$APPLIED_ROOT/i3-resurrect-restore-all.sh"
 fi
 
@@ -47,6 +48,8 @@ export HOME="$TEST_TMP/home"
 export PATH="$MOCK_BIN:/usr/bin:/bin"
 export XDG_RUNTIME_DIR="$TEST_TMP/runtime"
 export I3_RESURRECT="$MOCK_BIN/i3-resurrect"
+export I3_RESURRECT_GROUP=A
+export I3_RESURRECT_GROUP_HELPER="$ROOT/tests/resurrect_group_fixture.py"
 export I3_RESURRECT_STATE_DIR="$STATE_DIR"
 export I3_RESURRECT_META_DIR="$META_DIR"
 export I3_RESURRECT_PROC_ROOT="$PROC"
@@ -100,6 +103,11 @@ elif "--programs-only" in sys.argv:
         for child in node.get("nodes", []) + node.get("floating_nodes", []):
             fill(child)
     fill(layout)
+    programs = json.loads((directory / f"workspace_{workspace}_programs.json").read_text())
+    layout.setdefault("nodes", []).extend(
+        dict(id=200 + index, window=200 + index, window_properties={"class": "unlaid"})
+        for index, entry in enumerate(programs)
+        if not entry.get("group_launch", {}).get("mark", True))
     path = pathlib.Path(os.environ["TEST_TREE"])
     tree = json.loads(path.read_text())
     tree["nodes"].append(layout)
@@ -189,19 +197,19 @@ add_proc 400 1 'odd) name' / '' odd
 
 cat >"$TEST_TREE" <<'EOF'
 {"type":"root","nodes":[{"type":"output","name":"eDP","nodes":[{"type":"con","name":"content","nodes":[
- {"type":"workspace","name":"3",
+ {"type":"workspace","num":3,"name":"3",
   "floating_nodes":[{"type":"floating_con","nodes":[
    {"window":102,"window_properties":{"class":"com.mitchellh.ghostty","instance":"ghostty"}}]}],
   "nodes":[{"type":"con","nodes":[
    {"window":101,"window_properties":{"class":"com.mitchellh.ghostty","instance":"ghostty"}},
    {"window":103,"window_properties":{"class":"Thunar","instance":"thunar"}}]}]},
- {"type":"workspace","name":"4","nodes":[
+ {"type":"workspace","num":4,"name":"4","nodes":[
   {"window":201,"window_properties":{"class":"com.mitchellh.ghostty","instance":"ghostty-ws4-1"}},
   {"window":202,"window_properties":{"class":"com.mitchellh.ghostty","instance":"ghostty-ws4-1"}}]},
- {"type":"workspace","name":"5","nodes":[
+ {"type":"workspace","num":5,"name":"5","nodes":[
   {"window":501,"window_properties":{"class":"com.mitchellh.ghostty","instance":"ghostty"}},
   {"window":502,"window_properties":{"class":"com.mitchellh.ghostty","instance":"ghostty"}}]},
- {"type":"workspace","name":"6","nodes":[
+ {"type":"workspace","num":6,"name":"6","nodes":[
   {"window":601,"window_properties":{"class":"com.mitchellh.ghostty","instance":"ghostty"}},
   {"window":602,"window_properties":{"class":"com.mitchellh.ghostty","instance":"ghostty"}}]}
 ]}]}]}
@@ -349,6 +357,8 @@ grep -Fqx 'Restore complete.' "$TEST_NOTIFY" ||
     fail "the restore did not report success: $(cat "$TEST_NOTIFY")"
 grep -Fqx 'Reattach by hand: hpc solo, hpcz shell' "$TEST_NOTIFY" ||
     fail "the restore listed the wrong sessions to reattach: $(cat "$TEST_NOTIFY")"
+grep -Fqx 'Opened without the saved layout: 4' "$TEST_NOTIFY" ||
+    fail "a workspace with unpaired placeholders kept its layout: $(cat "$TEST_NOTIFY")"
 
 export LABROUTE_TEST_FAIL=1
 run_restore 1

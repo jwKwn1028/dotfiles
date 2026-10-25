@@ -27,6 +27,7 @@ if [ ! -r "$ROOT/_snap-common.sh" ]; then
     cp -p -- "$ROOT/executable__snap-common.sh" "$APPLIED_ROOT/_snap-common.sh"
     cp -p -- "$ROOT/_resurrect-common.sh" "$APPLIED_ROOT/_resurrect-common.sh"
     cp -p -- "$ROOT/executable_i3-resurrect-state.py" "$APPLIED_ROOT/i3-resurrect-state.py"
+    cp -p -- "$ROOT/workspace_groups.py" "$APPLIED_ROOT/workspace_groups.py"
     RESTORE="$APPLIED_ROOT/i3-resurrect-restore-all.sh"
 fi
 
@@ -39,6 +40,8 @@ printf '[{"command":["example"],"working_directory":"/tmp"}]\n' \
 
 export PATH="$MOCK_BIN:/usr/bin:/bin"
 export XDG_RUNTIME_DIR="$MOCK_STATE/runtime"
+export I3_RESURRECT_GROUP=A
+export I3_RESURRECT_GROUP_HELPER="$ROOT/tests/resurrect_group_fixture.py"
 export I3_RESURRECT_STATE_DIR="$STATE_DIR"
 export I3_RESURRECT_META_DIR="$META_DIR"
 export I3_RESURRECT_LAYOUT_DELAY=0

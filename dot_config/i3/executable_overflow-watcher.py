@@ -1,39 +1,16 @@
 #!/usr/bin/python3
-"""Send a window to another workspace when it lands smaller than a quarter of the screen.
-
-Companion to autotiling: autotiling picks the split direction, this decides when a
-workspace is packed enough that the window belongs somewhere else. Walking
-workspace numbers upward and wrapping 10 -> 1, the target is the first occupied
-workspace that still has room, else the first empty one, else the next number.
-Freshly opened windows and hand-offs from the manual bindings go through the same
-rule; moving a window inside one workspace is a rearrange, not an arrival. A moved
-window requests the same transient Polybar peek the workspace keybindings do,
-overridable so a nested test session cannot drive the real bar.
-
-Easy to get wrong:
-
-- i3's integer division puts container rects a pixel or two under the ideal
-  fraction, so an exact quarter must not read as smaller than a quarter.
-- The event payload predates placement, so geometry is re-read from the tree.
-- Two maps guard against self-judgement: con ids this watcher just moved, and
-  con id -> workspace, which tells a rearrange from a hand-off.
-- Nothing may focus the target workspace first: a criteria-matched move into the
-  *visible* workspace silently does nothing while reporting success.
-"""
+"""Cascade small arrivals within their source workspace group."""
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 
 from i3ipc import Connection, Event
 
-MAX_WS = 10
+from workspace_groups import GroupError, identity, request
 
-PEEK = os.environ.get("I3_OVERFLOW_PEEK") or os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "polybar-peek.sh"
-)
+MAX_WS = 10
 
 EPSILON = 0.01
 
@@ -52,7 +29,8 @@ def is_floating(con) -> bool:
 
 def wrap_order(current: int, max_ws: int = MAX_WS) -> list[int]:
     """Workspace numbers above `current`, wrapping 10 -> 1, `current` excluded."""
-    return [(current + offset - 1) % max_ws + 1 for offset in range(1, max_ws)]
+    base = ((current - 1) // max_ws) * max_ws
+    return [base + (current - base + offset - 1) % max_ws + 1 for offset in range(1, max_ws)]
 
 
 def room_for_one_more(parent_area, child_count, ws_area, fraction, stacked=False):
@@ -65,7 +43,7 @@ def room_for_one_more(parent_area, child_count, ws_area, fraction, stacked=False
     return share >= (fraction - EPSILON) * ws_area
 
 
-def pick_target(current: int, occupancy: dict[int, bool], max_ws: int = MAX_WS) -> int:
+def pick_target(current: int, occupancy: dict[int, bool], max_ws: int = MAX_WS) -> int | None:
     """Where a too-small window should go.
 
     `occupancy` maps workspace number -> has room. Missing workspaces are empty.
@@ -77,7 +55,7 @@ def pick_target(current: int, occupancy: dict[int, bool], max_ws: int = MAX_WS) 
     for num in order:
         if num not in occupancy:
             return num
-    return order[0]
+    return None
 
 
 def insertion_parent(ws):
@@ -148,7 +126,7 @@ class Watcher:
         previous = self.workspace_of.get(con_id)
         self.workspace_of[con_id] = ws.num if ws is not None else None
 
-        if ws is None or not 1 <= ws.num <= MAX_WS:  # scratchpad reports num -1
+        if ws is None or identity(ws.num) is None:
             return
         if event.change == "move" and previous == ws.num:
             return
@@ -162,35 +140,14 @@ class Watcher:
         if ratio >= self.fraction - EPSILON:
             return
 
-        occupancy = {}
-        for other in tree.workspaces():
-            if other.num == ws.num or not 1 <= other.num <= MAX_WS:
-                continue
-            if other.leaves():
-                occupancy[other.num] = workspace_has_room(other, self.fraction)
+        self.relocate(i3, con_id, ws.num)
 
-        target = pick_target(ws.num, occupancy)
-        self.log(
-            f"con {con_id} covers {ratio:.3f} of workspace {ws.num} "
-            f"(occupancy {occupancy}); moving to {target}"
-        )
-        self.relocate(i3, con_id, target)
-
-    def relocate(self, i3, con_id: int, target: int) -> None:
-        commands = [f"[con_id={con_id}] move container to workspace number {target}"]
-        if self.follow:
-            commands.append(f"[con_id={con_id}] focus")
-
-        self.self_moved.add(con_id)
-        results = i3.command("; ".join(commands))
-        failures = [r.error for r in results if not r.success]
-        if failures:
-            self.self_moved.discard(con_id)
-            self.log(f"move of con {con_id} to workspace {target} failed: {failures}")
-        else:
-            self.workspace_of[con_id] = target
-            if os.access(PEEK, os.X_OK):
-                i3.command(f"exec --no-startup-id {PEEK}")
+    def relocate(self, i3, con_id: int, source: int) -> None:
+        try:
+            request("overflow", con_id=con_id, source_num=source,
+                    fraction=self.fraction, follow=self.follow)
+        except GroupError as error:
+            self.log(str(error))
 
 
 def get_parser() -> argparse.ArgumentParser:

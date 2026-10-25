@@ -20,6 +20,7 @@ class QuitKeyTests(unittest.TestCase):
     def test_only_listed_classes_are_targets(self) -> None:
         self.assertEqual(QUIT_KEY.quit_target(42, ("spotify", "Spotify")), 42)
         self.assertEqual(QUIT_KEY.quit_target(42, ("kakaotalk.exe", "KakaoTalk.exe")), 42)
+        self.assertEqual(QUIT_KEY.quit_target(42, ("Thunar", "Thunar")), 42)
         self.assertIsNone(QUIT_KEY.quit_target(42, ("ghostty", "com.mitchellh.ghostty")))
         self.assertIsNone(QUIT_KEY.quit_target(42, ("kakaotalk.exe", "Wine")))
 

@@ -94,6 +94,7 @@ snap/firefox/common/.mozilla/firefox/
 .config/dunst/
 .config/systemd/user/dunst.service.d/
 .config/fcitx5/
+.config/Thunar/
 .toggle-touchpad.sh
 .local/bin/touchpad
 .local/bin/disable-trackpoint-middle-click

@@ -12,9 +12,11 @@ import subprocess
 import tempfile
 import time
 import unittest
+import sys
 
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 
 def source(name):
@@ -140,7 +142,7 @@ class RestoreTests(unittest.TestCase):
             path.mkdir()
         for name in ("i3-resurrect-save-all.sh", "i3-resurrect-restore-all.sh",
                      "_resurrect-common.sh", "i3-resurrect-state.py", "_polybar-common.sh",
-                     "_snap-common.sh", "ghostty-session-state.py"):
+                     "_snap-common.sh", "ghostty-session-state.py", "workspace_groups.py", "workspace-groups.json"):
             (self.applied / name).write_text(source(name).read_text())
         (self.applied / "zen-url-state.py").write_text('print("[]")\n')
         for name in ("i3-msg", "i3-resurrect", "notify-send"):
@@ -152,6 +154,8 @@ class RestoreTests(unittest.TestCase):
                         XDG_RUNTIME_DIR=str(self.root / "runtime"),
                         I3_RESURRECT=str(self.bin / "i3-resurrect"),
                         I3_SYSTEM_PYTHON="/usr/bin/python3",
+                        I3_RESURRECT_GROUP="A",
+                        I3_RESURRECT_GROUP_HELPER=str(ROOT / "tests/resurrect_group_fixture.py"),
                         I3_RESURRECT_PROC_ROOT=str(self.root / "proc"),
                         I3_RESURRECT_STATE_DIR=str(self.state), I3_RESURRECT_META_DIR=str(self.meta),
                         I3_RESURRECT_LAYOUT_DELAY="0", I3_RESURRECT_KILL_POLL_INTERVAL="0",
@@ -163,7 +167,7 @@ class RestoreTests(unittest.TestCase):
 
     def live_tree(self, count):
         self.write(self.root / "tree.json", dict(type="root", nodes=[
-            dict(type="workspace", name=str(n), nodes=[dict(id=100+n, window=100+n,
+            dict(type="workspace", name=str(n), num=n, nodes=[dict(id=100+n, window=100+n,
                  window_properties={"class": "Example"})]) for n in range(1, count+1)]))
 
     def profile(self, count):
@@ -200,8 +204,8 @@ class RestoreTests(unittest.TestCase):
         before = set(self.root.rglob("*"))
         result = self.run_script("restore", "--check")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.events(), [])
-        self.assertEqual(before, set(self.root.rglob("*")))
+        self.assertTrue(all(event["tool"] == "i3-msg" and event["args"] == ["-t", "get_tree"] for event in self.events()))
+        self.assertEqual(before, set(self.root.rglob("*")) - {self.root / "events"})
 
     def test_bad_snapshots_never_close_windows(self):
         cases = [("state", "workspace_1_programs.json", "{broken"),
@@ -319,7 +323,7 @@ class RestoreTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_unreadable_zathura_window_does_not_abort_save(self):
-        self.write(self.root / "tree.json", dict(type="root", nodes=[dict(type="workspace", name="1", nodes=[
+        self.write(self.root / "tree.json", dict(type="root", nodes=[dict(type="workspace", name="1", num=1, nodes=[
             dict(id=101, window=101, window_properties={"class": "Zathura", "instance": "org.pwmt.zathura"})])]))
         for xprop in ("exit 1", "echo '_NET_WM_PID(CARDINAL) = 4242'"):
             with self.subTest(xprop=xprop):
@@ -402,7 +406,7 @@ class RestoreTests(unittest.TestCase):
 
     def test_restore_skips_empty_saved_workspaces_and_preserves_live_windows(self):
         self.write(self.root / "tree.json", dict(type="root", nodes=[
-            dict(type="workspace", name=str(n), nodes=[dict(id=100+n, window=100+n,
+            dict(type="workspace", name=str(n), num=n, nodes=[dict(id=100+n, window=100+n,
                  window_properties={"class": "Example"})]) for n in (3, 4, 5, 6)]))
         self.profile(3)
         (self.meta / "workspaces.txt").write_text("1\n2\n3\n6\n")
@@ -443,7 +447,7 @@ class RestoreTests(unittest.TestCase):
                          list(zip(["1", "2", "3", "4", "5"], targets)))
         launches = [json.loads(line) for line in (self.root / "launches").read_text().splitlines()]
         self.assertEqual([(item["workspace"], item["programs"][0]["command"]) for item in launches],
-                         [(target, f"example-{number}") for number, target in enumerate(targets, 1)])
+                         [(target, [f"example-{number}"]) for number, target in enumerate(targets, 1)])
         current = SNAPSHOT.read_json(self.root / "tree.json")
         self.assertEqual([node for node in current["nodes"] if node["name"] in ("1", "4")], tree["nodes"])
         focus = [event["args"][0] for event in self.events()
@@ -644,7 +648,7 @@ class RestoreTests(unittest.TestCase):
             {"swallows": [{"class": "^com\\.mitchellh\\.ghostty$", "instance": "^ghostty-ws1-1$"}]}]))
         result = self.run_script(WRONG_INSTANCE="1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Ghostty window instance is missing", (self.meta / "last-restore.json").read_text())
+        self.assertIn("A launched window is missing", (self.meta / "last-restore.json").read_text())
 
     def test_programs_without_placeholders_still_require_windows(self):
         self.write(self.state / "workspace_1_layout.json", dict(type="workspace", name="1", nodes=[]))

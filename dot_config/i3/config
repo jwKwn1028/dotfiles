@@ -5,7 +5,8 @@ font pango:DejaVu Sans 10
 focus_follows_mouse yes
 mouse_warping none
 focus_wrapping no
-workspace_auto_back_and_forth yes
+workspace_auto_back_and_forth no
+focus_on_window_activation smart
 
 # Keep in sync with NEW in toggle-titles.sh.
 default_border pixel 1
@@ -27,7 +28,7 @@ for_window [class="^com[.]mitchellh[.]ghostty[.]scratchpad$"] floating enable, m
 # $mod+d is tile-right, so rofi takes $mod+space.
 bindsym $mod+space            exec --no-startup-id env XDG_CURRENT_DESKTOP=XFCE:i3 rofi -show drun -theme spotlight
 bindsym $mod+Tab              exec --no-startup-id ~/.config/i3/focus-prev.sh
-bindsym $mod+Shift+Tab        exec --no-startup-id rofi -show window
+bindsym $mod+Shift+Tab        exec --no-startup-id ~/.config/i3/workspace-groups.py window-menu
 bindsym $mod+t                exec --no-startup-id thunar
 bindsym $mod+p                exec --no-startup-id xfce4-display-settings --minimal
 bindsym XF86Display           exec --no-startup-id xfce4-display-settings --minimal
@@ -87,16 +88,16 @@ bindsym $mod+f fullscreen toggle
 # Sticky: no `mode "default"` on actions. The name is the Polybar label.
 set $mode_window hjkl / HJKL / Tab
 mode "$mode_window" {
-    bindsym h move left
-    bindsym j move down
-    bindsym k move up
-    bindsym l move right
+    bindsym h exec --no-startup-id ~/.config/i3/workspace-groups.py direction left
+    bindsym j exec --no-startup-id ~/.config/i3/workspace-groups.py direction down
+    bindsym k exec --no-startup-id ~/.config/i3/workspace-groups.py direction up
+    bindsym l exec --no-startup-id ~/.config/i3/workspace-groups.py direction right
     bindsym Shift+h resize shrink width  10 px or 10 ppt
     bindsym Shift+j resize grow   height 10 px or 10 ppt
     bindsym Shift+k resize shrink height 10 px or 10 ppt
     bindsym Shift+l resize grow   width  10 px or 10 ppt
 # Trailing focus required: mouse_warping beats focus_follows_mouse.
-    bindsym Tab move container to output next; focus output next
+    bindsym Tab exec --no-startup-id ~/.config/i3/workspace-groups.py output
     bindsym Return exec --no-startup-id ~/.config/i3/window-mode.sh close, mode "default"
     bindsym Escape exec --no-startup-id ~/.config/i3/window-mode.sh close, mode "default"
 }
@@ -137,6 +138,26 @@ workspace $ws7  output nonprimary
 workspace $ws8  output nonprimary
 workspace $ws9  output nonprimary
 workspace $ws10 output nonprimary
+workspace 11 output primary
+workspace 12 output primary
+workspace 13 output nonprimary
+workspace 14 output nonprimary
+workspace 15 output nonprimary
+workspace 16 output nonprimary
+workspace 17 output nonprimary
+workspace 18 output nonprimary
+workspace 19 output nonprimary
+workspace 20 output nonprimary
+workspace 21 output primary
+workspace 22 output primary
+workspace 23 output nonprimary
+workspace 24 output nonprimary
+workspace 25 output nonprimary
+workspace 26 output nonprimary
+workspace 27 output nonprimary
+workspace 28 output nonprimary
+workspace 29 output nonprimary
+workspace 30 output nonprimary
 
 bindsym $mod+1 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 1
 bindsym $mod+2 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 2
@@ -158,16 +179,16 @@ bindsym $mod+Mod1+7 exec --no-startup-id ~/.config/i3/workspace-action.sh switch
 bindsym $mod+Mod1+8 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 8
 bindsym $mod+Mod1+9 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 9
 bindsym $mod+Mod1+0 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 10
-bindsym Control+Mod1+1 workspace $ws1
-bindsym Control+Mod1+2 workspace $ws2
-bindsym Control+Mod1+3 workspace $ws3
-bindsym Control+Mod1+4 workspace $ws4
-bindsym Control+Mod1+5 workspace $ws5
-bindsym Control+Mod1+6 workspace $ws6
-bindsym Control+Mod1+7 workspace $ws7
-bindsym Control+Mod1+8 workspace $ws8
-bindsym Control+Mod1+9 workspace $ws9
-bindsym Control+Mod1+0 workspace $ws10
+bindsym Control+Mod1+1 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 1 --quiet
+bindsym Control+Mod1+2 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 2 --quiet
+bindsym Control+Mod1+3 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 3 --quiet
+bindsym Control+Mod1+4 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 4 --quiet
+bindsym Control+Mod1+5 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 5 --quiet
+bindsym Control+Mod1+6 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 6 --quiet
+bindsym Control+Mod1+7 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 7 --quiet
+bindsym Control+Mod1+8 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 8 --quiet
+bindsym Control+Mod1+9 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 9 --quiet
+bindsym Control+Mod1+0 exec --no-startup-id ~/.config/i3/workspace-action.sh switch 10 --quiet
 
 # Keycodes: layout-independent.
 bindcode $mod+Shift+10 exec --no-startup-id ~/.config/i3/workspace-action.sh move 1
@@ -182,18 +203,19 @@ bindcode $mod+Shift+18 exec --no-startup-id ~/.config/i3/workspace-action.sh mov
 bindcode $mod+Shift+19 exec --no-startup-id ~/.config/i3/workspace-action.sh move 10
 
 # Super+X, then 1-0 for one workspace or Shift+K for all.
-mode "kill workspace" {
-    bindsym 1 [workspace=$ws1] kill, mode "default"
-    bindsym 2 [workspace=$ws2] kill, mode "default"
-    bindsym 3 [workspace=$ws3] kill, mode "default"
-    bindsym 4 [workspace=$ws4] kill, mode "default"
-    bindsym 5 [workspace=$ws5] kill, mode "default"
-    bindsym 6 [workspace=$ws6] kill, mode "default"
-    bindsym 7 [workspace=$ws7] kill, mode "default"
-    bindsym 8 [workspace=$ws8] kill, mode "default"
-    bindsym 9 [workspace=$ws9] kill, mode "default"
-    bindsym 0 [workspace=$ws10] kill, mode "default"
-    bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-all-windows.sh
+mode "kill workspace (K: group, A: all)" {
+    bindsym 1 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 1
+    bindsym 2 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 2
+    bindsym 3 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 3
+    bindsym 4 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 4
+    bindsym 5 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 5
+    bindsym 6 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 6
+    bindsym 7 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 7
+    bindsym 8 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 8
+    bindsym 9 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 9
+    bindsym 0 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 10
+    bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-group-windows.sh
+    bindsym Shift+a exec --no-startup-id ~/.config/i3/kill-group-windows.sh all
     bindsym Return exec --no-startup-id ~/.config/i3/kill-workspace-mode.sh close, mode "default"
     bindsym Escape exec --no-startup-id ~/.config/i3/kill-workspace-mode.sh close, mode "default"
 }
@@ -203,6 +225,15 @@ bindsym $mod+Mod1+h exec --no-startup-id ~/.config/i3/workspace-action.sh prev
 bindsym $mod+Mod1+l exec --no-startup-id ~/.config/i3/workspace-action.sh next
 bindsym Control+$mod+h exec --no-startup-id ~/.config/i3/workspace-action.sh relative -1
 bindsym Control+$mod+l exec --no-startup-id ~/.config/i3/workspace-action.sh relative 1
+bindsym Control+$mod+k exec --no-startup-id ~/.config/i3/workspace-groups.py group-relative -1
+bindsym Control+$mod+j exec --no-startup-id ~/.config/i3/workspace-groups.py group-relative 1
+bindsym Control+$mod+1 exec --no-startup-id ~/.config/i3/workspace-groups.py select A
+bindsym Control+$mod+2 exec --no-startup-id ~/.config/i3/workspace-groups.py select B
+bindsym Control+$mod+grave exec --no-startup-id ~/.config/i3/workspace-groups.py select B
+bindsym Control+$mod+3 exec --no-startup-id ~/.config/i3/workspace-groups.py select C
+bindsym Control+$mod+Tab exec --no-startup-id ~/.config/i3/workspace-groups.py group-previous
+bindsym $mod+Shift+k exec --no-startup-id ~/.config/i3/workspace-groups.py transfer -1
+bindsym $mod+Shift+j exec --no-startup-id ~/.config/i3/workspace-groups.py transfer 1
 bindsym $mod+Shift+h exec --no-startup-id ~/.config/i3/workspace-action.sh move-relative -1
 bindsym $mod+Shift+l exec --no-startup-id ~/.config/i3/workspace-action.sh move-relative 1
 
@@ -247,19 +278,14 @@ bindsym $mod+Shift+t exec --no-startup-id ~/.config/i3/toggle-titles-resnap.sh
 bindsym $mod+m exec --no-startup-id ~/.config/i3/show-desktop.sh
 bindsym $mod+Control+m move scratchpad
 # --- autostart ---
+exec_always --no-startup-id ~/.config/i3/workspace-groups.py start
 exec_always --no-startup-id ~/.config/i3/session-reload.sh
 exec --no-startup-id /usr/bin/gnome-keyring-daemon --start --components=secrets
 exec_always --no-startup-id sh -c 'pgrep -u "$USER" polkit-gnome >/dev/null || /usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1 &'
-exec_always --no-startup-id sh -c 'pkill -f "bash .*/focus-tracker\.sh$"; setsid ~/.config/i3/focus-tracker.sh </dev/null >/dev/null 2>&1 &'
-exec_always --no-startup-id sh -c 'pkill -f "bash .*/snap-watcher\.sh$"; setsid ~/.config/i3/snap-watcher.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/kakaotalk-float-watcher\.sh$"; setsid ~/.config/i3/kakaotalk-float-watcher.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/randr-hotplug\.sh$"; setsid ~/.config/i3/randr-hotplug.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "bash .*/usb-hotplug\.sh$"; setsid ~/.config/i3/usb-hotplug.sh </dev/null >/dev/null 2>&1 &'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/super-polybar-listener\.py$"; exec /usr/bin/python3 ~/.config/i3/super-polybar-listener.py'
-# Match the interpreter-led worker, not this `sh -c` launcher.
-exec_always --no-startup-id sh -c 'pkill -f "^[^ ]*/python[^ ]* [^ ]*/autotiling( |$)"; exec ~/.local/bin/autotiling'
-# -d until the idle-tiling bug is caught; no `$` so args match.
-exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/overflow-watcher\.py"; exec /usr/bin/python3 ~/.config/i3/overflow-watcher.py -d'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/top-edge-peek\.py$"; exec /usr/bin/python3 ~/.config/i3/top-edge-peek.py'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/quit-key\.py$"; exec /usr/bin/python3 ~/.config/i3/quit-key.py'
 exec --no-startup-id xrdb -merge ~/.Xresources

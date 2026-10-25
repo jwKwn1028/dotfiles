@@ -28,6 +28,11 @@ from i3ipc import Connection
 
 HERE = Path(__file__).resolve().parent
 WATCHER = HERE.parent / "overflow-watcher.py"
+if not WATCHER.exists():
+    WATCHER = HERE.parent / "executable_overflow-watcher.py"
+CONTROLLER = HERE.parent / "workspace-groups.py"
+if not CONTROLLER.exists():
+    CONTROLLER = HERE.parent / "executable_workspace-groups.py"
 RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
 
 i3: Connection = None  # set by boot()
@@ -91,7 +96,10 @@ def boot(dual: bool, workdir: Path) -> list[subprocess.Popen]:
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
         )
     ]
-    env = {**os.environ, "DISPLAY": display}
+    runtime = workdir / "runtime"
+    runtime.mkdir(mode=0o700)
+    env = {**os.environ, "DISPLAY": display, "XDG_RUNTIME_DIR": str(runtime),
+           "XDG_STATE_HOME": str(workdir / "state"), "I3_GROUP_WORKERS": "0"}
     env.pop("I3SOCK", None)
     if not wait_for(lambda: subprocess.run(
         ["xdpyinfo"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -118,9 +126,9 @@ def boot(dual: bool, workdir: Path) -> list[subprocess.Popen]:
     stub = workdir / "peek-stub.sh"
     stub.write_text(f'#!/bin/sh\necho peek >> "{PEEK_LOG}"\n')
     stub.chmod(0o755)
-    env["I3_OVERFLOW_PEEK"] = str(stub)
+    env["I3_GROUP_PEEK"] = str(stub)
     autotiling = shutil.which("autotiling") or os.path.expanduser("~/.local/bin/autotiling")
-    for argv in ([autotiling], [sys.executable, str(WATCHER)]):
+    for argv in ([sys.executable, str(CONTROLLER), "serve"], [autotiling], [sys.executable, str(WATCHER)]):
         procs.append(subprocess.Popen(
             argv, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True,
@@ -323,7 +331,7 @@ def single_screen():
     print(f"    window moved to ws{landed}, peek calls {before} -> {peeks()}")
     check("S10 a relocated window triggers exactly one peek", peeks(), before + 1)
 
-    print("\nS11  every workspace packed: hand off once anyway, never ping-pong")
+    print("\nS11  every workspace packed: stay in the source group")
     kill_all()
     for num in range(1, 11):
         pack(num, f"z{num}_")
@@ -331,12 +339,12 @@ def single_screen():
     before = peeks()
     opened, landed = spawn("last", on=5)
     print(f"    new window on ws{opened} -> ws{landed}, size {ratios(landed)}")
-    check("S11 falls back to the next workspace number", landed, 6)
+    check("S11 stays on the source workspace", landed, 5)
     # One hop only: the watcher's own move is swallowed by the self_moved guard,
     # so a window with nowhere good to go settles instead of circling.
     time.sleep(3)
-    check("S11 stays put afterwards", ws_of("last"), 6)
-    check("S11 only one peek, so only one move", peeks(), before + 1)
+    check("S11 stays put afterwards", ws_of("last"), 5)
+    check("S11 no peek when no destination fits", peeks(), before)
     check("S11 every workspace still holds its windows", len(occupied_map()), 10)
 
 

@@ -4,10 +4,9 @@
 
 SNAP_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 SNAP_TITLES_STATE="$SNAP_RUNTIME_DIR/i3-titles.state"
-SNAP_FOCUS_HISTORY="$SNAP_RUNTIME_DIR/i3-focus-history"
 SNAP_LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/i3"
 SNAP_LOG="$SNAP_LOG_DIR/snap.log"
-export SNAP_RUNTIME_DIR SNAP_TITLES_STATE SNAP_FOCUS_HISTORY
+export SNAP_RUNTIME_DIR SNAP_TITLES_STATE
 
 snap_log() {
   mkdir -p "$SNAP_LOG_DIR" 2>/dev/null || return 0

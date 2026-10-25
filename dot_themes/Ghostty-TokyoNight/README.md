@@ -11,17 +11,17 @@ theme is still `ubuntu-mono-light`.
 
 ## What it matches
 
-| Ghostty setting | How Thunar picks it up |
-| --- | --- |
-| `theme = TokyoNight Storm` | full Adwaita-dark recolor onto the Storm palette |
-| `background = #292d3e` | every surface — sidebar, view, toolbar, statusbar |
-| `foreground`, `selection-background` | `#c0caf5` text, `#364a82` selection |
-| `cursor-color = #86be43` | focus rings, caret, checkboxes, progress, tab underline |
-| `font-family = JuliaMono` | whole UI, with the same CJK/Nerd-Font fallbacks |
-| `font-style-bold = false` | no bold anywhere |
-| `window-decoration = none`, square frame | zero border-radius, no shadows, no gradients |
-| `window-padding-x/y = 8` | 8px gutter around the file view |
-| `scrollbar = never` | thin flat slider, no trough or steppers |
+| Ghostty setting                          | How Thunar picks it up                                  |
+| ---------------------------------------- | ------------------------------------------------------- |
+| `theme = TokyoNight Storm`               | full Adwaita-dark recolor onto the Storm palette        |
+| `background = #292d3e`                   | every surface — sidebar, view, toolbar, statusbar       |
+| `foreground`, `selection-background`     | `#c0caf5` text, `#364a82` selection                     |
+| `cursor-color = #86be43`                 | focus rings, caret, checkboxes, progress, tab underline |
+| `font-family = JuliaMono`                | whole UI, with the same CJK/Nerd-Font fallbacks         |
+| `font-style-bold = false`                | no bold anywhere                                        |
+| `window-decoration = none`, square frame | zero border-radius, no shadows, no gradients            |
+| `window-padding-x/y = 8`                 | 8px gutter around the file view                         |
+| `scrollbar = never`                      | thin flat slider, no trough or steppers                 |
 
 ## Files
 
@@ -65,6 +65,8 @@ it bothers you. (This theme already paints menu toplevels opaque.)
 
 **Font size** — Ghostty's 18pt is oversized for a file manager, so the UI sits at
 12pt. Change `font-size` in the `*` block near the top of `gtk-3.0/gtk.css`.
+
+**Keys** — see `~/.config/Thunar/docs.md`.
 
 **Anything else** — edit `gtk-3.0/gtk.css` and restart Thunar:
 
