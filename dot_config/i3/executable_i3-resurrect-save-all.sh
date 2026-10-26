@@ -20,6 +20,7 @@ HELIUM_DESKTOP_FILE="${HELIUM_DESKTOP_FILE:-$HOME/.local/share/applications/heli
 LABROUTE_MODE_FILE="${TAILSCALE_REMOTE_MODE_FILE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tailscale-remote-proxy-required}"
 
 notify() {
+    [ "${I3_RESURRECT_QUIET:-0}" != 1 ] || return 0
     if command -v notify-send >/dev/null 2>&1; then
         notify-send "i3-resurrect" "$1" || true
     fi

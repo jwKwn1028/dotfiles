@@ -115,6 +115,8 @@ bindsym --release Control+$mod+b exec --no-startup-id ~/.config/i3/i3-resurrect-
 bindsym Control+$mod+s exec --no-startup-id ~/.config/i3/i3-resurrect-restore-all-b.sh
 bindsym --release Control+$mod+c exec --no-startup-id ~/.config/i3/i3-resurrect-save-all-c.sh
 bindsym Control+$mod+t exec --no-startup-id ~/.config/i3/i3-resurrect-restore-all-c.sh
+bindsym --release Control+$mod+d exec --no-startup-id ~/.config/i3/i3-resurrect-session.py save
+bindsym Control+$mod+u exec --no-startup-id ~/.config/i3/i3-resurrect-session.py restore
 
 # --- workspaces ---
 set $ws1 "1"

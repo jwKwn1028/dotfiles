@@ -14,6 +14,12 @@ resurrect_lock() {
     local display_key
     display_key="$(printf '%s' "${DISPLAY:-default}" | sha256sum | cut -c1-16)"
     mkdir -p "$runtime"
+    if [ -n "${I3_RESURRECT_PARENT_LOCK:-}" ] &&
+        [ "$I3_RESURRECT_PARENT_LOCK" = "$(readlink -m "$runtime/i3-resurrect-$display_key.lock")" ] &&
+        [ "$(readlink -f "/proc/$$/fd/9")" = "$I3_RESURRECT_PARENT_LOCK" ]; then
+        flock -n 9
+        return $?
+    fi
     exec 9>"$runtime/i3-resurrect-$display_key.lock"
     if ! flock -n 9; then
         printf 'Another i3 save or restore is already running.\n' >&2

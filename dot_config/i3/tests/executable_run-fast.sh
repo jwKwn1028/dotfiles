@@ -89,6 +89,8 @@ run 'zen URL state unit tests' \
     /usr/bin/python3 "$I3_ROOT/tests/test-zen-url-state.py"
 run 'resurrect snapshot tests' \
     /usr/bin/python3 "$I3_ROOT/tests/test-resurrect-state.py"
+run 'all-groups snapshot tests' \
+    /usr/bin/python3 "$I3_ROOT/tests/test-i3-resurrect-session.py"
 run 'config consistency tests' \
     env I3_POLYBAR_CONFIG="$POLYBAR_ROOT/config.ini" \
     /usr/bin/python3 "$I3_ROOT/tests/test-config-consistency.py"

@@ -12,7 +12,7 @@ import sys
 import tempfile
 import uuid
 
-from workspace_groups import SCRATCH_CLASS, filtered_tree, identity, numbers
+from workspace_groups import GroupError, SCRATCH_CLASS, filtered_tree, identity, numbers, validate_view
 
 
 def read_json(path):
@@ -59,6 +59,8 @@ def validate_node(node):
 
 
 def validate(state, meta):
+    if (meta / "session.json").exists():
+        return validate_session(state, meta)["saved"]
     format_path = meta / "group-format.json"
     if format_path.exists():
         format_data = read_json(format_path)
@@ -127,6 +129,27 @@ def validate(state, meta):
                             and re.fullmatch(r"[A-Za-z0-9_-]+", session["name"]),
                             "invalid remote session")
     return workspaces
+
+
+def validate_session(state, meta):
+    data = read_json(meta / "session.json")
+    require(isinstance(data, dict) and data.get("version") == 1, "unsupported all-groups snapshot format")
+    groups = data.get("groups")
+    require(isinstance(groups, dict) and bool(groups) and
+            all(isinstance(name, str) and re.fullmatch(r"[A-Z][A-Z0-9_-]*", name) and
+                type(index) is int and index >= 0 for name, index in groups.items()) and
+            len(set(groups.values())) == len(groups), "invalid saved group definitions")
+    saved = data.get("saved")
+    require(isinstance(saved, list) and bool(saved) and all(isinstance(group, str) and group in groups for group in saved) and
+            len(saved) == len(set(saved)), "invalid saved group list")
+    validate_view(data.get("view"), groups)
+    for group in saved:
+        child_state, child_meta = resolve(state / group, meta / group)
+        require(not (child_meta / "session.json").exists(), "nested all-groups snapshots are invalid")
+        workspaces = validate(child_state, child_meta)
+        require(all(workspace_order(name)[0] in range(1, 11) for name in workspaces), "invalid logical slots")
+        occupied_workspaces(child_state, child_meta)
+    return data
 
 
 def resolve(state, meta, previous=False):
@@ -294,12 +317,13 @@ def workspace_order(name):
     return (int(match[1]) if match else float("inf"), name)
 
 
-def prepare_restore(state, meta, tree, directory, group="A", operation=None):
-    """Pack saved workspaces into empty slots, then share occupied slots on overflow."""
+def prepare_restore(state, meta, tree, directory, group="A", operation=None, preserve_slots=False):
+    """Plan group-scoped destinations and isolated launches."""
     require(isinstance(tree, dict) and tree.get("type") == "root", "invalid live i3 tree")
     saved = sorted(occupied_workspaces(state, meta), key=workspace_order)
     require(all(workspace_order(name)[0] in range(1, 11) for name in saved),
             "snapshot workspace identities must be logical slots 1–10")
+    require(len({workspace_order(name)[0] for name in saved}) == len(saved), "duplicate saved logical slots")
     pool = numbers(group)
     names, occupied = {}, {}
     for node in walk(tree):
@@ -315,6 +339,8 @@ def prepare_restore(state, meta, tree, directory, group="A", operation=None):
             occupied[number] = windows
 
     slots = [number for number in pool if number not in occupied] + sorted(occupied)
+    if preserve_slots:
+        slots = [pool[workspace_order(name)[0] - 1] for name in saved]
     plan = []
     for source, number in zip(saved, slots):
         destination = names.get(number, str(number))
@@ -537,6 +563,7 @@ def main():
     parser.add_argument("--previous", action="store_true")
     parser.add_argument("--group", default="A")
     parser.add_argument("--operation")
+    parser.add_argument("--preserve-slots", action="store_true")
     args = parser.parse_args()
     try:
         if args.action == "resolve":
@@ -554,7 +581,8 @@ def main():
         elif args.action == "occupied":
             print(json.dumps(occupied_workspaces(args.state, args.meta)))
         elif args.action == "prepare-restore":
-            print(json.dumps(prepare_restore(args.state, args.meta, json.load(sys.stdin), Path(args.value), args.group, args.operation)))
+            print(json.dumps(prepare_restore(args.state, args.meta, json.load(sys.stdin), Path(args.value),
+                                             args.group, args.operation, args.preserve_slots)))
         elif args.action == "capture-group":
             capture_group(args.meta, json.load(sys.stdin), args.group)
         elif args.action == "clean-save":
@@ -568,7 +596,7 @@ def main():
                 return 1
         else:
             session_report(args.state, args.meta, set(json.loads(args.value)))
-    except (OSError, ValueError, TypeError, KeyError, re.error) as error:
+    except (OSError, ValueError, TypeError, KeyError, GroupError, re.error) as error:
         print(f"Snapshot error: {error}", file=sys.stderr)
         return 1
     return 0

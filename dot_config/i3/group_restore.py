@@ -11,7 +11,7 @@ import subprocess
 import time
 
 from workspace_groups import (GroupError, exact, identity, number, owner_alive,
-                              process_identity, quote, walk)
+                              process_identity, quote, validate_view, walk)
 
 
 class Restore:
@@ -62,8 +62,49 @@ class Restore:
             display.sync()
 
     def reserved(self, *groups):
-        return any(not lease.get("cancelled") and lease["group"] in groups
-                   for lease in self.state["leases"].values())
+        session = self.state.get("session_restore", {})
+        return ((self.session_active() and any(group in session["groups"] for group in groups)) or
+                any(not lease.get("cancelled") and lease["group"] in groups
+                    for lease in self.state["leases"].values()))
+
+    def session_active(self):
+        session = self.state.get("session_restore")
+        return bool(session and not session.get("cancelled") and owner_alive(session["owner"]))
+
+    def session_lease(self, token):
+        session = self.state.get("session_restore", {})
+        if not self.session_active() or session.get("token") != token:
+            raise GroupError("All-groups restore was cancelled or its owner exited")
+        return session
+
+    def session_begin(self, token, owner, groups):
+        if (not re.fullmatch(r"[a-f0-9]{32}", token) or not owner_alive(owner) or
+                not isinstance(groups, list) or not groups or len(set(groups)) != len(groups) or
+                any(group not in self.controller.groups for group in groups)):
+            raise GroupError("Invalid all-groups restore request")
+        if self.session_active() or self.state["leases"]:
+            raise GroupError("Another restore owns placement")
+        self.controller.pause_workers()
+        self.state["session_restore"] = dict(token=token, owner=owner, groups=groups, cancelled=False)
+        self.controller.save()
+        return token
+
+    def session_end(self, token):
+        session = self.state.get("session_restore", {})
+        if session.get("token") != token:
+            return
+        session["cancelled"] = True
+        for operation in list(self.state["leases"]):
+            self.release(operation, cancelled=True)
+        self.state.pop("session_restore", None)
+        self.controller.save()
+        self.controller.resume_workers()
+
+    def session_views(self, token, view):
+        self.session_lease(token)
+        view = validate_view(view, self.controller.groups)
+        self.state["views"].update(view["views"])
+        return self.controller.select(view["selected"], force=True, restore_session=token, remember_view=False)
 
     def lease(self, token):
         lease = self.state["leases"].get(token)
@@ -95,10 +136,15 @@ class Restore:
         self.controller.save()
         self.controller.resume_workers()
 
-    def cancel_group_change(self, group):
+    def cancel_group_change(self, group, session_token=None):
+        session = self.state.get("session_restore")
+        if session and session.get("token") != session_token:
+            session["cancelled"] = True
+            self.controller.save()
         for operation, lease in list(self.state["leases"].items()):
             if lease["group"] != group:
                 self.release(operation, cancelled=True)
+        self.controller.resume_workers()
 
     def forget_window(self, con_id):
         for launch in self.state["launches"].values():
@@ -107,7 +153,7 @@ class Restore:
                 launch["done"] = True
         self.controller.save()
 
-    def begin(self, group, owner, token):
+    def begin(self, group, owner, token, session=None):
         number(group, 1, self.controller.groups)
         if not re.fullmatch(r"[a-f0-9]{32}", token):
             raise GroupError("Invalid restore operation identity")
@@ -115,10 +161,16 @@ class Restore:
             raise GroupError("Restore owner is not alive")
         if self.state["leases"]:
             raise GroupError("Another restore owns placement")
+        if session:
+            if group not in self.session_lease(session)["groups"]:
+                raise GroupError("Group is outside the all-groups restore")
+        elif self.session_active():
+            raise GroupError("An all-groups restore owns placement")
         self.controller.cleanup_mode()
-        self.controller.select(group)
+        self.controller.select(group, restore_session=session)
         self.controller.pause_workers()
         self.state["leases"][token] = {"group": group, "owner": owner, "placeholders": {},
+                                      "session": session,
                                       "before": [con.window for con in self.controller.tree().leaves() if con.window]}
         self.controller.save()
         return token
@@ -166,7 +218,7 @@ class Restore:
         if launch_id in self.state["launches"]:
             raise GroupError("Launch token already used")
         record = dict(route, workspace=workspace, before=lease["before"], created=time.time(),
-                      owner=None, window=None, done=False)
+                      owner=None, window=None, done=False, session=lease.get("session"))
         self.state["launches"][launch_id] = record
         self.controller.save()
         environment = dict(os.environ, I3_GROUP_LAUNCH=launch_id, DESKTOP_STARTUP_ID=launch_id)
@@ -242,6 +294,9 @@ class Restore:
         return True
 
     def maintain(self):
+        session = self.state.get("session_restore")
+        if session and not owner_alive(session["owner"]):
+            self.session_end(session["token"])
         for operation, lease in list(self.state["leases"].items()):
             if not owner_alive(lease["owner"]):
                 self.release(operation, cancelled=True)
@@ -254,14 +309,40 @@ class Restore:
                 if con.window:
                     self.route(con)
         for token, launch in list(self.state["launches"].items()):
-            if launch.get("done") and launch["operation"] not in self.state["leases"]:
+            session = self.state.get("session_restore", {})
+            retained = self.session_active() and launch.get("session") == session.get("token")
+            if launch.get("done") and launch["operation"] not in self.state["leases"] and not retained:
                 self.state["launches"].pop(token, None)
-            elif (not owner_alive(launch.get("owner")) and time.time() - launch["created"] > 120 and
+            elif (not retained and not owner_alive(launch.get("owner")) and time.time() - launch["created"] > 120 and
                   launch["operation"] not in self.state["leases"]):
                 self.state["launches"].pop(token, None)
         self.controller.save()
 
+    def ready_launches(self, launches):
+        tree = self.controller.tree()
+        for launch in launches:
+            con = tree.find_by_id(launch.get("window")) if launch.get("window") else None
+            if (not launch.get("done") or launch.get("error") or launch.get("transferred") or
+                    not con or not con.workspace() or
+                    con.workspace().num != number(launch["group"], launch["slot"])):
+                raise GroupError("A launched window is missing, ambiguous, or moved by the user")
+        return True
+
     def dispatch(self, action, **values):
+        if action == "session-begin":
+            return self.session_begin(**values)
+        if action == "session-status":
+            self.session_lease(values["token"])
+            return True
+        if action == "session-views":
+            return self.session_views(**values)
+        if action == "session-ready":
+            self.session_lease(values["token"])
+            return self.ready_launches([launch for launch in self.state["launches"].values()
+                                       if launch.get("session") == values["token"]])
+        if action == "session-end":
+            self.session_end(values["token"])
+            return True
         if action == "begin":
             return self.begin(**values)
         if action == "layout":
@@ -275,14 +356,7 @@ class Restore:
             self.lease(values["token"])
             launches = [launch for launch in self.state["launches"].values()
                         if launch["operation"] == values["token"] and launch["workspace"] == values["workspace"]]
-            tree = self.controller.tree()
-            for launch in launches:
-                con = tree.find_by_id(launch.get("window")) if launch.get("window") else None
-                if (not launch.get("done") or launch.get("error") or launch.get("transferred") or
-                        not con or not con.workspace() or
-                        con.workspace().num != number(launch["group"], launch["slot"])):
-                    raise GroupError("A launched window is missing, ambiguous, or moved by the user")
-            return True
+            return self.ready_launches(launches)
         if action == "focus":
             lease = self.lease(values["token"])
             ws = next((ws for ws in self.controller.tree().workspaces() if ws.name == values["workspace"]), None)

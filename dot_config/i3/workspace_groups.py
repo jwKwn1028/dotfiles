@@ -51,6 +51,21 @@ def numbers(group, groups=None):
     return [number(group, slot, groups) for slot in range(1, SLOTS + 1)]
 
 
+def validate_view(value, groups):
+    if (not isinstance(value, dict) or value.get("selected") not in groups or
+            not isinstance(value.get("views"), dict)):
+        raise GroupError("Invalid saved session view")
+    for group, view in value["views"].items():
+        if (group not in groups or not isinstance(view, dict) or
+                type(view.get("slot")) is not int or view["slot"] not in range(1, SLOTS + 1) or
+                not isinstance(view.get("outputs"), dict) or
+                any(not isinstance(output, str) or type(slot) is not int or slot not in range(1, SLOTS + 1)
+                    for output, slot in view["outputs"].items()) or
+                ("output" in view and not isinstance(view["output"], str))):
+            raise GroupError("Invalid saved group/output view")
+    return json.loads(json.dumps(value))
+
+
 def quote(value):
     return json.dumps(str(value), ensure_ascii=False)
 

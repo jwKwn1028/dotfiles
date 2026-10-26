@@ -21,6 +21,7 @@ RESTORE_LEASE=0
 LABROUTE_ERROR=""
 
 notify() {
+    [ "${I3_RESURRECT_QUIET:-0}" != 1 ] || return 0
     if command -v notify-send >/dev/null 2>&1; then
         notify-send "i3-resurrect" "$1" || true
     fi
@@ -141,7 +142,7 @@ umask 077
 if [ "$CHECK" = 0 ]; then
     resurrect_lock || exit 1
 fi
-PROFILE_META_DIR="$META_DIR"
+PROFILE_META_DIR="${I3_RESURRECT_REPORT_DIR:-$META_DIR}"
 if ! resolved="$(resurrect_state resolve "$STATE_DIR" "$META_DIR" "${PREVIOUS[@]}" 2>&1)"; then
     resurrect_fail 'Restore aborted; invalid snapshot manifest.'$'\n'"$resolved"
 fi
@@ -164,8 +165,11 @@ trap cleanup_restore EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 RESTORE_STATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/i3-resurrect-restore.XXXXXXXX")"
+SLOT_POLICY=()
+[ "${I3_RESURRECT_PRESERVE_SLOTS:-0}" != 1 ] || SLOT_POLICY=(--preserve-slots)
 if ! RESTORE_PLAN="$(i3-msg -t get_tree | resurrect_state prepare-restore \
-    "$STATE_DIR" "$META_DIR" "$RESTORE_STATE_DIR" --group "$DESTINATION_GROUP" --operation "$RESTORE_OPERATION" 2>"$RESTORE_STATE_DIR/plan-error")"; then
+    "$STATE_DIR" "$META_DIR" "$RESTORE_STATE_DIR" --group "$DESTINATION_GROUP" --operation "$RESTORE_OPERATION" \
+    "${SLOT_POLICY[@]}" 2>"$RESTORE_STATE_DIR/plan-error")"; then
     resurrect_fail 'Restore aborted; could not plan workspace placement. Existing windows are unchanged.'$'\n'"$(cat "$RESTORE_STATE_DIR/plan-error")"
 fi
 MERGE_WORKSPACES="$(jq '[.[] | select(.merging) | .workspace]' <<< "$RESTORE_PLAN")"
@@ -181,7 +185,9 @@ if ! restore_labroute; then
 fi
 owner="$("$RESURRECT_PYTHON" -c 'import sys; from pathlib import Path; text=Path("/proc/"+sys.argv[1]+"/stat").read_text(); print(text[text.rfind(")")+2:].split()[19])' "$$")"
 jq -n --arg token "$RESTORE_OPERATION" --arg group "$DESTINATION_GROUP" --argjson pid "$$" --arg start "$owner" \
-    '{action:"restore-begin",token:$token,group:$group,owner:[$pid,$start]}' | resurrect_group >/dev/null
+    --arg session "${I3_RESURRECT_SESSION_TOKEN:-}" \
+    '{action:"restore-begin",token:$token,group:$group,owner:[$pid,$start]} +
+     (if $session == "" then {} else {session:$session} end)' | resurrect_group >/dev/null
 RESTORE_LEASE=1
 hide_polybar_for_restore
 

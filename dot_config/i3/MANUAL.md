@@ -348,15 +348,24 @@ unexpected return to tiling while leaving hidden/fullscreen windows alone.
 
 ## i3-Resurrect Save and Restore
 
-Profiles are storage slots independent of workspace groups. Each operation
-captures its source/destination group once: selected by default, or `--group=B`.
-Any profile can save any group and restore into any group.
+Main/B/C are independent storage profiles: each saves/restores one selected
+group, or the group given by `--group=B`. Any of these profiles can hold any
+group and restore into any other group.
 
 | Profile | Save (on release) | Restore | State / metadata |
 | --- | --- | --- | --- |
 | Main | `Super+Ctrl+A` | `Super+Ctrl+R` | `resurrect` / `resurrect-meta` |
 | B | `Super+Ctrl+B` | `Super+Ctrl+S` | `resurrect-b` / `resurrect-meta-b` |
 | C | `Super+Ctrl+C` | `Super+Ctrl+T` | `resurrect-c` / `resurrect-meta-c` |
+| All groups | `Super+Ctrl+D` | `Super+Ctrl+U` | `resurrect-session` / `resurrect-meta-session` |
+
+The all-groups profile saves every managed group together and restores original
+groups/slots, each group's remembered view, and the selected group. Scratchpad
+and unmanaged windows are excluded; existing windows are kept. A save
+publishes only after every group succeeds. Switching groups cancels a running
+restore; issued launches keep their captured destinations. Use
+`i3-resurrect-session.py save|restore`; `--check` validates without desktop
+changes, and `restore --previous` selects the previous complete session.
 
 All profiles share a nonblocking save/restore lock per display. Snapshot data
 contains local paths, URLs, and session names; `resurrect*` stays gitignored.
@@ -496,7 +505,7 @@ standalone tests without applying live configuration.
 | Workspace groups | Mapping, boundaries, transfer guards, snapshots across all group pairs, Polybar output, worker recovery. |
 | Scratch terminal | New/revealed window centering on offset displays, delayed resizing, hide-only toggles. |
 | Snap/overflow | Geometry, capacity, group isolation, marks, unsnap, rebalance, locks. |
-| Snapshots | Validation, atomic publication/recovery, interrupted/concurrent saves, metadata, layout-free restore, observed failures. |
+| Snapshots | Validation, atomic group/session publication and recovery, cancellation, interrupted/concurrent saves, metadata, layout-free restore, observed failures. |
 | Bar/session/hotplug | Visibility/gesture ownership, navigation, monitor/USB events, reload, lock, launcher, provisioning contracts. |
 
 Live checks require Xephyr/xterm; overflow also needs autotiling. They create

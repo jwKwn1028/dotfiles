@@ -94,6 +94,77 @@ def run(dual=False):
         def uniform(group):
             return all((ws.num - 1) // 10 == group for ws in i3.get_workspaces() if ws.visible)
 
+        def session_checks():
+            slots = {"A": 4, "B": 6, "C": 9}
+            for group, slot in slots.items():
+                rpc("select", group=group)
+                rpc("switch", value=slot, click=True)
+                open_window("session-" + group)
+            rpc("select", group="B")
+            session_environment = dict(environment, I3_RESURRECT_STATE_DIR=str(directory / "resurrect-session"),
+                                       I3_RESURRECT_META_DIR=str(directory / "resurrect-meta-session"),
+                                       I3_RESURRECT_LAYOUT_DELAY="0", I3_RESURRECT_POLL_INTERVAL="0.05",
+                                       I3_RESURRECT_WAIT_ATTEMPTS="100", ZEN_LIVE_URL_CAPTURE="0")
+            session_helper = directory / "i3/i3-resurrect-session.py"
+
+            def session_command(*arguments):
+                result = subprocess.run(["/usr/bin/python3", str(session_helper), *arguments],
+                                        env=session_environment, text=True, capture_output=True, timeout=60)
+                assert result.returncode == 0, result.stderr
+                return result
+
+            session_command("save")
+            state = Path(session_environment["I3_RESURRECT_STATE_DIR"])
+            meta = Path(session_environment["I3_RESURRECT_META_DIR"])
+            generation = state / "snapshots" / json.loads((meta / "snapshot.json").read_text())["current"]
+            before = {path: path.read_bytes() for path in generation.rglob("*") if path.is_file()}
+            original = {con.id for con in i3.get_tree().leaves() if con.window}
+            session_command("restore", "--check")
+            assert original == {con.id for con in i3.get_tree().leaves() if con.window}
+            assert rpc("status")["selected"] == "B"
+            i3.command('[title="^session-"] kill')
+            wait(lambda: not any(con.name.startswith("session-") for con in i3.get_tree().leaves() if con.name))
+            rpc("select", group="C")
+            rpc("switch", value=9, click=True)
+            existing = open_window("session-existing")
+            session_command("restore")
+            for group, slot in slots.items():
+                assert window("session-" + group).workspace().num == rpc("status")["groups"][group] * 10 + slot
+            assert window("session-existing").id == existing.id
+            assert rpc("status")["selected"] == "B" and uniform(1)
+            assert before == {path: path.read_bytes() for path in generation.rglob("*") if path.is_file()}
+            print(f"PASS {'dual' if dual else 'single'}: atomic all-groups save, original slots, immutable restore, existing windows", flush=True)
+
+            i3.command('[title="^session-"] kill')
+            wait(lambda: not any(con.name.startswith("session-") for con in i3.get_tree().leaves() if con.name))
+            child_state = generation / "state/A/snapshots"
+            child_meta = generation / "meta/A"
+            child_generation = json.loads((child_meta / "snapshot.json").read_text())["current"]
+            path = child_state / child_generation / "state/workspace_4_programs.json"
+            path.write_text(json.dumps([dict(command=["sh", "-c", "sleep 1; exec xterm -T session-late -e sleep 120"],
+                                             working_directory="/tmp")]))
+            location = subprocess.check_output(["/usr/bin/python3", str(helper), "path"], env=environment, text=True).strip()
+            process = subprocess.Popen(["/usr/bin/python3", str(session_helper), "restore"], env=session_environment,
+                                       text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            processes.append(process)
+            wait(lambda: any(launch.get("session") and not launch.get("done") and launch["group"] == "A"
+                             for launch in json.loads((Path(location) / "state.json").read_text())["launches"].values()))
+            rpc("select", group="C")
+            output, error = process.communicate(timeout=15)
+            assert process.returncode != 0, output + error
+            wait(lambda: window("session-late") and window("session-late").workspace().num == 4)
+            assert not window("session-B") and not window("session-C")
+            assert rpc("status")["selected"] == "C" and uniform(2)
+            assert json.loads((meta / "last-restore.json").read_text())["cancelled"]
+            assert not json.loads((Path(location) / "state.json").read_text()).get("session_restore")
+            i3.command('[title="^session-"] kill')
+            print(f"PASS {'dual' if dual else 'single'}: all-groups cancellation and late-window isolation", flush=True)
+
+        if "session-only" in sys.argv:
+            session_checks()
+            rpc("stop")
+            return
+
         scratch_class = "com.mitchellh.ghostty.scratchpad"
         processes.append(subprocess.Popen(["xterm", "-class", scratch_class, "-T", "scratch-test", "-e", "sleep", "120"],
                                            env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
@@ -251,6 +322,7 @@ def run(dual=False):
         rpc("kill-all-groups")
         wait(lambda: not rpc("status")["windows"])
         print(f"PASS {'dual' if dual else 'single'}: Shift+A closes every group", flush=True)
+        session_checks()
         rpc("stop")
     except Exception:
         if "i3" in locals():

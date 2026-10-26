@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 from workspace_groups import (GroupError, SCRATCH_CLASS, atomic_json, definitions, exact,
-                              identity, number, owner_alive, quote, source_path)
+                              identity, number, owner_alive, quote, source_path, validate_view)
 
 
 class Controller:
@@ -145,15 +145,16 @@ class Controller:
         self.command(f"move workspace to output {quote(output)}")
         return name
 
-    def select(self, group, slot=None, force=False, external=False):
+    def select(self, group, slot=None, force=False, external=False, restore_session=None, remember_view=True):
         number(group, slot or 1, self.groups)
         old = self.selected()
         if group == old and slot is None and not force and self.state.get("desktop") is None:
             return False
         if self.restore and group != old:
-            self.restore.cancel_group_change(group)
+            self.restore.cancel_group_change(group, restore_session)
         self.cleanup_mode()
-        self.remember()
+        if remember_view:
+            self.remember()
         self.transition = True
         self.ready = False
         try:
@@ -342,6 +343,8 @@ class Controller:
         changed = False
         if action == "status":
             return self.status()
+        if action == "session-view":
+            return validate_view(dict(selected=group, views=self.state["views"]), self.groups)
         if action == "placement":
             return self.placement_allowed(values.get("con_id", values.get("value")), values.get("workspace"))
         if action.startswith("restore-"):
@@ -572,7 +575,7 @@ class Controller:
         if os.environ.get("I3_GROUP_WORKERS", "1") == "0":
             return
         commands = {"overflow": ["/usr/bin/python3", str(source_path("overflow-watcher.py"))]}
-        if not self.state["leases"]:
+        if not self.state["leases"] and not (self.restore and self.restore.session_active()):
             commands.update(snap=["bash", str(source_path("snap-watcher.sh"))],
                             autotiling=[str(Path.home() / ".local/bin/autotiling")])
         for name, command in commands.items():
