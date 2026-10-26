@@ -42,7 +42,9 @@ def run(dual=False):
         display = next(f":{index}" for index in range(40, 70) if not Path(f"/tmp/.X{index}-lock").exists())
         config = directory / "config"
         sock = directory / "i3.sock"
-        config.write_text(f'# i3 config file (v4)\nfont pango:monospace 10\nipc-socket {sock}\nworkspace_auto_back_and_forth yes\nfocus_follows_mouse no\n')
+        scratch_rule = next(line for line in (ROOT / "config").read_text().splitlines()
+                            if line.startswith('for_window [class="^com[.]mitchellh[.]ghostty[.]scratchpad$"]'))
+        config.write_text(f'# i3 config file (v4)\nfont pango:monospace 10\nipc-socket {sock}\nworkspace_auto_back_and_forth yes\nfocus_follows_mouse no\n{scratch_rule}\n')
         environment = dict(os.environ, DISPLAY=display, I3SOCK=str(sock), XDG_RUNTIME_DIR=str(directory / "runtime"),
                            I3_GROUP_PEEK="/bin/true", I3_GROUP_WORKERS="1", XDG_STATE_HOME=str(directory / "state"), PYTHONDONTWRITEBYTECODE="1")
         Path(environment["XDG_RUNTIME_DIR"]).mkdir(mode=0o700)
@@ -91,6 +93,30 @@ def run(dual=False):
 
         def uniform(group):
             return all((ws.num - 1) // 10 == group for ws in i3.get_workspaces() if ws.visible)
+
+        scratch_class = "com.mitchellh.ghostty.scratchpad"
+        processes.append(subprocess.Popen(["xterm", "-class", scratch_class, "-T", "scratch-test", "-e", "sleep", "120"],
+                                           env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        scratch = wait(lambda: window("scratch-test"))
+        assert scratch.workspace().name == "__i3_scratch"
+        i3.command(f"[con_id={scratch.id}] floating enable, resize set 800 500, move scratchpad")
+        scratch_script = directory / "i3/scratch-terminal.sh"
+        for slot in ([1, 4] if dual else [1]):
+            rpc("switch", value=slot)
+            subprocess.run(["bash", str(scratch_script)], env=environment, check=True)
+            shown = window("scratch-test")
+            floating = shown.parent if shown.parent.type == "floating_con" else shown
+            usable = shown.workspace().rect
+            assert abs(floating.rect.x - (usable.x + (usable.width - floating.rect.width) / 2)) <= 2
+            assert abs(floating.rect.y - (usable.y + (usable.height - floating.rect.height) / 2)) <= 2
+            subprocess.run(["bash", str(scratch_script)], env=environment, check=True)
+            assert window("scratch-test").workspace().name == "__i3_scratch"
+        i3.command(f"[con_id={scratch.id}] kill")
+        print(f"PASS {'dual' if dual else 'single'}: scratch terminal centers on each monitor", flush=True)
+        if "scratch-only" in sys.argv:
+            rpc("stop")
+            return
+        rpc("switch", value=1, click=True)
 
         rpc("switch", value=4)
         a = open_window("group-a-original")

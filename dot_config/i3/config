@@ -23,7 +23,7 @@ bindsym $mod+Return           exec ghostty
 bindsym $mod+Shift+Return     exec --no-startup-id xfce4-terminal
 # Copilot: Super+Shift+F23; keycode avoids X11 keysym aliases.
 bindcode --release $mod+Shift+201 exec --no-startup-id ~/.config/i3/scratch-terminal.sh
-for_window [class="^com[.]mitchellh[.]ghostty[.]scratchpad$"] floating enable, move position center
+for_window [class="^com[.]mitchellh[.]ghostty[.]scratchpad$"] floating enable, move scratchpad
 # bindsym Control+Mod1+t        exec --no-startup-id ghostty  # XFCE uses Ctrl+Alt+T
 # $mod+d is tile-right, so rofi takes $mod+space.
 bindsym $mod+space            exec --no-startup-id env XDG_CURRENT_DESKTOP=XFCE:i3 rofi -show drun -theme spotlight

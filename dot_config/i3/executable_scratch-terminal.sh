@@ -23,6 +23,27 @@ terminal_state() {
         first(terminal(""))'
 }
 
+wait_terminal_size() {
+    local attempt geometry previous="" stable=0
+    for ((attempt = 0; attempt < 20; attempt++)); do
+        geometry="$(i3-msg -t get_tree | jq -r --argjson id "$terminal_id" '
+            first(.. | objects | select(.id? == $id) |
+                select(.rect.width > 0 and .rect.height > 0) |
+                [.rect.width, .rect.height] | @tsv) // empty')"
+        if [ -n "$geometry" ]; then
+            if [ "$geometry" = "$previous" ]; then
+                stable=$((stable + 1))
+                [ "$stable" -lt 3 ] || return 0
+            else
+                stable=0
+            fi
+            previous="$geometry"
+        fi
+        sleep 0.05
+    done
+    [ -n "$previous" ]
+}
+
 state="$(terminal_state)"
 created=false
 if [ -z "$state" ]; then
@@ -48,18 +69,18 @@ if [ -z "$state" ]; then
 fi
 
 IFS=$'\t' read -r terminal_id workspace <<< "$state"
-if [ "$created" = true ]; then
-    i3-msg "[con_id=$terminal_id] focus" >/dev/null
+visible="$(i3-msg -t get_workspaces | jq --arg workspace "$workspace" '
+    any(.[]; .name == $workspace and .visible)')"
+if [ "$created" = false ] && [ "$visible" = true ]; then
+    i3-msg "[con_id=$terminal_id] move scratchpad" >/dev/null
     exit 0
 fi
 
-visible="$(i3-msg -t get_workspaces | jq --arg workspace "$workspace" '
-    any(.[]; .name == $workspace and .visible)')"
-if [ "$visible" = true ]; then
+if [ "$created" = true ]; then
     i3-msg "[con_id=$terminal_id] move scratchpad" >/dev/null
-else
-    # Keep its floating size and position when showing it here.
-    i3-msg "[con_id=$terminal_id] move scratchpad; \
-        [con_id=$terminal_id] scratchpad show; \
-        [con_id=$terminal_id] focus" >/dev/null
+    wait_terminal_size
 fi
+
+i3-msg "[con_id=$terminal_id] move scratchpad; \
+    [con_id=$terminal_id] scratchpad show; \
+    [con_id=$terminal_id] floating enable, move position center, focus" >/dev/null
