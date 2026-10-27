@@ -194,6 +194,86 @@ chmod +x "$TEST_BIN/$binary"
     def test_git_cargo_failure_retries(self):
         self.assert_cargo_retry("retry-test-git")
 
+    def btop_fixture(self):
+        source = self.packages["source"]["btop"]
+        self.env.update(BTOP_COMMIT=source["commit"], BTOP_TAG=source["tag"])
+        self.mock("dpkg-query", "printf 'install ok installed'\n")
+        self.mock("git", '''
+if [ "$1" = clone ]; then
+    printf 'clone\\n' >> "$ATTEMPT_LOG"
+    for last; do :; done
+    mkdir -p "$last"
+else
+    printf '%s\\n' "$BTOP_COMMIT"
+fi
+''')
+        self.mock("make", '''
+import os
+from pathlib import Path
+import sys
+install = "install" in sys.argv
+with open(os.environ["ATTEMPT_LOG"], "a") as stream:
+    stream.write(("install" if install else "build") + "\\n")
+if os.environ["SIMULATE_FAILURE"] == "1":
+    sys.exit(42)
+if install:
+    binary = Path(os.environ["HOME"]) / ".local/bin/btop"
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    version = os.environ["BTOP_TAG"].removeprefix("v")
+    commit = os.environ["BTOP_COMMIT"][:7]
+    binary.write_text(f"#!/bin/sh\\nprintf 'btop version: {version}+{commit}\\\\n'\\n")
+    binary.chmod(0o755)
+else:
+    for required in ("CXX=g++-14", "GPU_SUPPORT=true", "INTEL_GPU_SUPPORT=true"):
+        if required not in sys.argv:
+            sys.exit("missing build option: " + required)
+''', interpreter="/usr/bin/python3")
+        self.render(script_name="run_once_after_97-build-btop.sh")
+
+    def test_btop_build_failure_retries_before_installing(self):
+        self.btop_fixture()
+        result = self.apply("1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.attempts(), ["clone", "build"])
+        self.assertFalse((self.destination / ".local/bin/btop").exists())
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.attempts(), ["clone", "build", "clone", "build", "install"])
+        result = self.apply("1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.attempts()), 5)
+
+    def test_btop_rejects_changed_source_tag(self):
+        self.btop_fixture()
+        self.env["BTOP_COMMIT"] = "0" * 40
+        result = self.apply()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not the pinned", result.stderr)
+        self.assertEqual(self.attempts(), ["clone"])
+
+    def test_btop_installs_missing_dependencies_with_sudo(self):
+        self.btop_fixture()
+        self.mock("dpkg-query", "exit 1\n")
+        self.mock("sudo", '''
+printf '%s\\n' "$*" >> "$ATTEMPT_LOG"
+''')
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.attempts()[0], "apt-get update -qq")
+        self.assertEqual(self.attempts()[1], "apt-get install -y --no-install-recommends "
+                         + " ".join(self.packages["source"]["btop"]["build_deps"]))
+        self.assertEqual(self.attempts()[2:], ["clone", "build", "install"])
+
+    def test_btop_skips_existing_pinned_build(self):
+        self.btop_fixture()
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (self.root / "state.boltdb").unlink()
+        result = self.apply("1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("already installed", result.stdout)
+        self.assertEqual(self.attempts(), ["clone", "build", "install"])
+
     def font_fixture(self):
         self.mock("curl", '''
 printf '%s\\n' "$4" >> "$ATTEMPT_LOG"

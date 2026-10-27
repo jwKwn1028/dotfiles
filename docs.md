@@ -88,6 +88,8 @@ executes them without creating that directory in the destination. Their
     first.
 13. `run_once_after_95/96`: build pinned i3lock-color into `/usr/local` and
     zathura into `~/.local`, installing build dependencies with sudo.
+14. `run_once_after_97`: build pinned btop into `~/.local` to fix AMD GPU crashes,
+    using `g++-14` and installing dependencies with sudo.
 
 `run_once_` tracks successful rendered content; `run_onchange_` also tracks the
 script path. Moving an unchanged `run_onchange_` script into `.chezmoiscripts/`

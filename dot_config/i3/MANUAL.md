@@ -357,7 +357,7 @@ group and restore into any other group.
 | Main | `Super+Ctrl+A` | `Super+Ctrl+R` | `resurrect` / `resurrect-meta` |
 | B | `Super+Ctrl+B` | `Super+Ctrl+S` | `resurrect-b` / `resurrect-meta-b` |
 | C | `Super+Ctrl+C` | `Super+Ctrl+T` | `resurrect-c` / `resurrect-meta-c` |
-| All groups | `Super+Ctrl+D` | `Super+Ctrl+U` | `resurrect-session` / `resurrect-meta-session` |
+| All groups | `Super+Ctrl+Y` | `Super+Ctrl+P` | `resurrect-session` / `resurrect-meta-session` |
 
 The all-groups profile saves every managed group together and restores original
 groups/slots, each group's remembered view, and the selected group. Scratchpad

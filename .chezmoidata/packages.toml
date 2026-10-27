@@ -188,3 +188,9 @@ url = "https://github.com/pwmt/zathura-pdf-poppler.git"
 tag = "0.3.4"
 commit = "9fc8752c76f9cc95419ab7b52a822b0f038b7859"
 build_deps = ["libpoppler-glib-dev"]
+
+[packages.source.btop]
+url = "https://github.com/aristocratos/btop.git"
+tag = "v1.4.8"
+commit = "cf1da5900b1e9eaa1c20fd7148dd812b43340b8a"
+build_deps = ["g++-14", "libdrm-dev", "lowdown"]
