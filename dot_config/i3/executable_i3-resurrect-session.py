@@ -96,8 +96,6 @@ class Session:
             environment["I3_RESURRECT_SESSION_TOKEN"] = session
         if report:
             environment["I3_RESURRECT_REPORT_DIR"] = str(report)
-        if action == "restore":
-            environment["I3_RESURRECT_PRESERVE_SLOTS"] = "1"
         command = ["bash", str(source_path(f"i3-resurrect-{action}-all.sh")), f"--group={group}"]
         if check:
             command.append("--check")
@@ -174,6 +172,7 @@ class Session:
         self.rpc("restore-session-begin", token=token, owner=[os.getpid(), process_identity(os.getpid())],
                  groups=list(data["groups"]))
         results = []
+        mappings = {}
         cancelled = False
         try:
             for group in data["saved"]:
@@ -185,12 +184,17 @@ class Session:
                     results.append(dict(group=group, status="ready"))
                 except GroupError as error:
                     results.append(dict(group=group, status="failed", detail=str(error)))
+                placement = report / "last-restore.json"
+                if placement.exists():
+                    mappings[group] = {str(snapshot.workspace_order(entry["source_workspace"])[0]):
+                                       identity(snapshot.workspace_order(entry["workspace"])[0], self.groups)[1]
+                                       for entry in snapshot.read_json(placement)["mapping"]}
                 self.rpc("restore-session-status", token=token)
             try:
                 self.rpc("restore-session-ready", token=token)
             except GroupError as error:
                 results.append(dict(group="(verification)", status="failed", detail=str(error)))
-            self.rpc("restore-session-views", token=token, view=data["view"])
+            self.rpc("restore-session-views", token=token, view=data["view"], mappings=mappings)
         except BaseException:
             cancelled = True
             raise

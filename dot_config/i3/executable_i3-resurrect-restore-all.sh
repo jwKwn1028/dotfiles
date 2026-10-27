@@ -165,11 +165,8 @@ trap cleanup_restore EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 RESTORE_STATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/i3-resurrect-restore.XXXXXXXX")"
-SLOT_POLICY=()
-[ "${I3_RESURRECT_PRESERVE_SLOTS:-0}" != 1 ] || SLOT_POLICY=(--preserve-slots)
 if ! RESTORE_PLAN="$(i3-msg -t get_tree | resurrect_state prepare-restore \
-    "$STATE_DIR" "$META_DIR" "$RESTORE_STATE_DIR" --group "$DESTINATION_GROUP" --operation "$RESTORE_OPERATION" \
-    "${SLOT_POLICY[@]}" 2>"$RESTORE_STATE_DIR/plan-error")"; then
+    "$STATE_DIR" "$META_DIR" "$RESTORE_STATE_DIR" --group "$DESTINATION_GROUP" --operation "$RESTORE_OPERATION" 2>"$RESTORE_STATE_DIR/plan-error")"; then
     resurrect_fail 'Restore aborted; could not plan workspace placement. Existing windows are unchanged.'$'\n'"$(cat "$RESTORE_STATE_DIR/plan-error")"
 fi
 MERGE_WORKSPACES="$(jq '[.[] | select(.merging) | .workspace]' <<< "$RESTORE_PLAN")"

@@ -25,6 +25,7 @@ spec = importlib.util.spec_from_file_location("resurrect_session", path)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 snapshot = module.snapshot
+SLOTS = {"A": 4, "B": 6, "C": 9}
 
 
 def tree():
@@ -33,16 +34,17 @@ def tree():
 
 
 def child_snapshot(state, meta, group):
+    slot = SLOTS[group]
     state.joinpath("snapshots").mkdir(parents=True)
     meta.mkdir(parents=True)
     staging = Path(tempfile.mkdtemp(prefix="generation.", dir=state / "snapshots"))
     payload, metadata = staging / "state", staging / "meta"
     payload.mkdir()
     metadata.mkdir()
-    (metadata / "workspaces.txt").write_text("4\n")
+    (metadata / "workspaces.txt").write_text(f"{slot}\n")
     (metadata / "group-format.json").write_text(json.dumps(dict(version=1, slots=10, source_group=group)))
-    (payload / "workspace_4_layout.json").write_text(json.dumps(dict(name="4", nodes=[dict(swallows=[{"class": "Example"}])])))
-    (payload / "workspace_4_programs.json").write_text(json.dumps([dict(command=["example"], working_directory="/tmp")]))
+    (payload / f"workspace_{slot}_layout.json").write_text(json.dumps(dict(name=str(slot), nodes=[dict(swallows=[{"class": "Example"}])])))
+    (payload / f"workspace_{slot}_programs.json").write_text(json.dumps([dict(command=["example"], working_directory="/tmp")]))
     snapshot.publish(state, meta, staging.name)
 
 
@@ -61,6 +63,7 @@ class SessionTests(unittest.TestCase):
         self.calls = []
         self.rpc_calls = []
         self.fail = None
+        self.placements = {group: {str(slot): slot} for group, slot in SLOTS.items()}
         self.cancelled = False
         self.session.rpc = self.rpc
         self.session.child = self.child
@@ -81,6 +84,10 @@ class SessionTests(unittest.TestCase):
             raise GroupError(f"Group {group}: launch failed")
         if action == "save" and not check:
             child_snapshot(state, meta, group)
+        if action == "restore" and not check:
+            snapshot.atomic_json(values["report"] / "last-restore.json", dict(mapping=[
+                dict(source_workspace=source, workspace=str(self.session.groups[group] * 10 + target))
+                for source, target in self.placements[group].items()]))
         return f"Group {group} plan"
 
     def publish(self):
@@ -152,6 +159,7 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(before, {path: path.read_bytes() for path in generation.rglob("*") if path.is_file()})
         actions = dict(self.rpc_calls)
         self.assertEqual(actions["restore-session-views"]["view"], self.view)
+        self.assertEqual(actions["restore-session-views"]["mappings"], self.placements)
         self.assertIn("restore-session-ready", actions)
         self.assertIn("restore-session-end", actions)
 
@@ -191,15 +199,42 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.rpc_calls, [])
         self.assertEqual(self.calls, [])
 
-    def test_preserve_slots_shares_original_destination_only(self):
+    def test_restore_passes_actual_destinations_to_saved_views(self):
+        self.publish()
+        self.placements = {group: {str(slot): index + 1} for index, (group, slot) in enumerate(SLOTS.items())}
+        self.session.restore()
+        self.assertEqual(dict(self.rpc_calls)["restore-session-views"]["mappings"], self.placements)
+
+    def test_restore_prefers_empty_slots_in_each_original_group(self):
         self.publish()
         state, meta = snapshot.resolve(self.session.state, self.session.meta)
-        child_state, child_meta = snapshot.resolve(state / "A", meta / "A")
-        output = self.root / "plan"
-        output.mkdir()
-        plan = snapshot.prepare_restore(child_state, child_meta, tree(), output, "A", uuid.uuid4().hex, True)
-        self.assertEqual(plan[0]["workspace"], "4")
-        self.assertTrue(plan[0]["merging"])
+        for group, index in self.session.groups.items():
+            with self.subTest(group=group):
+                child_state, child_meta = snapshot.resolve(state / group, meta / group)
+                output = self.root / group
+                output.mkdir()
+                live = tree()
+                live["nodes"].append(dict(type="workspace", name=str(index * 10 + 1), num=index * 10 + 1,
+                                          nodes=[dict(window=200 + index)]))
+                before = json.dumps(live)
+                plan = snapshot.prepare_restore(child_state, child_meta, live, output, group, uuid.uuid4().hex)
+                self.assertEqual(plan[0]["workspace"], str(index * 10 + 2))
+                self.assertFalse(plan[0]["merging"])
+                self.assertEqual(json.dumps(live), before)
+
+    def test_full_groups_share_only_their_own_occupied_slots(self):
+        self.publish()
+        state, meta = snapshot.resolve(self.session.state, self.session.meta)
+        live = dict(type="root", nodes=[dict(type="workspace", name=str(num), num=num,
+                                           nodes=[dict(window=num + 100)]) for num in range(1, 31)])
+        for group, index in self.session.groups.items():
+            with self.subTest(group=group):
+                child_state, child_meta = snapshot.resolve(state / group, meta / group)
+                output = self.root / group
+                output.mkdir()
+                plan = snapshot.prepare_restore(child_state, child_meta, live, output, group, uuid.uuid4().hex)
+                self.assertEqual(plan[0]["workspace"], str(index * 10 + 1))
+                self.assertTrue(plan[0]["merging"])
 
     def test_inherited_lock_accepts_children_and_blocks_other_operations(self):
         command = ['bash', '-c', 'DIR="$1"; . "$DIR/_resurrect-common.sh"; notify() { :; }; resurrect_lock',
@@ -216,7 +251,7 @@ class SessionTests(unittest.TestCase):
         self.publish()
         state, meta = snapshot.resolve(self.session.state, self.session.meta)
         child_state, _ = snapshot.resolve(state / "C", meta / "C")
-        (child_state / "workspace_4_programs.json").write_text("broken")
+        (child_state / "workspace_9_programs.json").write_text("broken")
         with self.assertRaises(ValueError):
             self.session.restore()
         self.assertEqual(self.calls, [])
@@ -226,8 +261,10 @@ class SessionTests(unittest.TestCase):
 class ControllerSessionTests(unittest.TestCase):
     def setUp(self):
         self.owner = [os.getpid(), process_identity(os.getpid())]
-        self.controller = SimpleNamespace(state=dict(leases={}, launches={}), groups={"A": 0, "B": 1, "C": 2},
-                                          save=lambda: None, pause_workers=lambda: None, resume_workers=lambda: None)
+        self.controller = SimpleNamespace(state=dict(leases={}, launches={}, views={}), groups={"A": 0, "B": 1, "C": 2},
+                                          save=lambda: None, pause_workers=lambda: None, resume_workers=lambda: None,
+                                          select=lambda *args, **kwargs: True,
+                                          target_output=lambda slot: "primary" if slot <= 2 else "external")
         self.restore = Restore(self.controller)
         self.token = uuid.uuid4().hex
         self.restore.session_begin(self.token, self.owner, ["A", "B", "C"])
@@ -236,6 +273,24 @@ class ControllerSessionTests(unittest.TestCase):
         self.restore.cancel_group_change("B", self.token)
         self.assertTrue(self.restore.session_active())
         self.assertTrue(self.restore.reserved("C"))
+
+    def test_saved_focus_follows_new_slot_and_monitor(self):
+        view = dict(selected="B", views={"B": dict(slot=6, output="external", outputs={"primary": 1, "external": 6})})
+        self.restore.session_views(self.token, view, mappings={"B": {"6": 2}})
+        self.assertEqual(self.controller.state["views"]["B"], dict(slot=2, output="primary", outputs={"primary": 2}))
+        self.assertEqual(view["views"]["B"]["slot"], 6)
+
+    def test_two_saved_output_views_can_swap_monitors_without_losing_focus(self):
+        view = dict(selected="B", views={"B": dict(slot=6, output="external", outputs={"primary": 1, "external": 6})})
+        self.restore.session_views(self.token, view, mappings={"B": {"1": 3, "6": 2}})
+        self.assertEqual(self.controller.state["views"]["B"],
+                         dict(slot=2, output="primary", outputs={"primary": 2, "external": 3}))
+
+    def test_saved_output_views_collapsing_onto_one_monitor_keep_focused_slot(self):
+        view = dict(selected="B", views={"B": dict(slot=6, output="external", outputs={"primary": 1, "external": 6})})
+        self.controller.target_output = lambda slot: "primary"
+        self.restore.session_views(self.token, view, mappings={"B": {"1": 2, "6": 3}})
+        self.assertEqual(self.controller.state["views"]["B"], dict(slot=3, output="primary", outputs={"primary": 3}))
 
     def test_user_group_change_cancels_session(self):
         self.restore.cancel_group_change("B")

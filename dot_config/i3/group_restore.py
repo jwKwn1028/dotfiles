@@ -100,9 +100,28 @@ class Restore:
         self.controller.save()
         self.controller.resume_workers()
 
-    def session_views(self, token, view):
+    def session_views(self, token, view, mappings=None):
         self.session_lease(token)
         view = validate_view(view, self.controller.groups)
+        for group, mapping in (mappings or {}).items():
+            if (group not in self.controller.groups or not isinstance(mapping, dict) or
+                    any(source not in {str(slot) for slot in range(1, 11)} or
+                        type(target) is not int or target not in range(1, 11)
+                        for source, target in mapping.items()) or len(set(mapping.values())) != len(mapping)):
+                raise GroupError("Invalid restored workspace mapping")
+            remembered = view["views"].get(group)
+            if not remembered or not mapping:
+                continue
+            slot = mapping.get(str(remembered["slot"]), remembered["slot"])
+            output = (self.controller.target_output(slot) if str(remembered["slot"]) in mapping else
+                      remembered.get("output", self.controller.target_output(slot)))
+            outputs = {name: value for name, value in remembered["outputs"].items() if str(value) not in mapping}
+            for value in remembered["outputs"].values():
+                if str(value) in mapping:
+                    target = mapping[str(value)]
+                    outputs[self.controller.target_output(target)] = target
+            outputs[output] = slot
+            remembered.update(slot=slot, output=output, outputs=outputs)
         self.state["views"].update(view["views"])
         return self.controller.select(view["selected"], force=True, restore_session=token, remember_view=False)
 

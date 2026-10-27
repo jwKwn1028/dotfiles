@@ -124,16 +124,28 @@ def run(dual=False):
             assert rpc("status")["selected"] == "B"
             i3.command('[title="^session-"] kill')
             wait(lambda: not any(con.name.startswith("session-") for con in i3.get_tree().leaves() if con.name))
-            rpc("select", group="C")
-            rpc("switch", value=9, click=True)
-            existing = open_window("session-existing")
-            session_command("restore")
+            existing = {}
             for group, slot in slots.items():
-                assert window("session-" + group).workspace().num == rpc("status")["groups"][group] * 10 + slot
-            assert window("session-existing").id == existing.id
-            assert rpc("status")["selected"] == "B" and uniform(1)
+                rpc("select", group=group)
+                for occupied in (1, slot):
+                    rpc("switch", value=occupied, click=True)
+                    title = f"session-existing-{group}-{occupied}"
+                    con = open_window(title)
+                    existing[title] = (con.id, con.workspace().num,
+                                       (con.rect.x, con.rect.y, con.rect.width, con.rect.height))
+            session_command("restore")
+            for group in slots:
+                assert window("session-" + group).workspace().num == rpc("status")["groups"][group] * 10 + 2
+            for title, (con_id, num, rect) in existing.items():
+                con = window(title)
+                assert (con.id, con.workspace().num) == (con_id, num)
+                assert (con.rect.x, con.rect.y, con.rect.width, con.rect.height) == rect
+            assert rpc("status")["selected"] == "B" and uniform(1) and focused_number() == 12
+            for group in slots:
+                rpc("select", group=group)
+                assert focused_number() == rpc("status")["groups"][group] * 10 + 2
             assert before == {path: path.read_bytes() for path in generation.rglob("*") if path.is_file()}
-            print(f"PASS {'dual' if dual else 'single'}: atomic all-groups save, original slots, immutable restore, existing windows", flush=True)
+            print(f"PASS {'dual' if dual else 'single'}: all-groups restore uses empty slots, preserves existing windows and geometry, maps views/focus", flush=True)
 
             i3.command('[title="^session-"] kill')
             wait(lambda: not any(con.name.startswith("session-") for con in i3.get_tree().leaves() if con.name))
@@ -152,7 +164,7 @@ def run(dual=False):
             rpc("select", group="C")
             output, error = process.communicate(timeout=15)
             assert process.returncode != 0, output + error
-            wait(lambda: window("session-late") and window("session-late").workspace().num == 4)
+            wait(lambda: window("session-late") and window("session-late").workspace().num == 1)
             assert not window("session-B") and not window("session-C")
             assert rpc("status")["selected"] == "C" and uniform(2)
             assert json.loads((meta / "last-restore.json").read_text())["cancelled"]

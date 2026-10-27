@@ -317,7 +317,7 @@ def workspace_order(name):
     return (int(match[1]) if match else float("inf"), name)
 
 
-def prepare_restore(state, meta, tree, directory, group="A", operation=None, preserve_slots=False):
+def prepare_restore(state, meta, tree, directory, group="A", operation=None):
     """Plan group-scoped destinations and isolated launches."""
     require(isinstance(tree, dict) and tree.get("type") == "root", "invalid live i3 tree")
     saved = sorted(occupied_workspaces(state, meta), key=workspace_order)
@@ -339,8 +339,6 @@ def prepare_restore(state, meta, tree, directory, group="A", operation=None, pre
             occupied[number] = windows
 
     slots = [number for number in pool if number not in occupied] + sorted(occupied)
-    if preserve_slots:
-        slots = [pool[workspace_order(name)[0] - 1] for name in saved]
     plan = []
     for source, number in zip(saved, slots):
         destination = names.get(number, str(number))
@@ -563,7 +561,6 @@ def main():
     parser.add_argument("--previous", action="store_true")
     parser.add_argument("--group", default="A")
     parser.add_argument("--operation")
-    parser.add_argument("--preserve-slots", action="store_true")
     args = parser.parse_args()
     try:
         if args.action == "resolve":
@@ -582,7 +579,7 @@ def main():
             print(json.dumps(occupied_workspaces(args.state, args.meta)))
         elif args.action == "prepare-restore":
             print(json.dumps(prepare_restore(args.state, args.meta, json.load(sys.stdin), Path(args.value),
-                                             args.group, args.operation, args.preserve_slots)))
+                                             args.group, args.operation)))
         elif args.action == "capture-group":
             capture_group(args.meta, json.load(sys.stdin), args.group)
         elif args.action == "clean-save":

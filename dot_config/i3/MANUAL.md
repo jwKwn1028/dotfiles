@@ -1,13 +1,9 @@
 # i3 Configuration Manual
 
-Reference for the i3/X11 session, workspace groups, floating/snap helpers, and
-local snapshots. See also [Polybar controls](../polybar/docs.md) and the
-[Ghostty guide](../ghostty/docs.md).
-
-Super is `Mod4`; Ctrl/Caps are swapped. Focus follows the mouse, without focus
-wrapping or pointer warping. Borders default to `pixel 1`. Global automatic
-back-and-forth is disabled in favor of per-group slot history; application
-activation uses i3's `smart` policy.
+Controls and maintenance for i3/X11. See [Polybar](../polybar/docs.md) and
+[Ghostty](../ghostty/docs.md). Super is `Mod4`; Ctrl/Caps are swapped. Focus
+follows the mouse without wrapping or warping. Borders use `pixel 1`, workspace
+history is per group, and application activation uses i3's `smart` policy.
 
 ## Keybinding Reference
 
@@ -30,13 +26,11 @@ activation uses i3's `smart` policy.
 
 ### Copilot Terminal
 
-Copilot shows/hides one floating Ghostty on the current workspace/output.
-Startup waits for its size to settle while hidden, then shows, centers, and
-focuses it in one i3 command. Reopening centers it on the current monitor.
-Size and running commands survive hiding; closing opens a
-fresh terminal next time. It skips the Zsh banner and is excluded from groups,
-snapshots, and focus history. The binding is `Super+Shift+F23` (keycode `201`),
-on release.
+Copilot (`Super+Shift+F23`, keycode `201`, on release) toggles one floating
+Ghostty on the current monitor. Startup settles its size while hidden, then
+shows, centers, and focuses it together. Hiding preserves size and commands;
+closing starts fresh next time. It skips the Zsh banner, snapshots, and focus
+history, and stays shared across groups.
 
 ### Window Management
 
@@ -45,7 +39,6 @@ on release.
 | `Super+Shift+Q` / `Alt+F4` | Close focused window. |
 | `Ctrl+Q` | Close apps that ignore it, listed in `QUIT_CLASSES` (`quit-key.py`). |
 | `Super+H/J/K/L` / `Super+Arrow keys` | Focus left/down/up/right. |
-| `Super+Shift+H/L` | Move to previous/next slot in the group and follow; wrap 1↔10. |
 | `Super+Shift+M` / `Super+Ctrl+M` | Show scratchpad / move focused window to scratchpad. |
 | `Super+Shift+N` | Centre the focused floating window on its output. |
 | `Super+Shift+Space` | Toggle floating. |
@@ -53,9 +46,7 @@ on release.
 
 ### Window Mode
 
-`Super+R` enters a sticky mode labelled `hjkl / HJKL / Tab` in Polybar.
-`window-mode.sh open` reveals the bar; `Return`/`Escape` restore its prior
-visibility and leave the mode.
+`Super+R` (`window-mode.sh open`) enters sticky window mode and reveals Polybar.
 
 | Binding | Action |
 | --- | --- |
@@ -96,17 +87,14 @@ Number keys address slots `1–10` of the selected [group](#workspace-groups);
 | `Super+Ctrl+grave` | Group B; the laptop keyboard drops `2` with physical Caps (Ctrl) + Super. |
 | `Super+Shift+K/J` | Move focused window to the same slot of the previous/next group and follow; stops at the first/last. |
 
-Navigation stays within the group; boundary stops have no move, focus, workspace
-creation, or peek. Repeated number keys use per-group history; group-tab and
-focused-slot clicks are no-ops. Slots 1–2 use primary, 3–10 external when
-connected; all are available on one monitor. See [Workspace Groups](#workspace-groups).
+Boundary stops change nothing and do not peek. Group-tab and focused-slot
+clicks are no-ops. See [Workspace Groups](#workspace-groups) for monitor policy.
 XFCE's conflicting `Ctrl+Super+L` and `Super+R` shortcuts are removed.
 
 ### Kill Workspace Mode
 
-`Super+X` (`kill-workspace-mode.sh open`) records the selected group and the
-bar's visibility, then reveals the bar. The mode reads
-`kill workspace (K: group, A: all)`.
+`Super+X` (`kill-workspace-mode.sh open`) captures the group and bar visibility,
+then reveals Polybar with `kill workspace (K: group, A: all)`.
 
 | Binding | Action |
 | --- | --- |
@@ -115,10 +103,9 @@ bar's visibility, then reveals the bar. The mode reads
 | `Shift+A` | Same for **all** groups (`kill-group-windows.sh all`). |
 | `Return` / `Escape` | Abort and restore bar visibility. |
 
-Slot matches are exact: killing `1` cannot hit `10`, `11`, or `21`. Group/all
-kills spare scratchpad and unmanaged windows. A group change cancels kill mode.
-Abort and group/all kills restore prior bar visibility; slot kills leave it
-visible. A transient peek counts as hidden.
+Slot matches are exact: `1` cannot hit `10`, `11`, or `21`. Group/all kills spare
+scratchpad and unmanaged windows. Switching groups cancels the mode; a transient
+peek counts as hidden when restoring bar visibility.
 
 ### Media, Brightness, and Screenshots
 
@@ -151,50 +138,44 @@ zero-based indices from `workspace-groups.json`.
 | B | 1–10 | 11–20 |
 | C | 1–10 | 21–30 |
 
-Polybar displays local slots: B's `3` addresses workspace `13`. Renaming it to
-`13: project` preserves its identity. Duplicate live numbers block group actions;
-unnumbered/out-of-range workspaces, `_desktop`, and scratchpad remain unmanaged.
-Empty slots are created on demand.
+Polybar shows local slots: B's `3` means workspace `13`; `13: project` keeps
+that identity. Duplicate numbers block group actions. Unnumbered/out-of-range
+workspaces, `_desktop`, and scratchpad are unmanaged; empty slots are created
+on demand.
 
 ### Switching and Moving Between Groups
 
-Switching restores the group's visible slot per monitor and focused output,
-leaving its applications running. First entry uses primary slot 1 and external
-slot 3; one monitor uses the last focused slot or 1. Slots remain distinct per
-output. The controller closes active binding modes, serializes the switch,
-and verifies the result; physical screens may redraw separately.
+Switching restores each monitor's slot and the focused output, leaving apps
+running. First entry uses primary slot 1/external slot 3; one monitor uses the
+last focused slot or 1. Active modes close and the result is verified; screens
+may redraw separately.
 
-`Super+Shift+k/j` explicitly transfers only the focused window to the same slot
-of the adjacent group and follows it: B:4 → C:4. It stops at group endpoints.
-The controller captures and rechecks the source window, discards stale restore/
-overflow decisions for it, and runs normal overflow in the destination group.
-Ordinary slot moves and window-mode moves stay within their source group.
+`Super+Shift+K/J` transfers only the focused window to the adjacent group's same
+slot (B:4 → C:4), follows, and stops at endpoints. It clears stale restore/
+overflow decisions and checks destination capacity. Other moves stay in-group.
 
 ### Focus and Urgency
 
-`Super+Tab` and the Rofi window list select windows globally, activating their
-group without moving them. Focus history ignores controller transitions and
-the Copilot terminal. Hidden-group activation requests become urgent (`C!` in
-Polybar); identifiable background arrivals retain the selected view. Other
-external focus changes are adopted and the remaining output reconciled once.
-Raw i3 focus events cannot establish user intent.
+`Super+Tab` and Rofi select windows globally without moving them. History skips
+controller transitions and Copilot. Hidden-group activation requests mark
+urgency (`C!`); identified background arrivals preserve the current view.
+Other external focus changes reconcile both outputs; raw focus events cannot
+establish intent.
 
 ### Displays
 
-Slots 1–2 belong to primary and 3–10 to external when available. Config output
-assignments affect workspace creation; the controller also moves existing
-workspaces to their policy output on switch, reload, and hotplug. Disconnects
-show the group's last focused slot on the surviving screen while preserving
-external-slot memory for reconnection. Window membership stays in its group.
+Slots 1–2 use primary, 3–10 external when connected; all work on one monitor.
+The controller applies this policy on switch, reload, and hotplug. Disconnects
+show the last focused slot and preserve external-slot memory. Windows keep
+their group.
 
 ### Session Controller
 
-`workspace-groups.py start` replaces the controller for the current display/
-i3 socket and removes older watcher copies. It owns `autotiling`,
-`snap-watcher.sh`, and `overflow-watcher.py`, reconnects after i3 restarts, and
-serializes navigation, focus, moves, kills, overflow, and restore operations.
-Failed IPC commands do not commit successful state. While unavailable or
-reconciling, placement pauses and Polybar shows `groups unavailable`.
+`workspace-groups.py start` replaces the display/i3-socket controller and old
+watchers. It owns `autotiling`, `snap-watcher.sh`, and `overflow-watcher.py`,
+reconnects after i3 restarts, and serializes group operations. Failed IPC does
+not commit state; unavailable/reconciling groups pause placement and show
+`groups unavailable` in Polybar.
 
 | File | Responsibility |
 | --- | --- |
@@ -203,9 +184,8 @@ reconciling, placement pauses and Polybar shows `groups unavailable`.
 | `group_restore.py` | Placement leases, launch identity, placeholders, late arrivals. |
 | `workspace-groups.py` | CLI, daemon, Polybar subscription, Rofi window list. |
 
-The workspace, move, previous-window, desktop, and focus-tracker shell helpers
-forward to this controller. State, socket, locks, and `controller.log` live in
-`$XDG_RUNTIME_DIR/i3-groups-<hash>/`, keyed by display and i3 socket.
+Shell helpers forward to the controller. State, socket, locks, and
+`controller.log` live in `$XDG_RUNTIME_DIR/i3-groups-<hash>/`.
 
 ### Adding a Group
 
@@ -225,59 +205,49 @@ original floating geometry or tiling position.
 | `Super+Q/E/Z/C` | Upper-left/upper-right/lower-left/lower-right quarter. |
 | `Super+U` on release | Unsnap. |
 
-CLI: `tile-snap.sh REGION [CON_ID]` also accepts `full` and `unsnap`.
-Geometry uses the target workspace, clamps stale hotplug rectangles to active
-outputs, accounts for reserved bar space/borders, and retries size hints.
+CLI: `tile-snap.sh REGION [CON_ID]` also accepts `full`/`unsnap`. Placement handles
+workspace/output geometry, reserved bars, borders, and size hints. `_snap_*`
+marks the region; `_presnap_*`/`_pretiling_*` retain original geometry/anchors
+across repeated snaps, falling back to surviving siblings if needed.
 
-`_snap_<region>` marks the current region; `_presnap_*` and `_pretiling_*`
-preserve original geometry and tiling anchors. Repeated snaps retain that
-original state; missing tiling parents fall back to surviving siblings.
+`snap-watcher.sh` fills free space, splits occupants, or returns to tiling;
+closing windows expands survivors. `resnap.sh` refreshes after bar/title changes,
+with per-window placement locks. Title-bar state lives in `i3-titles.state`.
 
-On arrival beside snapped windows, `snap-watcher.sh` fills the largest free
-region, splits a larger occupant, or returns that workspace to normal tiling.
-Closing a snapped window expands survivors without overlap. `resnap.sh`
-reapplies regions after bar/title changes; per-window locks serialize placement.
-
-`Super+Shift+T` toggles `pixel 1`/normal borders. State is in
-`$XDG_RUNTIME_DIR/i3-titles.state`; the watcher applies it to new windows.
-Autotiling has no depth limit: tall containers split vertically, wider ones
-horizontally; floating/fullscreen and stacked/tabbed cases are skipped.
+Autotiling splits tall containers vertically and wide ones horizontally, without
+a depth limit; floating/fullscreen and stacked/tabbed layouts are skipped.
 
 ## Overflow Watcher
 
-New or manually moved tiled windows smaller than one quarter of their workspace
-are considered for relocation. Controller moves are checked after displaying
-the destination because hidden geometry can be stale. Search stays within the
-window's actual source group, upward with local 10→1 wrapping:
+New/manually moved tiled windows smaller than a quarter of their workspace may
+relocate. Moves are checked after showing the destination to avoid stale hidden
+geometry. Search stays within the source group, upward with local 10→1 wrapping:
 
 1. First occupied slot predicted to have room.
 2. Otherwise first empty slot.
 3. Otherwise stay and log that the group is full.
 
-B:10 may overflow to B:1–9, never A/C; numeric-next at B:10 remains a no-op.
-Each window moves once using a capacity prediction; hidden layouts prevent a
-reliable post-move measurement. Source-container/workspace criteria reject stale
+B:10 may overflow to B:1–9, never A/C; numeric-next at B:10 still does nothing.
+Each arrival moves once using predicted capacity; stale source checks reject
 moves. Rearrangements, floating/fullscreen/scratch windows, handled arrivals,
-and active restores are skipped. A background group's overflow cannot take
-foreground focus. A full group is reconsidered after an explicit workspace move.
+and restores are skipped. Background overflow preserves focus; explicit moves
+reconsider a full group.
 
 Options: `--fraction`/`-f` defaults to `0.25`; `--no-follow` keeps source focus;
 `--debug`/`-d` prints watcher errors. Controller decisions use `controller.log`.
 
 ## Polybar Integration
 
-`launch.sh` starts synchronized, initially hidden bars on every active output,
-with one tray on the internal/primary display. The `groups` module subscribes
-to controller changes and shows `A [B] C | 1 2 [3] 7 10`; inactive urgent groups
-get `!`. Clicks carry explicit group/slot identities, so stale slot clicks are
-ignored. `internal/i3` supplies only binding-mode labels. See
-[Polybar controls](../polybar/docs.md) for pointer actions.
+`launch.sh` starts synchronized hidden bars on every output, with one tray on
+internal/primary. The `groups` module shows `A [B] C | 1 2 [3] 7 10`; urgent
+inactive groups get `!`. Stale slot clicks are ignored. `internal/i3` supplies
+mode labels. See [Polybar controls](../polybar/docs.md) for pointer actions.
 
-`Super+Shift+B` toggles visibility, raises bars, and resnaps. Workspace shortcuts
-or a Super-only tap peek for `I3_POLYBAR_PEEK_MS` (200 ms); repeated keys extend
-one deadline. A Super-only hold lasts until release; another key cancels it.
-`I3_SUPER_HOLD_MS` overrides the hold threshold. Peeks preserve a persistent bar
-and skip resnapping; explicit toggles cancel pending peeks.
+`Super+Shift+B` toggles, raises, and resnaps. Workspace shortcuts/Super taps
+peek for `I3_POLYBAR_PEEK_MS` (200 ms), extended by repeated keys. A Super-only
+hold lasts until release; another key cancels it. `I3_SUPER_HOLD_MS` sets the
+hold threshold. Peeks preserve persistent visibility and skip resnapping;
+explicit toggles cancel peeks.
 
 `display-setup.sh` owns relaunches. Keep Polybar `screenchange-reload` and
 `wm-restack` disabled. Launcher locks must not be inherited by detached bars
@@ -291,16 +261,13 @@ audio, battery, Wi-Fi, Bluetooth, power. Window/menu actions exit; in-place
 toggles stay. Exit restores prior bar visibility, counting a peek as hidden.
 Group tabs use their own shortcuts/mouse and are not cursor stops.
 
-Normal stops use identically padded `-sel` module twins. Tray stops use a
-click-through highlight from `bar-nav-marker.py`. Power entries require the
-mouse and explicit shutdown/restart confirmation. Media keys change volume by
-5%; bar scrolling uses 1%.
+Power entries require mouse confirmation. Media keys change volume by 5%;
+bar scrolling uses 1%.
 
 ### NetworkManager Tray
 
-`nm-applet` provides Wi-Fi menus/password prompts; `blueman-applet` and
-`blueman-tray` provide Bluetooth. The launcher docks NetworkManager before
-restarting the Bluetooth tray, matching the keyboard cursor's order.
+`nm-applet` provides Wi-Fi; `blueman-applet`/`blueman-tray` provide Bluetooth.
+NetworkManager docks first to match the keyboard cursor's order.
 
 ### Top-Edge Peek
 
@@ -311,33 +278,29 @@ the hold; a visible fullscreen window suppresses it until the pointer leaves.
 
 ## Monitor and Wallpaper Setup
 
-`display-setup.sh` places the first connected external output at `0x0` and the
-primary laptop to its right; laptop-only uses `0x0`. `I3_LAPTOP_OUTPUT` defaults
-to `eDP`; `I3_DISPLAY_SETUP_DELAY` defaults to one second. Setup reconciles
-workspaces, dunst's monitor index, wallpaper, and bars.
+`display-setup.sh` puts the first external output at `0x0`, laptop to its right;
+laptop-only uses `0x0`. It reconciles workspaces, dunst, wallpaper, and bars.
+Defaults: `I3_LAPTOP_OUTPUT=eDP`, `I3_DISPLAY_SETUP_DELAY=1` second.
 
-`randr-hotplug.sh` debounces connected-output changes for 0.7 seconds
-(`I3_RANDR_HOTPLUG_QUIET`), ignores geometry-only events, and rechecks after
-setup. Shared Rofi notices report connection changes; manual refresh is silent.
-Wallpaper files are `~/.wallpaper-laptop.png` and `~/.wallpaper-external.png`.
+`randr-hotplug.sh` debounces connections for `I3_RANDR_HOTPLUG_QUIET` (0.7 s),
+ignores geometry-only events, and rechecks after setup. Rofi reports connection
+changes; manual refresh is silent. Wallpapers: `~/.wallpaper-laptop.png` and
+`~/.wallpaper-external.png`.
 
 ## USB and Type-C Notices
 
-`usb-hotplug.sh` watches unprivileged USB/Type-C udev events, coalesces hub bursts
-and detach/reattach bounces, and keeps initial enumeration silent. Connector
-mapping uses sysfs links; unknown topology is labelled USB rather than guessed.
-Inspect with `usb-hotplug.sh --dump`; override with `I3_USB_TYPEC_BUSES`.
-
-`I3_USB_HOTPLUG_QUIET` defaults to 0.7 seconds and `I3_USB_TYPEC_WINDOW` to three.
-`I3_USB_TOAST_DETAIL=full` includes partner wattage, alternate modes, and speed;
-`compact` omits these. `I3_TOAST_WRAP` controls notice wrapping.
+`usb-hotplug.sh` coalesces USB/Type-C udev bursts and bounces, with silent initial
+enumeration. Sysfs identifies connectors; unknown topology is labelled USB.
+Inspect with `--dump`; override with `I3_USB_TYPEC_BUSES`. Defaults:
+`I3_USB_HOTPLUG_QUIET=0.7`, `I3_USB_TYPEC_WINDOW=3` seconds.
+`I3_USB_TOAST_DETAIL=full|compact` controls wattage/mode/speed detail;
+`I3_TOAST_WRAP` controls wrapping.
 
 ## Show Desktop
 
-`Super+M` temporarily shows `_desktop`; repeating returns to the captured group
-and slot. Selecting a group also leaves it. Windows are not minimized and
-remembered group views are preserved. Scratchpad commands remain shared across
-groups; the Copilot terminal is excluded by class even on numbered workspaces.
+`Super+M` toggles `_desktop` and returns to the captured group/slot. Selecting
+a group also leaves it. Windows keep running and remembered views survive.
+Scratchpad and Copilot remain shared across groups.
 
 ## Floating Rules
 
@@ -348,9 +311,8 @@ unexpected return to tiling while leaving hidden/fullscreen windows alone.
 
 ## i3-Resurrect Save and Restore
 
-Main/B/C are independent storage profiles: each saves/restores one selected
-group, or the group given by `--group=B`. Any of these profiles can hold any
-group and restore into any other group.
+Main/B/C store one selected group (or `--group=B`) independently of group names;
+any profile can restore into any group.
 
 | Profile | Save (on release) | Restore | State / metadata |
 | --- | --- | --- | --- |
@@ -359,81 +321,65 @@ group and restore into any other group.
 | C | `Super+Ctrl+C` | `Super+Ctrl+T` | `resurrect-c` / `resurrect-meta-c` |
 | All groups | `Super+Ctrl+Y` | `Super+Ctrl+P` | `resurrect-session` / `resurrect-meta-session` |
 
-The all-groups profile saves every managed group together and restores original
-groups/slots, each group's remembered view, and the selected group. Scratchpad
-and unmanaged windows are excluded; existing windows are kept. A save
-publishes only after every group succeeds. Switching groups cancels a running
-restore; issued launches keep their captured destinations. Use
-`i3-resurrect-session.py save|restore`; `--check` validates without desktop
-changes, and `restore --previous` selects the previous complete session.
+All-groups save publishes only after every group succeeds. Restore keeps each
+original group, remaps remembered views/focus, and selects the saved group.
+All restores prefer empty slots, sharing occupied ones only when full; existing
+windows stay in place. Scratchpad/unmanaged windows are excluded.
 
-All profiles share a nonblocking save/restore lock per display. Snapshot data
-contains local paths, URLs, and session names; `resurrect*` stays gitignored.
+CLI: `i3-resurrect-session.py save|restore`; `--check` makes no desktop changes,
+`restore --previous` uses the last complete snapshot. All profiles share a
+nonblocking lock per display. Data includes local paths/URLs/session names;
+`resurrect*` stays gitignored.
 
 ### Save Script
 
-`i3-resurrect-save-all.sh` captures only its group's tree and application
-metadata, excluding scratch/desktop windows without moving them. It saves with
-live identities, checks for window changes (titles may change), then normalizes
-filenames, layouts, metadata, and generated instance names to slots 1–10.
-Arbitrary command arguments, URLs, and paths are preserved. Empty groups fail
-without replacing the previous snapshot.
+`i3-resurrect-save-all.sh` captures its group's tree/metadata without moving
+windows, checks live identities, and normalizes to slots 1–10 while preserving
+arguments, URLs, and paths. Empty groups or failures preserve the old snapshot.
 
-Validation and filesystem flushes precede atomic publication of
-`resurrect-meta*/snapshot.json`. Generations are immutable; current and previous
-are retained. Failures/interruption preserve the old selection. Valid flat
-legacy profiles can become the previous generation; invalid legacy data is
-never advertised for recovery. `group-format.json` versions slot content
-separately from the generation manifest; recorded source group is informational.
+Validation and filesystem flushes precede atomic `snapshot.json` publication.
+Current/previous generations are immutable; only valid legacy data is retained
+for recovery. `group-format.json` versions slot content; source group is
+informational.
 
 ### Application State
 
 | Application | Captured/restored state and limits |
 | --- | --- |
-| Zathura | File and current page from X properties/D-Bus; restore adds `--page`. Unreadable windows retain plain commands. |
-| Zen/Helium | Live address-bar capture, restoring clipboard/focus; fallback reads Zen/Firefox session files. Pairing uses window IDs before normalization. Ambiguous counts retain plain launches. |
-| Helium | Replaces transient AppImage paths using `helium.desktop`, falling back to the newest matching AppImage. |
-| Ghostty | Per-window working directory and first `hpc`/`hpcz` session, with unique launch identity. Tabs/splits cannot be reconstructed; remaining sessions are listed for manual attachment. |
+| Zathura | File/page via X properties/D-Bus; unreadable state retains a plain launch. |
+| Zen/Helium | Address-bar URL capture restores clipboard/focus; fallback reads Zen/Firefox sessions. Window IDs pair entries; ambiguous counts retain plain launches. |
+| Helium | Resolves transient paths via `helium.desktop`, then the newest matching AppImage. |
+| Ghostty | Working directory and first `hpc`/`hpcz` session per window. Tabs/splits are not reconstructed; remaining sessions need manual attachment. |
 
-`ZEN_LIVE_URL_CAPTURE=0` disables address-bar capture. `ZEN_PROFILE_ROOTS`
-overrides fallback profile roots. `I3_RESURRECT_PROC_ROOT` overrides `/proc`
-for session inspection. Remote attaches are reported as **requested,
-unverified**; failed/unlaunched sessions appear under `Reattach by hand`.
+`ZEN_LIVE_URL_CAPTURE=0` disables live capture; `ZEN_PROFILE_ROOTS` overrides
+fallback profiles; `I3_RESURRECT_PROC_ROOT` overrides `/proc`. Remote attaches
+are **requested, unverified**; failures/unlaunched sessions say `Reattach by hand`.
 
 ### Restore Script
 
-`i3-resurrect-restore-all.sh` resolves/validates one snapshot and prepares
-temporary copies before changing windows. `--check` prints its destination plan
-without a placement lease or changes to windows, routing, or bars. `--previous`
-uses the prior generation; B/C wrappers accept the same options. Legacy 1–10
-workspaces read as slots; invalid manifests/unknown formats fail explicitly.
+`i3-resurrect-restore-all.sh` validates and prepares temporary copies before
+desktop changes. `--check` prints destinations without changing windows,
+routing, or bars; `--previous` selects the prior generation. B/C wrappers accept
+both. Legacy 1–10 workspaces become slots; invalid formats fail explicitly.
 
-1. Place saved workspaces in the destination group's empty slots, lowest first;
-   remaining ones share its occupied slots. Existing windows are never closed
-   or moved out. Other groups and unmanaged workspaces are excluded.
-2. Build unique launch tokens and operation-owned placeholders whose swallow
-   rules match nothing. Shell-string, `gtk-launch`, `xdg-open`, and `dbus-send`
-   launches are rejected. Missing AppImages resolve to a newer matching file;
-   incompatible layout/program counts restore programs without the layout.
+1. Plan lowest empty slots within the destination group, then occupied slots.
+2. Build unique launch tokens and owned placeholders. Reject shell-string,
+   `gtk-launch`, `xdg-open`, and `dbus-send` launches; resolve missing AppImages.
+   Mismatched layout/program counts restore programs without layout.
 3. Restore `labroute on` if recorded; failure/timeout aborts before desktop
-   changes. Restore never turns the route off.
-4. Acquire a placement lease, select the destination group, pause autotiling/
-   snap-watcher, and hide a visible bar. Pre-existing windows cannot be routed.
-5. Launch programs with instance/startup/environment tokens. Only a provably
-   owned new window is swapped into its placeholder or sent to its captured
-   slot. Overflow skips restore arrivals; readiness requires every launched
-   window still in its destination and no empty placeholders.
-6. Recheck successes, restore mapped focus, remove owned empty placeholders,
-   release the lease, resume workers, and restore prior bar visibility.
+   changes. Restore never turns it off.
+4. Reserve placement, select the group, pause tiling/snap workers, and hide
+   visible bars. Route only provably owned new windows; overflow skips arrivals.
+5. Verify launched windows and placeholders, restore mapped focus, clear owned
+   empty placeholders, resume workers, and restore bar visibility.
    `last-restore.json` records mapping, shared slots, results, and retry guidance.
 
-A group switch cancels further launches and clears empty placeholders. Already
-issued launches retain their destination after cancellation/controller restart,
-without pulling focus back. Records remain while their launcher lives and for
-at least two minutes; dead owners release leases. Explicit transfers supersede
-pending routing. Cleanup targets tagged placeholder X windows, never populated
-containers. Ambiguous/single-instance application arrivals report incomplete
-restores rather than moving an existing window.
+Switching groups cancels further launches and clears empty placeholders.
+Issued launches retain their destinations across cancellation/controller restart
+without taking focus; explicit transfers override routing. Records last while
+the launcher lives and at least two minutes; dead owners release reservations.
+Cleanup never removes populated containers. Ambiguous/single-instance arrivals
+report incomplete restores without moving existing windows.
 
 Defaults: `I3_RESURRECT_LAYOUT_DELAY=0.25`, `I3_RESURRECT_WAIT_ATTEMPTS=48`,
 `I3_RESURRECT_POLL_INTERVAL=0.25`, `I3_RESURRECT_LABROUTE_TIMEOUT=45`.
@@ -445,30 +391,26 @@ Restoring that profile into empty B uses `11–15`, leaving A untouched.
 
 ## Autostart and Dependencies
 
-Startup provides XFCE settings/power services, keyring, Polkit, Picom,
-NetworkManager/Bluetooth, xss-lock, input-device setup, and the group/gesture/
-hotplug watchers. `session-reload.sh` refreshes user units, changed dunst
-configuration, Picom, displays, wallpaper, and bars, then reports one result.
-`lock.sh` uses i3lock-color when available and plain i3lock otherwise.
+Startup runs XFCE settings/power, keyring, Polkit, Picom, network/Bluetooth,
+xss-lock, input setup, and watchers. `session-reload.sh` refreshes user units,
+changed dunst config, Picom, displays, wallpaper, and bars with one result toast.
+`lock.sh` prefers i3lock-color, falling back to i3lock.
 
-Packages are declared in `.chezmoidata/packages.toml` under the i3/X11 desktop
-profile. Helpers use `/usr/bin/python3` with `python3-i3ipc`, `python3-xlib`,
-and `python3-lz4`; autotiling is provisioned through pipx. Display/bar scripts
-also use `xrandr`, Polybar, X11 inspection tools, `feh`, `jq`, and `flock`.
+Packages live in `.chezmoidata/packages.toml` under the i3/X11 profile: system
+Python with `python3-i3ipc`, `python3-xlib`, `python3-lz4`; pipx autotiling;
+`xrandr`, Polybar, X11 tools, `feh`, `jq`, and `flock`.
 
 ## Runtime and State Files
 
-Runtime files use `$XDG_RUNTIME_DIR` (fallback `/run/user/$(id -u)`). Group
-state lives in `i3-groups-<hash>/`; `i3-polybar-*` holds visibility/peek/bar-mode
-state, `i3-*-mode.restore-hidden` holds prior mode visibility, `i3-titles.state`
-holds decorations, and `tile-snap-<id>.lock` serializes each window.
+Runtime root: `$XDG_RUNTIME_DIR` (fallback `/run/user/$(id -u)`). State:
+`i3-groups-<hash>/` for groups, `i3-polybar-*` for bars, `i3-*-mode.restore-hidden`
+for prior visibility, `i3-titles.state` for borders, `tile-snap-<id>.lock` for snaps.
 
 Logs: `${XDG_STATE_HOME:-$HOME/.local/state}/i3/snap.log`,
 `${XDG_STATE_HOME:-$HOME/.local/state}/polybar/polybar-<output>.log`, and the
 session's `controller.log`. Snap/bar logs rotate above roughly 200 KB.
-Snapshot generations contain layouts/programs plus workspace, focused-slot,
-route, browser/PDF, and Ghostty metadata; profile metadata holds the manifest
-and last restore report.
+Snapshot generations hold layouts/programs and application/workspace metadata;
+profile metadata holds the manifest and last restore report.
 
 ## Maintenance and Troubleshooting
 
@@ -495,25 +437,17 @@ jq . ~/.config/i3/resurrect-meta/last-restore.json
 
 ## Tests
 
-From source: `bash dot_config/i3/tests/executable_run-fast.sh`; from an applied
-tree: `~/.config/i3/tests/run-fast.sh`. The runner renders source-state names
-into a temporary tree, then runs syntax, ShellCheck, i3 config parsing, and
-standalone tests without applying live configuration.
+Fast suite: `bash dot_config/i3/tests/executable_run-fast.sh` from source, or
+`~/.config/i3/tests/run-fast.sh` after applying. It uses a temporary tree for
+syntax, ShellCheck, config parsing, and group/snapshot/snap/bar/hotplug tests.
 
-| Checks | Coverage |
-| --- | --- |
-| Workspace groups | Mapping, boundaries, transfer guards, snapshots across all group pairs, Polybar output, worker recovery. |
-| Scratch terminal | New/revealed window centering on offset displays, delayed resizing, hide-only toggles. |
-| Snap/overflow | Geometry, capacity, group isolation, marks, unsnap, rebalance, locks. |
-| Snapshots | Validation, atomic group/session publication and recovery, cancellation, interrupted/concurrent saves, metadata, layout-free restore, observed failures. |
-| Bar/session/hotplug | Visibility/gesture ownership, navigation, monitor/USB events, reload, lock, launcher, provisioning contracts. |
-
-Live checks require Xephyr/xterm; overflow also needs autotiling. They create
-isolated single- and dual-monitor sessions. Set `I3_GROUP_PEEK` to a stub in
-custom nested tests: Polybar IPC itself is not display-scoped.
+Live checks use isolated single-/dual-monitor Xephyr sessions with xterm;
+overflow also needs autotiling. Stub `I3_GROUP_PEEK` in custom nested tests
+because Polybar IPC is not display-scoped.
 
 ```sh
 ~/.config/i3/tests/test-workspace-groups-live.py
 ~/.config/i3/tests/test-workspace-groups-live.py scratch-only
+~/.config/i3/tests/test-workspace-groups-live.py session-only
 ~/.config/i3/tests/test-overflow-live.py
 ```
