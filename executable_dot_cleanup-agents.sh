@@ -50,6 +50,8 @@ This preserves:
   ~/.codex/rules/
   ~/.codex/skills/
   ~/.codex/plugins/
+  ~/.codex/packages/
+  ~/.codex/app-server-*/
   ~/.claude/.credentials.json
   ~/.claude/settings.json
   ~/.claude/settings.local.json
@@ -138,6 +140,10 @@ is_protected() {
       return 0
       ;;
     "$CODEX_DIR/plugins"|"$CODEX_DIR/plugins/"*)
+      return 0
+      ;;
+    # Preserve daemon binaries, sockets, and locks.
+    "$CODEX_DIR/packages"|"$CODEX_DIR/packages/"*|"$CODEX_DIR/"app-server-*)
       return 0
       ;;
     "$CLAUDE_DIR/.credentials.json"|"$CLAUDE_DIR/settings.json"|"$CLAUDE_DIR/settings.local.json"|"$CLAUDE_DIR/statusline-command.sh"|"$CLAUDE_DIR/CLAUDE.md")

@@ -19,6 +19,12 @@ chezmoi update      # git pull + apply
 Document conversion and Typst layouts:
 [Pandoc and Typst presets](dot_local/share/pandoc/docs.md).
 
+## Agent cleanup
+
+Preview with `~/.cleanup-agents.sh`; add `--apply` to delete. Chats and memory
+require confirmation. Codex's `packages/` and `app-server-*/` stay intact to
+preserve daemon binaries, sockets, and locks.
+
 ## bashrc
 
 `dot_bashrc` targets remote clusters with only basic tools and can be copied to

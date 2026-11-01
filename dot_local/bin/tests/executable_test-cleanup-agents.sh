@@ -263,6 +263,70 @@ test_claude_hooks_survive_apply() {
   pass 'Claude hooks directory survives --apply'
 }
 
+test_codex_runtime_survives_cleanup() {
+  local home output
+  home="$(new_home runtime)"
+  output="$TEST_TMP/runtime/output"
+
+  # Cleanup must preserve an open socket and lock.
+  python3 - "$home" "$CLEANUP" "$output" <<'PY'
+import fcntl
+import os
+from pathlib import Path
+import socket
+import subprocess
+import sys
+
+home, cleanup, output = sys.argv[1:]
+codex = Path(home) / ".codex"
+protected = [codex / name for name in (
+    "app-server-control", "app-server-daemon", "app-server-future", "packages")]
+for path in protected:
+    path.mkdir(parents=True)
+    (path / "fixture").write_text("preserve this runtime state\n")
+release = codex / "packages" / "app-server-daemon" / "releases" / "fixture" / "bin"
+release.mkdir(parents=True)
+binary = release / "codex"
+binary.write_text("installed daemon binary\n")
+current = release.parents[2] / "current"
+current.symlink_to("releases/fixture")
+cache = codex / "cache.tmp"
+cache.write_text("disposable cache\n")
+sock_path = codex / "app-server-control" / "control.sock"
+lock_path = codex / "app-server-daemon" / "daemon.lock"
+env = dict(os.environ, HOME=home)
+
+with socket.socket(socket.AF_UNIX) as listener, lock_path.open("w") as lock:
+    listener.bind(str(sock_path))
+    listener.listen(1)
+    listener.settimeout(2)
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    sock_inode = sock_path.stat().st_ino
+    lock_inode = os.fstat(lock.fileno()).st_ino
+    for flags in ([], ["--apply"], ["--apply", "--include-projects"]):
+        result = subprocess.run(["bash", cleanup, *flags], env=env,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, check=True)
+        Path(output).write_text(result.stdout)
+        for path in protected:
+            assert path.is_dir(), f"cleanup {flags} removed {path}"
+            assert (path / "fixture").read_text() == "preserve this runtime state\n"
+            assert f"Would remove: {path}" not in result.stdout
+        assert binary.read_text() == "installed daemon binary\n"
+        assert current.is_symlink() and (current / "bin" / "codex").is_file()
+        assert sock_path.stat().st_ino == sock_inode
+        assert lock_path.stat().st_ino == lock_inode
+        with socket.socket(socket.AF_UNIX) as client:
+            client.settimeout(2)
+            client.connect(str(sock_path))
+            connection, _ = listener.accept()
+            connection.close()
+        assert cache.exists() == (not flags)
+PY
+
+  pass 'Codex sockets, locks, and installed packages survive preview and apply'
+}
+
 # The per-chat prompt is pointless if the sweep afterwards takes the state that
 # belongs to a chat you just kept.
 test_kept_chat_keeps_its_session_state() {
@@ -704,6 +768,7 @@ test_codex_delete_removes_chat_state
 test_claude_keep_prunes_history
 test_claude_delete_removes_chat_state
 test_claude_hooks_survive_apply
+test_codex_runtime_survives_cleanup
 test_kept_chat_keeps_its_session_state
 test_memory_index_survives_the_sweep
 test_memory_erase_takes_the_index
