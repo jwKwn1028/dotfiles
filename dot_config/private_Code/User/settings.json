@@ -89,7 +89,6 @@
     "workbench.editor.editorActionsLocation": "hidden",
     "window.titleBarStyle": "native",
     "window.commandCenter": false,
-    // ~/.local/bin/code sets GTK_THEME for VS Code's own menus only.
     "terminal.integrated.env.linux": {
         "GTK_THEME": null
     },

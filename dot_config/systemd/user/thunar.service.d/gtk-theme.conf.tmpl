@@ -1,5 +1,4 @@
-# Route the D-Bus/systemd-activated Thunar daemon through the wrapper that
-# applies the Ghostty-TokyoNight GTK theme. See ~/.themes/Ghostty-TokyoNight/README.md
+# Use the shared Thunar launcher for D-Bus activation.
 [Service]
 ExecStart=
 ExecStart={{ .chezmoi.homeDir }}/.local/bin/thunar --daemon

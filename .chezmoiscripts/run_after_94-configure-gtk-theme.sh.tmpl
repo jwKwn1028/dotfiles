@@ -1,0 +1,40 @@
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" -}}{{- $class = .class -}}{{- end -}}
+{{- $desktopProfile := "none" -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{-     $desktopProfile = "linuxmint-i3-x11" -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey . "desktopProfile" -}}
+{{-   $desktopProfile = .desktopProfile -}}
+{{- end -}}
+{{- if and (eq .chezmoi.os "linux") (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
+#!/bin/sh
+set -eu
+
+# Update XFConf's in-memory settings as well as the managed XML.
+if ! command -v xfconf-query >/dev/null 2>&1 || [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+    echo "No XFConf session available; the GTK theme will take effect at login."
+    exit 0
+fi
+
+set_theme_setting() {
+    current=$(xfconf-query -c xsettings -p "$1" 2>/dev/null || true)
+    if [ "$current" != "$2" ]; then
+        echo "==> Setting XSettings $1 to $2"
+        xfconf-query -c xsettings -p "$1" --create --type string --set "$2"
+    fi
+}
+
+set_theme_setting /Net/ThemeName Ghostty-TokyoNight
+set_theme_setting /Net/IconThemeName Papirus-Dark
+
+# Remove the retired Thunar icon shim.
+legacy_icons="$HOME/.themes/Ghostty-TokyoNight/xdg-data/icons/ubuntu-mono-light"
+if [ -f "$legacy_icons/index.theme" ]; then
+    rm -f -- "$legacy_icons/index.theme" "$legacy_icons/empty/.keep"
+    rmdir -- "$legacy_icons/empty" "$legacy_icons" \
+        "${legacy_icons%/*}" "${legacy_icons%/icons/*}" 2>/dev/null || true
+fi
+{{- end }}

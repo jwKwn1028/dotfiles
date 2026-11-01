@@ -5,6 +5,10 @@ Controls and maintenance for i3/X11. See [Polybar](../polybar/docs.md) and
 follows the mouse without wrapping or warping. Borders use `pixel 1`, workspace
 history is per group, and application activation uses i3's `smart` policy.
 
+GTK 3 uses Ghostty-TokyoNight and Papirus-Dark through `xfsettingsd`.
+See the [theme guide](../../dot_themes/Ghostty-TokyoNight/README.md) for checks
+and rollback.
+
 ## Keybinding Reference
 
 ### Launchers

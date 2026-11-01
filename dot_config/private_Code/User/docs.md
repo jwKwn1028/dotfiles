@@ -37,9 +37,8 @@ the current window.
 
 The status bar and menu bar start hidden. Tap left `Alt` to show the menu bar
 for one use; `Alt+`letter menu mnemonics yield to the `Alt` bindings below.
-VS Code uses the native title bar so it fills its i3 tile; `~/.local/bin/code`
-launches it with the Ghostty-TokyoNight GTK theme so those menus are dark (see
-`~/.themes/Ghostty-TokyoNight/README.md`). `Ctrl+T Ctrl+S`
+VS Code's native title bar fills its i3 tile; its menus follow the GTK session
+theme; see `~/.themes/Ghostty-TokyoNight/README.md`. `Ctrl+T Ctrl+S`
 and `Ctrl+T Ctrl+M` save the new state to the live `settings.json`, so run
 `chezmoi re-add` to keep it or toggle back before the next `chezmoi apply`.
 

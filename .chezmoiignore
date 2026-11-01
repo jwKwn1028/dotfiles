@@ -106,8 +106,7 @@ snap/firefox/common/.mozilla/firefox/
 .config/systemd/user/task-notify.timer
 .config/task/MANUAL.md
 
-# The Ghostty-TokyoNight GTK theme (~1M), the Thunar and VS Code GTK_THEME
-# wrappers that switch it on, and the launch paths through them. Ship all or none.
+# GTK session theme and shared launchers; desktop profile only.
 .themes/Ghostty-TokyoNight/
 .local/bin/thunar
 .local/share/applications/thunar.desktop

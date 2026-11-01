@@ -84,8 +84,8 @@ executes them without creating that directory in the destination. Their
 9. `run_after_90/91`: X11 keyboard/TrackPoint and TLP configuration.
 10. `run_onchange_after_92`: the Flameshot screenshot directory.
 11. `run_after_93`: the logind lid-switch drop-in.
-12. `run_after_94`: enable Thunar per-folder settings and sort Downloads newest
-    first.
+12. `run_after_94`: sync GTK theme/icons with XFConf, enable Thunar per-folder
+    settings, and sort Downloads newest first.
 13. `run_once_after_95/96`: build pinned i3lock-color into `/usr/local` and
     zathura into `~/.local`, installing build dependencies with sudo.
 14. `run_once_after_97`: build pinned btop into `~/.local` to fix AMD GPU crashes,

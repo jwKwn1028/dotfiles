@@ -1,99 +1,66 @@
 # Ghostty-TokyoNight
 
-A GTK3 theme that makes **Thunar** read like a Ghostty window, derived from
-`~/.config/ghostty/config`.
+GTK 3 session theme for `desktop` / `linuxmint-i3-x11`: TokyoNight Storm
+colors, JuliaMono 10pt regular, square widgets, and Papirus-Dark icons.
 
-It is **scoped to Thunar and VS Code** — it activates only for processes
-launched through `~/.local/bin/thunar` or `~/.local/bin/code`. VS Code borrows it
-only for the menus of its native title bar; its editor keeps its own color
-theme, and its integrated terminals drop `GTK_THEME`. The global GTK theme is still Adwaita and the global icon
-theme is still `ubuntu-mono-light`.
+`xfsettingsd` reads the managed XSettings XML. On apply,
+`run_after_94-configure-gtk-theme.sh.tmpl` also updates the running XFConf
+session and removes the old Thunar icon shim. Without a session bus, the
+settings take effect at login. Thunar and VS Code keep their launch wrappers;
+native menus follow XSettings without exporting `GTK_THEME`.
 
-## What it matches
+GTK 2, GTK 4/libadwaita, Qt, and browser interfaces keep separate styling.
+Flatpak apps need the theme inside their sandbox. VS Code's editor keeps its
+own theme, and integrated terminals clear inherited `GTK_THEME` overrides.
 
-| Ghostty setting                          | How Thunar picks it up                                  |
-| ---------------------------------------- | ------------------------------------------------------- |
-| `theme = TokyoNight Storm`               | full Adwaita-dark recolor onto the Storm palette        |
-| `background = #292d3e`                   | every surface — sidebar, view, toolbar, statusbar       |
-| `foreground`, `selection-background`     | `#c0caf5` text, `#364a82` selection                     |
-| `cursor-color = #86be43`                 | focus rings, caret, checkboxes, progress, tab underline |
-| `font-family = JuliaMono`                | whole UI, with the same CJK/Nerd-Font fallbacks         |
-| `font-style-bold = false`                | no bold anywhere                                        |
-| `window-decoration = none`, square frame | zero border-radius, no shadows, no gradients            |
-| `window-padding-x/y = 8`                 | 8px gutter around the file view                         |
-| `scrollbar = never`                      | thin flat slider, no trough or steppers                 |
+## Check the appearance
 
-## Files
+Fully quit and reopen apps after editing the stylesheet.
 
-```
-~/.themes/Ghostty-TokyoNight/
-  gtk-3.0/gtk.css                 hand-written Ghostty layer (edit this)
-  gtk-3.0/_adwaita-recolored.css  generated; GTK's Adwaita-dark, recolored
-  gtk-3.0/assets/                 generated; Adwaita's check/slider artwork
-  xdg-data/icons/ubuntu-mono-light/  icon-theme redirect shim (see below)
-  tools/recolor.py                the palette mapper
-  tools/regenerate.sh             rebuild the generated files after a GTK upgrade
+| Command | Check |
+| --- | --- |
+| `pavucontrol` | Tabs, sliders, and mute buttons. |
+| `blueman-manager` | Device icons, rows, and menus. |
+| `xfce4-settings-manager` | Settings icons and dialogs. |
+| `xfce4-power-manager-settings` | Tab labels clear the separator line. |
+| `xfce4-taskmanager` | Column headings, selection, and focus. |
+| `mintupdate` | Install Updates fits the toolbar; its disabled arrow stays visible. |
+| `thunar` | Tabs, sidebar icons, motion keys, and normal typing in the location field. |
 
-~/.local/bin/thunar                       wrapper that turns the theme on
-~/.local/share/applications/thunar.desktop  menu/panel launches -> wrapper
-~/.config/systemd/user/thunar.service.d/gtk-theme.conf  D-Bus activation -> wrapper
+Also check GTK 3 file dialogs, keyboard focus, and warning/error states.
+Mint Update uses compact toolbar padding; any remaining overflow actions are
+under its down arrow. Disabled actions remain unclickable.
 
-~/.local/bin/code                         VS Code wrapper; shadows /usr/bin/code
-~/.local/share/applications/com.microsoft.VSCode{,.UrlHandler}.desktop
-                                          menu and vscode:// launches -> wrapper
-```
+## Customize
 
-All three launch paths route through the one wrapper, so the theme applies
-whether Thunar is opened from the menu, from a shell, or by another app asking
-D-Bus to "show this folder".
+Edit the managed `gtk-3.0/gtk.css`. Its `*` font rules override the session
+font; secondary labels use `#a9b1d6` on `#292d3e`. The recolored Adwaita base
+and widget artwork are generated files.
 
-## Two things worth knowing
-
-**Icons can't be set from CSS.** Thunar queries `GtkIconTheme` directly, and
-under Xfce that name comes from XSETTINGS, which no per-app setting overrides.
-So `xdg-data/icons/ubuntu-mono-light/` is an empty theme declaring
-`Inherits=Papirus-Dark`, and the wrapper puts it first on `XDG_DATA_DIRS`:
-Thunar resolves the name to the shim, every other app gets the real one.
-
-**Menus ghost slightly.** ~15% of the window beneath shows through open menus.
-Not this theme — stock Thunar under Adwaita does the same here. Likely picom's
-`use-damage = true` with `backend = "glx"`, known to leave stale content under
-newly mapped popups; set `use-damage = false` in `~/.config/picom/picom.conf` if
-it bothers you. (This theme already paints menu toplevels opaque.)
-
-## Tweaking
-
-**Font size** — Ghostty's 18pt is oversized for a file manager, so the UI sits at
-12pt. Change `font-size` in the `*` block near the top of `gtk-3.0/gtk.css`.
-
-**Keys** — see `~/.config/Thunar/docs.md`.
-
-**Anything else** — edit `gtk-3.0/gtk.css` and restart Thunar:
+Thunar's 8px gutter and motion bindings stay scoped to `.standard-view`.
+See `~/.config/Thunar/docs.md` for keys. To reload Thunar:
 
 ```sh
 systemctl --user restart thunar.service
 ```
 
-**After a GTK upgrade** — if widgets start looking like stock Adwaita again,
-the new GTK shipped rules this theme has not seen:
+## Regenerate after a GTK upgrade
 
 ```sh
 ~/.themes/Ghostty-TokyoNight/tools/regenerate.sh
 ```
 
-## Removing it
+This rebuilds the Adwaita base and assets. `export-pixbufs.py` converts inline
+GdkPixdata resources to PNG using system Python, `python3-gi`, and
+`gir1.2-gdkpixbuf-2.0`, all provisioned for this profile. Review and import
+regenerated targets with `chezmoi re-add` before the next apply.
+
+## Temporarily return to Adwaita
 
 ```sh
-rm ~/.local/bin/thunar
-rm ~/.local/share/applications/thunar.desktop
-rm -r ~/.config/systemd/user/thunar.service.d
-rm -r ~/.themes/Ghostty-TokyoNight
-systemctl --user daemon-reload
-systemctl --user restart thunar.service
-rm ~/.local/bin/code
-rm ~/.local/share/applications/com.microsoft.VSCode.desktop
-rm ~/.local/share/applications/com.microsoft.VSCode.UrlHandler.desktop
+xfconf-query -c xsettings -p /Net/ThemeName -s Adwaita
+xfconf-query -c xsettings -p /Net/IconThemeName -s ubuntu-mono-light
 ```
 
-Nothing under `/usr` was modified, so that returns Thunar and VS Code to stock.
-VS Code picks up the change the next time it fully restarts.
+Reopen apps to refresh. The next apply restores the managed defaults; for a
+permanent change, edit both the source XSettings XML and the apply script.
