@@ -34,11 +34,11 @@ for e in "${entries[@]}"; do
   id="${e%% *}"
   region="${e##* }"
   {
-    if [ -r "$DIR/workspace-groups.py" ]; then
-      /usr/bin/python3 "$DIR/workspace-groups.py" placement "$id" || exit 0
+    if [ -x "$DIR/workspace-action.sh" ]; then
+      "$DIR/workspace-action.sh" placement "$id" || exit 0
     fi
     i3-msg "[con_id=$id] unmark _snap_$region" >/dev/null 2>&1
-    "$DIR/tile-snap.sh" "$region" "$id"
+    SNAP_PLACEMENT_CHECKED=1 "$DIR/tile-snap.sh" "$region" "$id"
   } &
 done
 wait

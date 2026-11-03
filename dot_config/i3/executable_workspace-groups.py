@@ -18,7 +18,7 @@ import sys
 import threading
 import time
 
-from workspace_groups import GroupError, identity, request, session_dir, socket_path, subscribe
+from workspace_groups import GroupError, identity, request, session_dir, socket_path, source_path, subscribe
 
 LEGACY = re.compile(r"^bash .*/(focus-tracker|snap-watcher)\.sh$|^[^ ]*/python[^ ]* [^ ]*/(autotiling|overflow-watcher\.py)( |$)")
 
@@ -36,9 +36,14 @@ def serve():
         except BlockingIOError:
             return
         stopped = threading.Event()
-        events = queue.Queue()
-        signal.signal(signal.SIGTERM, lambda *_: stopped.set())
-        signal.signal(signal.SIGINT, lambda *_: stopped.set())
+        events = queue.SimpleQueue()
+
+        def stop(*_):
+            stopped.set()
+            events.put(("stop", "", None))
+
+        signal.signal(signal.SIGTERM, stop)
+        signal.signal(signal.SIGINT, stop)
         path = directory / "controller.sock"
         path.unlink(missing_ok=True)
         controller = Controller(i3ipc.Connection(socket_path=socket_path()), directory)
@@ -60,12 +65,51 @@ def serve():
                     events.put(("disconnected", str(error), None))
                 stopped.wait(0.5)
 
+        def accept(server):
+            while not stopped.is_set():
+                try:
+                    client, _ = server.accept()
+                except OSError:
+                    if stopped.wait(0.1):
+                        return
+                    continue
+                client.settimeout(2)
+                try:
+                    with client.makefile("rb") as stream:
+                        payload = json.loads(stream.readline(8 * 1024 * 1024))
+                except Exception as error:
+                    payload = error
+                events.put(("client", client, payload))
+
+        def answer(client, payload):
+            try:
+                if isinstance(payload, Exception):
+                    raise payload
+                action = payload.pop("action")
+                if action == "subscribe":
+                    client.settimeout(0.5)
+                    subscribers.append(client)
+                    return True
+                if action == "stop":
+                    stopped.set()
+                    result = True
+                else:
+                    result = controller.dispatch(action, **payload)
+                reply = dict(ok=True, result=result)
+            except Exception as error:
+                reply = dict(ok=False, error=str(error))
+            try:
+                client.sendall(json.dumps(reply).encode() + b"\n")
+            except OSError:
+                pass
+            client.close()
+            return False
+
         thread = threading.Thread(target=listen, daemon=True)
         thread.start()
         with socket.socket(socket.AF_UNIX) as server:
             server.bind(str(path))
             server.listen(16)
-            server.settimeout(0.1)
             last_maintenance = 0
             subscribers, last_push, dirty = [], None, True
             try:
@@ -73,14 +117,26 @@ def serve():
                 controller.initialize()
                 controller.restore.maintain()
                 controller.resume_workers()
+                threading.Thread(target=accept, args=(server,), daemon=True).start()
                 while not stopped.is_set():
-                    for _ in range(200):
+                    try:
+                        batch = [events.get(timeout=max(0.0, last_maintenance + 1 - time.monotonic()))]
+                    except queue.Empty:
+                        batch = []
+                    while batch and len(batch) < 200:
                         try:
-                            kind, change, con_id = events.get_nowait()
+                            batch.append(events.get_nowait())
                         except queue.Empty:
                             break
+                    for kind, change, con_id in batch:
                         dirty = True
+                        if kind == "client":
+                            if answer(change, con_id):
+                                last_push = None
+                            continue
                         try:
+                            if kind == "stop":
+                                continue
                             if kind == "disconnected":
                                 controller.ready = False
                             elif kind == "reconnect":
@@ -91,7 +147,7 @@ def serve():
                         except Exception as error:
                             controller.ready = False
                             print(f"Group event: {error}", file=sys.stderr, flush=True)
-                    if time.monotonic() - last_maintenance > 1:
+                    if time.monotonic() - last_maintenance >= 1:
                         try:
                             controller.restore.maintain()
                             controller.resume_workers()
@@ -115,35 +171,12 @@ def serve():
                                     subscriber.close()
                             last_push = line
                         dirty = False
-                    try:
-                        client, _ = server.accept()
-                    except socket.timeout:
-                        continue
-                    client.settimeout(2)
-                    try:
-                        with client.makefile("rb") as stream:
-                            payload = json.loads(stream.readline(8 * 1024 * 1024))
-                        action = payload.pop("action")
-                        if action == "subscribe":
-                            client.settimeout(0.5)
-                            subscribers.append(client)
-                            last_push = None
-                            continue
-                        if action == "stop":
-                            stopped.set()
-                            result = True
-                        else:
-                            result = controller.dispatch(action, **payload)
-                        reply = dict(ok=True, result=result)
-                    except Exception as error:
-                        reply = dict(ok=False, error=str(error))
-                    dirty = True
-                    try:
-                        client.sendall(json.dumps(reply).encode() + b"\n")
-                    except OSError:
-                        pass
-                    client.close()
             finally:
+                stopped.set()
+                try:
+                    server.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
                 for subscriber in subscribers:
                     subscriber.close()
                 controller.ready = False
@@ -198,7 +231,7 @@ def bar_text(status):
     if not status["ready"]:
         return "%{F#f38ba8}groups unavailable%{F-}"
     selected, groups = status["selected"], status["groups"]
-    command = shlex.quote(str(Path(__file__).resolve()))
+    command = shlex.quote(str(source_path("workspace-action.sh")))
     urgent = {identity(ws["num"], groups)[0] for ws in status["workspaces"]
               if ws["urgent"] and identity(ws["num"], groups)}
     occupied = {window["group"][0] for window in status.get("windows", [])}

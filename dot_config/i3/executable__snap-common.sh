@@ -9,15 +9,16 @@ SNAP_LOG="$SNAP_LOG_DIR/snap.log"
 export SNAP_RUNTIME_DIR SNAP_TITLES_STATE
 
 snap_log() {
-  mkdir -p "$SNAP_LOG_DIR" 2>/dev/null || return 0
-  if [ -f "$SNAP_LOG" ]; then
+  [ -d "$SNAP_LOG_DIR" ] || mkdir -p "$SNAP_LOG_DIR" 2>/dev/null || return 0
+  # Checking the size costs a process, so sample one call in 16.
+  if (( RANDOM % 16 == 0 )) && [ -f "$SNAP_LOG" ]; then
     local sz
     sz=$(stat -c%s "$SNAP_LOG" 2>/dev/null || echo 0)
     if [ "$sz" -gt 204800 ]; then
       tail -n 500 "$SNAP_LOG" > "$SNAP_LOG.tmp" 2>/dev/null && mv "$SNAP_LOG.tmp" "$SNAP_LOG"
     fi
   fi
-  printf '[%s] %s[%d]: %s\n' "$(date +%H:%M:%S)" "${0##*/}" "$$" "$*" >> "$SNAP_LOG"
+  printf '[%(%H:%M:%S)T] %s[%d]: %s\n' -1 "${0##*/}" "$$" "$*" >> "$SNAP_LOG"
 }
 
 mark_to_quads() {

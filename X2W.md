@@ -525,8 +525,8 @@ below):
 
 `move-to-workspace.sh` no longer uses `xrandr`: it validates workspace numbers
 1–10 and sends one move-and-follow `i3-msg` command. `workspace-action.sh`
-wraps numbered and relative navigation, delegates moves to it, and requests a
-bar peek. Output policy now lives in the i3 `primary`/`nonprimary` workspace
+sends numbered and relative navigation and moves to the workspace controller's
+socket. Output policy now lives in the i3 `primary`/`nonprimary` workspace
 directives and the restore script, so the older high-risk description of this
 file as an output detector was stale.
 

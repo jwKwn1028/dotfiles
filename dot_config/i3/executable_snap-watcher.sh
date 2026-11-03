@@ -74,7 +74,7 @@ workspace_snap_entries() {
     [.. | objects | select((.window? // null) != null and (.id? // 0) != $id)] |
     .[] |
     .id as $cid |
-    [(.marks // [])[] | select(startswith("_snap_")) | sub("^_snap_"; "")] as $snaps |
+    [(.marks // [])[] | select(test("^_snap_(full|left|right|up|down|ul|ur|dl|dr)$")) | sub("^_snap_"; "")] as $snaps |
     select($snaps | length > 0) |
     "\($cid) \($snaps[0])"'
 }
@@ -215,7 +215,7 @@ rebalance_workspace_snaps() {
 handle_close() {
   local line="$1" was_snap closed_id tree ws_ids ws_id
 
-  was_snap=$(jq -r '(.container.marks // []) | map(select(startswith("_snap_"))) | length' <<<"$line" 2>/dev/null)
+  was_snap=$(jq -r '(.container.marks // []) | map(select(test("^_snap_(full|left|right|up|down|ul|ur|dl|dr)$"))) | length' <<<"$line" 2>/dev/null)
   [ "${was_snap:-0}" = "0" ] && return
 
   closed_id=$(jq -r '.container.id // 0' <<<"$line")
@@ -232,7 +232,7 @@ handle_close() {
       [.. | objects | select((.id? // 0) != $xid and (.window? // null) != null)] |
       .[] |
       .id as $id |
-      [(.marks // [])[] | select(startswith("_snap_")) | sub("^_snap_"; "")] as $snaps |
+      [(.marks // [])[] | select(test("^_snap_(full|left|right|up|down|ul|ur|dl|dr)$")) | sub("^_snap_"; "")] as $snaps |
       select($snaps | length > 0) |
       "\($id) \($snaps[0])"' <<<"$tree" | rebalance_workspace_snaps
   done

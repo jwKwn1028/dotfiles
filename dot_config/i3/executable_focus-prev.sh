@@ -1,6 +1,5 @@
-#!/usr/bin/env bash
-set -eu
-DIR="$(dirname "$(readlink -f "$0")")"
-HELPER="$DIR/workspace-groups.py"
-[ -r "$HELPER" ] || HELPER="$DIR/executable_workspace-groups.py"
-exec /usr/bin/python3 "$HELPER" previous-window
+#!/bin/sh
+case $0 in
+  */*) exec "${0%/*}/workspace-action.sh" previous-window ;;
+esac
+exec ./workspace-action.sh previous-window

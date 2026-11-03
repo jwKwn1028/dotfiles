@@ -14,14 +14,27 @@ I3_SYSTEM_PYTHON="${I3_SYSTEM_PYTHON:-/usr/bin/python3}"
 export POLYBAR_CONTROL_LOCK POLYBAR_PEEK_OWNER POLYBAR_PEEK_TRIGGER
 export POLYBAR_PEEK_HOLD POLYBAR_PEEK_WORKER_LOCK
 
-mkdir -p "$SNAP_RUNTIME_DIR" 2>/dev/null || true
+[ -d "$SNAP_RUNTIME_DIR" ] || mkdir -p "$SNAP_RUNTIME_DIR" 2>/dev/null || true
 
 now_ms() {
-  date +%s%3N
+  local now=${EPOCHREALTIME//[!0-9]/}
+  [ -n "$now" ] || { date +%s%3N; return; }
+  printf '%s\n' "${now:0:-3}"
+}
+
+# Bar window ids, looked up again whenever visibility is set: bars can be relaunched.
+POLYBAR_WINDOW_IDS=
+POLYBAR_WINDOWS_KNOWN=0
+
+polybar_find_windows() {
+  [ "$POLYBAR_WINDOWS_KNOWN" = 1 ] && return 0
+  POLYBAR_WINDOW_IDS=$(xdotool search --class '^[Pp]olybar$' 2>/dev/null || true)
+  POLYBAR_WINDOWS_KNOWN=1
 }
 
 polybar_windows() {
-  xdotool search --class '^[Pp]olybar$' 2>/dev/null || true
+  polybar_find_windows
+  [ -z "$POLYBAR_WINDOW_IDS" ] || printf '%s\n' "$POLYBAR_WINDOW_IDS"
 }
 
 polybar_window_viewable() {
@@ -32,7 +45,8 @@ polybar_window_viewable() {
 
 polybar_visible() {
   local win
-  for win in $(polybar_windows); do
+  polybar_find_windows
+  for win in $POLYBAR_WINDOW_IDS; do
     polybar_window_viewable "$win" && return 0
   done
   return 1
@@ -48,7 +62,8 @@ polybar_visible_value() {
 
 polybar_raise() {
   local win
-  for win in $(polybar_windows); do
+  polybar_find_windows
+  for win in $POLYBAR_WINDOW_IDS; do
     polybar_window_viewable "$win" || continue
     xdotool windowraise "$win" >/dev/null 2>&1 || true
   done
@@ -61,7 +76,8 @@ polybar_withdraw_orphan_docks() {
   local -a orphans=()
   local win info
 
-  for win in $(polybar_windows); do
+  polybar_find_windows
+  for win in $POLYBAR_WINDOW_IDS; do
     # Only the Parent line: -tree also names the root.
     info=$(xwininfo -id "$win" -tree 2>/dev/null |
       sed -n 's/^ *Parent window id: *//p') || continue
@@ -97,6 +113,8 @@ polybar_set_state() {
   local cmd="$1"
   local wanted="$2"
 
+  POLYBAR_WINDOWS_KNOWN=0
+  polybar_find_windows
   if polybar-msg cmd "$cmd" >/dev/null 2>&1; then
     # Let the hide land: until polybar unmaps, the bar still looks reparented.
     if [ "$wanted" = 0 ]; then
@@ -109,6 +127,8 @@ polybar_set_state() {
   if [ "$wanted" = 1 ] && [ -x "$HOME/.config/polybar/launch.sh" ]; then
     snap_log "polybar IPC unavailable; relaunching"
     "$HOME/.config/polybar/launch.sh" >/dev/null 2>&1
+    POLYBAR_WINDOWS_KNOWN=0
+    polybar_find_windows
     polybar-msg cmd show >/dev/null 2>&1 && return 0
   fi
 
@@ -120,6 +140,7 @@ polybar_wait_for_state() {
   local budget_ms="${2:-800}"
   local deadline current
 
+  polybar_find_windows
   deadline=$(( $(now_ms) + budget_ms ))
   while :; do
     current=$(polybar_visible_value)

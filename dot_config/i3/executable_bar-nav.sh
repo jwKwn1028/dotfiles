@@ -210,12 +210,13 @@ case "${1:-}" in
     else
       : >"$RESTORE_HIDDEN"
     fi
-    polybar_show_persistent
     : >"$MARKER"
     printf '0\n' >"$STATE"
     setsid -f flock -n "$MARKER.lock" "$DIR/bar-nav-marker.py" \
       "$STATE" "$MARKER" >/dev/null 2>&1
     reset_pairs 0
+    select_module 0
+    polybar_show_persistent
     select_module 0
     ;;
   prev) move -1 ;;

@@ -88,16 +88,16 @@ bindsym $mod+f fullscreen toggle
 # Sticky: no `mode "default"` on actions. The name is the Polybar label.
 set $mode_window hjkl / HJKL / Tab
 mode "$mode_window" {
-    bindsym h exec --no-startup-id ~/.config/i3/workspace-groups.py direction left
-    bindsym j exec --no-startup-id ~/.config/i3/workspace-groups.py direction down
-    bindsym k exec --no-startup-id ~/.config/i3/workspace-groups.py direction up
-    bindsym l exec --no-startup-id ~/.config/i3/workspace-groups.py direction right
+    bindsym h exec --no-startup-id ~/.config/i3/workspace-action.sh direction left
+    bindsym j exec --no-startup-id ~/.config/i3/workspace-action.sh direction down
+    bindsym k exec --no-startup-id ~/.config/i3/workspace-action.sh direction up
+    bindsym l exec --no-startup-id ~/.config/i3/workspace-action.sh direction right
     bindsym Shift+h resize shrink width  10 px or 10 ppt
     bindsym Shift+j resize grow   height 10 px or 10 ppt
     bindsym Shift+k resize shrink height 10 px or 10 ppt
     bindsym Shift+l resize grow   width  10 px or 10 ppt
 # Trailing focus required: mouse_warping beats focus_follows_mouse.
-    bindsym Tab exec --no-startup-id ~/.config/i3/workspace-groups.py output
+    bindsym Tab exec --no-startup-id ~/.config/i3/workspace-action.sh output
     bindsym Return exec --no-startup-id ~/.config/i3/window-mode.sh close, mode "default"
     bindsym Escape exec --no-startup-id ~/.config/i3/window-mode.sh close, mode "default"
 }
@@ -206,16 +206,16 @@ bindcode $mod+Shift+19 exec --no-startup-id ~/.config/i3/workspace-action.sh mov
 
 # Super+X, then 1-0 for one workspace or Shift+K for all.
 mode "kill workspace (K: group, A: all)" {
-    bindsym 1 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 1
-    bindsym 2 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 2
-    bindsym 3 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 3
-    bindsym 4 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 4
-    bindsym 5 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 5
-    bindsym 6 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 6
-    bindsym 7 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 7
-    bindsym 8 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 8
-    bindsym 9 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 9
-    bindsym 0 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 10
+    bindsym 1 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 1
+    bindsym 2 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 2
+    bindsym 3 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 3
+    bindsym 4 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 4
+    bindsym 5 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 5
+    bindsym 6 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 6
+    bindsym 7 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 7
+    bindsym 8 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 8
+    bindsym 9 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 9
+    bindsym 0 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 10
     bindsym Shift+k exec --no-startup-id ~/.config/i3/kill-group-windows.sh
     bindsym Shift+a exec --no-startup-id ~/.config/i3/kill-group-windows.sh all
     bindsym Return exec --no-startup-id ~/.config/i3/kill-workspace-mode.sh close, mode "default"
@@ -227,15 +227,15 @@ bindsym $mod+Mod1+h exec --no-startup-id ~/.config/i3/workspace-action.sh prev
 bindsym $mod+Mod1+l exec --no-startup-id ~/.config/i3/workspace-action.sh next
 bindsym Control+$mod+h exec --no-startup-id ~/.config/i3/workspace-action.sh relative -1
 bindsym Control+$mod+l exec --no-startup-id ~/.config/i3/workspace-action.sh relative 1
-bindsym Control+$mod+k exec --no-startup-id ~/.config/i3/workspace-groups.py group-relative -1
-bindsym Control+$mod+j exec --no-startup-id ~/.config/i3/workspace-groups.py group-relative 1
-bindsym Control+$mod+1 exec --no-startup-id ~/.config/i3/workspace-groups.py select A
-bindsym Control+$mod+2 exec --no-startup-id ~/.config/i3/workspace-groups.py select B
-bindsym Control+$mod+grave exec --no-startup-id ~/.config/i3/workspace-groups.py select B
-bindsym Control+$mod+3 exec --no-startup-id ~/.config/i3/workspace-groups.py select C
-bindsym Control+$mod+Tab exec --no-startup-id ~/.config/i3/workspace-groups.py group-previous
-bindsym $mod+Shift+k exec --no-startup-id ~/.config/i3/workspace-groups.py transfer -1
-bindsym $mod+Shift+j exec --no-startup-id ~/.config/i3/workspace-groups.py transfer 1
+bindsym Control+$mod+k exec --no-startup-id ~/.config/i3/workspace-action.sh group-relative -1
+bindsym Control+$mod+j exec --no-startup-id ~/.config/i3/workspace-action.sh group-relative 1
+bindsym Control+$mod+1 exec --no-startup-id ~/.config/i3/workspace-action.sh select A
+bindsym Control+$mod+2 exec --no-startup-id ~/.config/i3/workspace-action.sh select B
+bindsym Control+$mod+grave exec --no-startup-id ~/.config/i3/workspace-action.sh select B
+bindsym Control+$mod+3 exec --no-startup-id ~/.config/i3/workspace-action.sh select C
+bindsym Control+$mod+Tab exec --no-startup-id ~/.config/i3/workspace-action.sh group-previous
+bindsym $mod+Shift+k exec --no-startup-id ~/.config/i3/workspace-action.sh transfer -1
+bindsym $mod+Shift+j exec --no-startup-id ~/.config/i3/workspace-action.sh transfer 1
 bindsym $mod+Shift+h exec --no-startup-id ~/.config/i3/workspace-action.sh move-relative -1
 bindsym $mod+Shift+l exec --no-startup-id ~/.config/i3/workspace-action.sh move-relative 1
 

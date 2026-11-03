@@ -4,11 +4,16 @@
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
+import socket
+import subprocess
 import sys
 import tempfile
+import threading
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -215,6 +220,72 @@ class SnapshotGroupsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no savable"):
             snapshot.capture_group(self.meta, dict(type="root", nodes=[workspace(1, [1])]), "B")
         self.assertFalse((self.meta / "workspaces.txt").exists())
+
+
+class ShellClientTests(unittest.TestCase):
+    def setUp(self):
+        import workspace_groups
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        runtime = Path(self.temporary.name)
+        self.env = dict(os.environ, XDG_RUNTIME_DIR=str(runtime), DISPLAY=":7",
+                        I3SOCK=str(runtime / "i3" / "ipc-socket.42"))
+        self.env.pop("I3_GROUP_HELPER", None)
+        with mock.patch.dict(os.environ, self.env, clear=True):
+            self.directory = workspace_groups.session_dir()
+        self.directory.mkdir(parents=True)
+        self.client = ROOT / "workspace-action.sh"
+        if not self.client.exists():
+            self.client = ROOT / "executable_workspace-action.sh"
+
+    def exchange(self, args, reply):
+        received = []
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(self.directory / "controller.sock"))
+            server.listen(1)
+            server.settimeout(5)
+
+            def serve():
+                client, _ = server.accept()
+                with client, client.makefile("rb") as stream:
+                    received.append(json.loads(stream.readline()))
+                    client.sendall(reply.encode() + b"\n")
+
+            thread = threading.Thread(target=serve)
+            thread.start()
+            result = subprocess.run(["/bin/sh", str(self.client), *args], env=self.env,
+                                    capture_output=True, text=True, timeout=10)
+            thread.join(5)
+        (self.directory / "controller.sock").unlink()
+        self.stdout = result.stdout
+        return result.returncode, received[0] if received else None
+
+    def run_client(self, *args):
+        return subprocess.run(["/bin/sh", str(self.client), *args], env=self.env,
+                              capture_output=True, text=True, timeout=10).returncode
+
+    def test_requests_match_the_python_client(self):
+        code, request = self.exchange(["switch", "3", "--group", "B", "--click"],
+                                      '{"ok": true, "result": false}')
+        self.assertEqual(code, 0)
+        self.assertEqual(request, dict(action="switch", quiet=False, value="3", group="B", click=True))
+        code, request = self.exchange(["group-relative", "-1", "--quiet"], '{"ok": true, "result": true}')
+        self.assertEqual((code, request), (0, dict(action="group-relative", quiet=True, value="-1")))
+        code, request = self.exchange(["select", "A"], '{"ok": true, "result": true}')
+        self.assertEqual(request, dict(action="select", quiet=False, group="A"))
+
+    def test_placement_and_errors_set_the_exit_status(self):
+        self.assertEqual(self.exchange(["placement", "42"], '{"ok": true, "result": true}')[0], 0)
+        self.assertEqual(self.exchange(["placement", "42"], '{"ok": true, "result": false}')[0], 1)
+        self.assertEqual(self.exchange(["kill-begin"], '{"ok": false, "error": "no"}')[0], 1)
+        self.assertEqual(self.run_client("kill-begin"), 1)
+
+    def test_what_the_shell_cannot_express_goes_to_the_python_cli(self):
+        code, request = self.exchange(["--quiet", "status"], '{"ok": true, "result": {"ready": true}}')
+        self.assertEqual((code, request, self.stdout.strip()),
+                         (0, dict(action="status", quiet=True), '{"ready": true}'))
+        self.assertEqual(self.run_client("switch", "3", "--group", "--click"), 2)
+        self.assertEqual(self.run_client("switch", "-1x"), 2)
 
 
 if __name__ == "__main__":

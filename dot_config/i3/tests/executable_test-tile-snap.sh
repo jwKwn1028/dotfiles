@@ -425,6 +425,16 @@ grep -q 'unmark _snap_left' "$SNAP_TEST_CMDS" ||
 grep -q 'mark --add _snap_right' "$SNAP_TEST_CMDS" ||
     fail 'a resnap did not add the new region mark'
 
+# Restore anchors held for other snapped windows survive a snap.
+reset
+make_tree 0 0 1920 1080 user_off '["_snap_prev_999","_snap_left"]'
+make_outputs 0 0 1920 1080
+[ "$(snap right 101)" = 0 ] || fail 'snapping a window holding a restore anchor exited nonzero'
+grep -q 'unmark _snap_prev_999' "$SNAP_TEST_CMDS" &&
+    fail 'a snap stripped a restore anchor held for another window'
+grep -q 'unmark _snap_left' "$SNAP_TEST_CMDS" ||
+    fail 'a snap of an anchor-holding window kept its old region mark'
+
 # A tiled window with a sibling gets the marks unsnap needs to rebuild its slot.
 reset
 make_tree 0 0 1920 1080 user_off '[]' 2
@@ -489,6 +499,15 @@ grep -q 'unmark _presnap_bogus_junk_x_y_1' "$SNAP_TEST_CMDS" ||
     fail 'a malformed _presnap_ mark was not cleared'
 grep -q 'malformed mark' "$SNAP_LOG" ||
     fail 'a malformed _presnap_ mark was not logged'
+
+reset
+make_tree 0 0 1920 1080 user_on '["_snap_next_999","_presnap_11_22_333_444_1","_snap_left"]'
+make_outputs 0 0 1920 1080
+[ "$(snap unsnap 101)" = 0 ] || fail 'unsnapping a window holding a restore anchor exited nonzero'
+grep -q 'unmark _snap_left' "$SNAP_TEST_CMDS" ||
+    fail 'unsnap of an anchor-holding window left its region mark behind'
+grep -q 'unmark _snap_next_999' "$SNAP_TEST_CMDS" &&
+    fail 'unsnap removed a restore anchor held for another window'
 
 # --- argument validation ---------------------------------------------------
 reset

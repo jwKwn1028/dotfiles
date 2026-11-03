@@ -310,7 +310,7 @@ for exit_key in Return Escape; do
 done
 # The number keys are the one exit that deliberately does not restore.
 # shellcheck disable=SC2016
-grep -Fq 'bindsym 1 exec --no-startup-id ~/.config/i3/workspace-groups.py kill 1' "$ROOT/config" ||
+grep -Fq 'bindsym 1 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 1' "$ROOT/config" ||
   fail "a kill-workspace number key no longer exits straight to default mode"
 
 reset_case hidden

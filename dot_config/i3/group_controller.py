@@ -44,6 +44,7 @@ class Controller:
         self.overflow_module = None
         self.overflow_options = (0.25, True)
         self.restore = None
+        self.saved = None
 
     def tree(self):
         tree = self.i3.get_tree()
@@ -62,7 +63,10 @@ class Controller:
             raise GroupError("; ".join(errors) or "No IPC reply")
 
     def save(self):
-        atomic_json(self.path, self.state)
+        text = json.dumps(self.state)
+        if text != self.saved:
+            atomic_json(self.path, self.state)
+            self.saved = text
 
     def selected(self):
         group = self.state.get("selected")

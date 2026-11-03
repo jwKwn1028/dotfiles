@@ -115,9 +115,8 @@ if [ -z "$TARGET" ]; then
   fi
 fi
 
-GROUP_HELPER="$DIR/workspace-groups.py"
-if [ -r "$GROUP_HELPER" ]; then
-  /usr/bin/python3 "$GROUP_HELPER" placement "$TARGET" || exit 0
+if [ "${SNAP_PLACEMENT_CHECKED:-0}" != 1 ] && [ -x "$DIR/workspace-action.sh" ]; then
+  "$DIR/workspace-action.sh" placement "$TARGET" || exit 0
 fi
 
 # Serialize per window: two unsnaps would read the same _presnap_ mark.
@@ -133,7 +132,7 @@ if [ "$REGION" = "unsnap" ]; then
     [.. | objects | select(.id? == $id)][0] |
     (.marks // []) as $m |
     ([$m[] | select(startswith("_presnap_"))][0] // "") as $pre |
-    ([$m[] | select(startswith("_snap_"))][0] // "") as $snap |
+    ([$m[] | select(test("^_snap_(full|left|right|up|down|ul|ur|dl|dr)$"))][0] // "") as $snap |
     ([$m[] | select(startswith("_pretiling_"))][0] // "") as $tiling |
     "\($pre)|\($snap)|\($tiling)"')"
   if [ -z "$PRE" ]; then
@@ -169,20 +168,59 @@ if [ "$REGION" = "unsnap" ]; then
   exit 0
 fi
 
-# ---------- workspace + output geometry ----------
-read -r WS_OUTPUT X Y W H <<<"$(i3-msg -t get_tree | jq -r --argjson id "$TARGET" '
-  [.. | objects | select(.type? == "workspace") |
-   select([.. | objects | .id?] | index($id))][0] |
-  "\(.output) \(.rect.x) \(.rect.y) \(.rect.width) \(.rect.height)"')"
+# ---------- workspace, output, and window state in one read ----------
+IFS='|' read -r X Y W H OX OY OW OH HAS_PRE CUR_X CUR_Y CUR_W CUR_H CUR_FLOAT \
+  SLOT_PARENT SLOT_LAYOUT SLOT_PREV SLOT_NEXT OLD_SNAPS <<<"$(i3-msg -t get_tree |
+  jq -r --argjson id "$TARGET" --argjson outputs "$(i3-msg -t get_outputs || echo '[]')" '
+  def slot_entries($p):
+    [range(0; ($p | length) - 1) as $i |
+     select($p[$i] == "nodes") |
+     {parent_path: $p[:$i], idx: $p[$i + 1]}];
+
+  . as $tree |
+  [.. | objects | select(.id? == $id)][0] as $n |
+  ([.. | objects | select(.type? == "workspace") |
+    select([.. | objects | .id?] | index($id))][0] // {}) as $ws |
+  ([$outputs[] | select(.active and .name == $ws.output)][0] // {}) as $out |
+  (first(paths(objects | select(.id? == $id))) // null) as $p |
+  (if $p == null then
+     {parent: 0, layout: "none", idx: -1, children: []}
+   else
+     ([slot_entries($p)[] |
+       . as $slot |
+       ($tree | getpath($slot.parent_path)) as $parent |
+       ($parent.nodes // []) as $children |
+       ($children[$slot.idx] // {}) as $child |
+       select((($parent.type? == "workspace") or
+               (($parent.type? == "con") and (($child.type? // "") != "workspace"))) and
+              (($children | length) > 1)) |
+       {parent: ($parent.id // 0), layout: ($parent.layout // "none"),
+        idx: $slot.idx, children: $children}] | last) //
+       {parent: 0, layout: "none", idx: -1, children: []}
+   end) as $restore |
+  [
+    $ws.rect.x, $ws.rect.y, $ws.rect.width, $ws.rect.height,
+    $out.rect.x, $out.rect.y, $out.rect.width, $out.rect.height,
+    (($n.marks // []) | any(startswith("_presnap_"))),
+    ($n.rect.x // 0),
+    ($n.rect.y // 0),
+    ($n.rect.width // 0),
+    ($n.rect.height // 0),
+    ($n.floating // ""),
+    ($restore.parent // 0),
+    ($restore.layout // "none"),
+    (if ($restore.idx // -1) > 0 then ($restore.children[$restore.idx - 1].id // 0) else 0 end),
+    (if (($restore.idx // -1) >= 0 and (($restore.idx + 1) < ($restore.children | length))) then
+       ($restore.children[$restore.idx + 1].id // 0)
+     else 0 end),
+    (($n.marks // []) | map(select(test("^_snap_(full|left|right|up|down|ul|ur|dl|dr)$"))) | join(","))
+  ] | map(if . == null then "" else tostring end) | join("|")')"
 
 # jq emits "null" for missing fields; treat any non-positive as failure.
 if ! [[ "${W:-}" =~ ^[0-9]+$ && "${H:-}" =~ ^[0-9]+$ ]] || (( W <= 0 || H <= 0 )); then
   snap_log "could not resolve workspace rect for con_id=$TARGET (got W=$W H=$H)"
   exit 1
 fi
-
-read -r OX OY OW OH <<<"$(i3-msg -t get_outputs | jq -r --arg o "$WS_OUTPUT" '
-  .[] | select(.active and .name == $o) | "\(.rect.x) \(.rect.y) \(.rect.width) \(.rect.height)"')"
 
 # Mixed-height monitors can expose root-sized pseudo outputs and stale rects.
 if [[ "${OH:-}" =~ ^[0-9]+$ ]]; then
@@ -256,45 +294,6 @@ else
 fi
 
 # First snap only -- resnap re-runs with the same id, so skip if _presnap_ exists.
-read -r HAS_PRE CUR_X CUR_Y CUR_W CUR_H CUR_FLOAT SLOT_PARENT SLOT_LAYOUT SLOT_PREV SLOT_NEXT <<<"$(i3-msg -t get_tree | jq -r --argjson id "$TARGET" '
-  def slot_entries($p):
-    [range(0; ($p | length) - 1) as $i |
-     select($p[$i] == "nodes") |
-     {parent_path: $p[:$i], idx: $p[$i + 1]}];
-
-  . as $tree |
-  [.. | objects | select(.id? == $id)][0] as $n |
-  (first(paths(objects | select(.id? == $id))) // null) as $p |
-  (if $p == null then
-     {parent: 0, layout: "none", idx: -1, children: []}
-   else
-     ([slot_entries($p)[] |
-       . as $slot |
-       ($tree | getpath($slot.parent_path)) as $parent |
-       ($parent.nodes // []) as $children |
-       ($children[$slot.idx] // {}) as $child |
-       select((($parent.type? == "workspace") or
-               (($parent.type? == "con") and (($child.type? // "") != "workspace"))) and
-              (($children | length) > 1)) |
-       {parent: ($parent.id // 0), layout: ($parent.layout // "none"),
-        idx: $slot.idx, children: $children}] | last) //
-       {parent: 0, layout: "none", idx: -1, children: []}
-   end) as $restore |
-  (($n.marks // []) | any(startswith("_presnap_"))) as $hp |
-  [
-    ($hp | tostring),
-    ($n.rect.x // 0),
-    ($n.rect.y // 0),
-    ($n.rect.width // 0),
-    ($n.rect.height // 0),
-    ($n.floating // ""),
-    ($restore.parent // 0),
-    ($restore.layout // "none"),
-    (if ($restore.idx // -1) > 0 then ($restore.children[$restore.idx - 1].id // 0) else 0 end),
-    (if (($restore.idx // -1) >= 0 and (($restore.idx + 1) < ($restore.children | length))) then
-       ($restore.children[$restore.idx + 1].id // 0)
-     else 0 end)
-  ] | @tsv')"
 if [ "$HAS_PRE" = "false" ]; then
   case "$CUR_FLOAT" in
     user_on|auto_on) pf=1 ;;
@@ -314,10 +313,8 @@ if [ "$HAS_PRE" = "false" ]; then
   fi
 fi
 
-# Strip prior _snap_* marks: `mark --add` accumulates, and resnap.sh races otherwise.
-OLD_SNAPS=$(i3-msg -t get_tree | jq -r --argjson id "$TARGET" '
-  ([.. | objects | select(.id? == $id)][0].marks // []) |
-  map(select(startswith("_snap_"))) | join(",")')
+# Strip prior region marks: `mark --add` accumulates, and resnap.sh races otherwise.
+# Restore anchors this window holds for other snapped windows stay.
 UNMARK_PREFIX=""
 if [ -n "$OLD_SNAPS" ]; then
   IFS=',' read -ra _old <<<"$OLD_SNAPS"
@@ -326,23 +323,17 @@ if [ -n "$OLD_SNAPS" ]; then
   done
 fi
 
-# Stage 1: unfullscreen, set border + float, mark. Poll: size-hinted apps lag.
-i3-msg "[con_id=$TARGET] ${UNMARK_PREFIX}fullscreen disable, border $BORDER, floating enable, mark --add _snap_$REGION" >/dev/null
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  state=$(i3-msg -t get_tree | jq -r --argjson id "$TARGET" '
-    [.. | objects | select(.id? == $id)][0].floating // "stopped_on"')
-  case "$state" in user_on|auto_on) break ;; esac
-  sleep 0.01
-done
-
-# Stage 2: place it, shrinking by the reported overflow while the rect does not
-# fit -- terminals round to size hints and i3 clamps back to y=0.
+# Unfullscreen, set border + float, mark, and place in one command, then shrink
+# by the reported overflow while the rect does not fit -- terminals round to
+# size hints and i3 clamps back to y=0.
+STAGE="${UNMARK_PREFIX}fullscreen disable, border $BORDER, floating enable, mark --add _snap_$REGION, "
 attempts=0
 req_w=$tw
 req_h=$th
 fit=""
 while (( attempts < 10 )); do
-  i3-msg "[con_id=$TARGET] resize set $req_w $req_h, move position $tx $ty" >/dev/null
+  i3-msg "[con_id=$TARGET] ${STAGE}resize set $req_w $req_h, move position $tx $ty" >/dev/null
+  STAGE=""
   sleep 0.02
   read -r aw ah ax ay <<<"$(i3-msg -t get_tree | jq -r --argjson id "$TARGET" '
     [.. | objects | select(.id? == $id)][0] | "\(.rect.width) \(.rect.height) \(.rect.x) \(.rect.y)"')"

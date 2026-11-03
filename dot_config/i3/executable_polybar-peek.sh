@@ -5,7 +5,10 @@
 
 set -u
 
-DIR="$(dirname "$(readlink -f "$0")")"
+case $0 in
+  */*) DIR=${0%/*} ;;
+  *) DIR=. ;;
+esac
 . "$DIR/_polybar-common.sh"
 
 PEEK_DURATION_MS="${I3_POLYBAR_PEEK_MS:-200}"
@@ -28,7 +31,14 @@ write_hold() {
 }
 
 hold_pid() {
-  cat "$POLYBAR_PEEK_HOLD" 2>/dev/null || true
+  local pid=
+  read -r pid 2>/dev/null < "$POLYBAR_PEEK_HOLD" || true
+  printf '%s\n' "$pid"
+}
+
+read_trigger() {
+  trigger=
+  read -r trigger 2>/dev/null < "$POLYBAR_PEEK_TRIGGER" || true
 }
 
 hold_is_live() {
@@ -49,7 +59,7 @@ hide_owned_peek() {
 }
 
 run_worker() {
-  local trigger now
+  local trigger now wait_ms seconds
 
   command -v flock > /dev/null 2>&1 || exit 0
 
@@ -64,11 +74,13 @@ run_worker() {
         continue
       fi
     else
-      trigger=$(cat "$POLYBAR_PEEK_TRIGGER" 2> /dev/null || true)
+      read_trigger
       if [[ "$trigger" =~ ^[0-9]+$ ]]; then
         now=$(now_ms)
-        if [ $((now - trigger)) -lt "$PEEK_DURATION_MS" ]; then
-          sleep 0.05
+        wait_ms=$((trigger + PEEK_DURATION_MS - now))
+        if [ "$wait_ms" -gt 0 ]; then
+          printf -v seconds '%d.%03d' $((wait_ms / 1000)) $((wait_ms % 1000))
+          sleep "$seconds"
           continue
         fi
       fi
@@ -90,7 +102,7 @@ run_worker() {
     fi
 
     if [ ! -e "$POLYBAR_PEEK_HOLD" ]; then
-      trigger=$(cat "$POLYBAR_PEEK_TRIGGER" 2> /dev/null || true)
+      read_trigger
       now=$(now_ms)
       if [[ "$trigger" =~ ^[0-9]+$ ]] \
         && [ $((now - trigger)) -lt "$PEEK_DURATION_MS" ]; then

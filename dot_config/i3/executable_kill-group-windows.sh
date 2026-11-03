@@ -7,6 +7,6 @@ DIR="$(dirname "$(readlink -f "$0")")"
 
 action=kill-group
 [ "${1:-}" != all ] || action=kill-all-groups
-/usr/bin/python3 "${I3_GROUP_HELPER:-$DIR/workspace-groups.py}" "$action"
+"$DIR/workspace-action.sh" "$action"
 i3-msg 'mode "default"' >/dev/null
 exec "$DIR/kill-workspace-mode.sh" close

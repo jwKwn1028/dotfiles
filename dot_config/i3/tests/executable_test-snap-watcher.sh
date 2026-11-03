@@ -91,7 +91,7 @@ path, specs = sys.argv[1], sys.argv[2:]
 
 
 def win(wid, region):
-    marks = [f"_snap_{region}"] if region else []
+    marks = [f"_snap_{part}" for part in region.split("+")] if region else []
     return {
         "id": wid, "type": "con", "window": 9000 + wid, "name": f"w{wid}",
         "layout": "splith", "floating": "user_off", "fullscreen_mode": 0,
@@ -296,5 +296,16 @@ make_tree 101:left
 close_event 102
 run_watcher
 expect_snaps '' 'closing an unsnapped window triggered a rebalance'
+
+make_tree 101:left
+close_event 102 '["_snap_next_101"]'
+run_watcher
+expect_snaps '' 'closing a tiled window holding a restore anchor triggered a rebalance'
+
+# --- restore anchors are not snap regions ---------------------------------
+make_tree 101:prev_103+left 102:
+new_event 102
+run_watcher
+expect_snaps 'right 102|' 'a restore anchor hid the region of the window holding it'
 
 echo 'PASS: snap-watcher fills, splits, and rebalances snapped workspaces'
