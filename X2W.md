@@ -162,7 +162,7 @@ is not free. Eight files branch on the **exact string** `linuxmint-i3-x11`:
 | `.chezmoiignore` | `ne` | the whole desktop config tree |
 | `.chezmoiscripts/run_once_before_10-install-apt-packages.sh.tmpl` | `eq` (twice) | the i3 PPA and the `i3_x11` apt list |
 | `.chezmoiscripts/run_once_after_30-install-cli-tools.sh.tmpl` | `eq` | desktop CLI tooling |
-| `.chezmoiscripts/run_after_90-install-x11-input-configs.sh.tmpl` | `eq` | the Xorg rule and `/etc/default/keyboard` |
+| `.chezmoiscripts/run_after_90-install-x11-input-configs.sh.tmpl` | `eq` | the Xorg rules and `/etc/default/keyboard` |
 | `.chezmoiscripts/run_once_after_95-build-i3lock-color.sh.tmpl` | `eq` | the i3lock-color build |
 | `.chezmoiscripts/run_once_after_96-build-zathura.sh.tmpl` | `eq` | the zathura build |
 | `.chezmoi.toml.tmpl` | — | the prompt that defines the value |
@@ -337,12 +337,14 @@ There are also two more X11-owned input sources to account for now:
 
 - `dot_config/xfce4/xfconf/private_xfce-perchannel-xml/pointers.xml` disables
   the ELAN touchpad and carries pointer acceleration/tapping choices.
-- `.chezmoiscripts/run_after_90-install-x11-input-configs.sh.tmpl` installs an
-  Xorg libinput acceleration rule for the external TrackPoint keyboard and writes
-  `/etc/default/keyboard` with
+- `.chezmoiscripts/run_after_90-install-x11-input-configs.sh.tmpl` installs
+  Xorg libinput rules, acceleration for the external TrackPoint keyboard and a
+  button map disabling button 2 on the internal TrackPoint, the ELAN
+  shadow-mouse node, and that keyboard, and writes `/etc/default/keyboard` with
   `XKBOPTIONS="ctrl:swapcaps,korean:ralt_hangul"`.
 
-Do not port the Xorg rule itself; re-express its acceleration setting in Sway.
+Do not port the Xorg rules themselves; re-express both settings in Sway, and
+verify the three middle buttons independently.
 
 The keyboard options are not a detail to defer, and there are two of them now —
 `korean:ralt_hangul` is newer than the first audit, which recorded only
@@ -375,14 +377,6 @@ or `disabled`, but first inspect identifiers with:
 ```sh
 swaymsg -t get_inputs
 ```
-
-### `dot_local/bin/executable_disable-trackpoint-middle-click`
-
-This rewrites X11 button maps with `xinput`, disabling button 2 on the internal
-TrackPoint, the ELAN shadow-mouse node, and the external Lenovo TrackPoint
-keyboard every two seconds. On Wayland, prefer libinput/Sway settings or a
-udev/hwdb rule. A direct one-for-one script may not exist, so verify the three
-physical behaviors independently.
 
 ### `dot_config/polybar/*` and its i3-side callers
 

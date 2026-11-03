@@ -93,7 +93,7 @@ sz() {   # full restart (no double-wrapped ZLE widgets); shows config changes fi
   exec zsh
 }
 alias ':q'='exit'
-alias ':qa'='xdotool key --clearmodifiers alt+F4'
+alias ':qa'='i3-msg -q kill'
 if _have fdfind; then
   alias fd='fdfind'
 fi

@@ -95,7 +95,7 @@ class ProvisioningContractTests(unittest.TestCase):
         packages = set(data["packages"]["apt"]["i3_x11"])
         config = source_file("config")
         contracts = (
-            ("ghostty", config, "exec ghostty"),
+            ("ghostty", config, "exec --no-startup-id ghostty +new-window"),
             ("xfce4-terminal", config, "xfce4-terminal"),
             ("xfce4-settings", config, "xfsettingsd"),
             ("xfce4-power-manager", config, "xfce4-power-manager"),

@@ -73,13 +73,22 @@ cat >"$MOCK_BIN/xdotool" <<'EOF'
 #!/usr/bin/env bash
 printf 'probe %s\n' "$*" >>"$POLYBAR_TEST_STATE_DIR/applet-events"
 probes=$(grep -c '^probe ' "$POLYBAR_TEST_STATE_DIR/applet-events")
-[ "$probes" -ge 3 ] && printf '4242\n'
+[ "$probes" -ge 2 ] && printf '4242\n'
 exit 0
 EOF
 
 cat >"$MOCK_BIN/xwininfo" <<'EOF'
 #!/usr/bin/env bash
-printf 'Map State: IsViewable\nWidth: 19\nHeight: 19\n'
+probes=$(grep -c '^probe ' "$POLYBAR_TEST_STATE_DIR/applet-events")
+if [ "$probes" -ge 3 ]; then
+    parent='0x260001b (has no name)'
+    state=IsUnviewable
+else
+    parent='0x3c9 (the root window) "i3"'
+    state=IsViewable
+fi
+printf '  Root window id: 0x3c9 (the root window) "i3"\n  Parent window id: %s\n' "$parent"
+printf '  Width: 19\n  Height: 19\n  Map State: %s\n' "$state"
 EOF
 
 cat >"$MOCK_BIN/pgrep" <<'EOF'
@@ -184,6 +193,9 @@ grep -Fqx -- 'closed|-f blueman-tray' "$MOCK_STATE/applet-events" ||
       cat "$MOCK_STATE/applet-events" >&2; exit 1; }
 [ "$(grep -c '^probe ' "$MOCK_STATE/applet-events")" -ge 3 ] ||
     { printf 'FAIL: the redock did not wait for nm-applet\n' >&2; exit 1; }
+[ "$(grep -c '^probe ' "$MOCK_STATE/applet-events")" -eq 3 ] ||
+    { printf 'FAIL: an nm-applet icon docked in the hidden tray was not recognized\n' >&2
+      exit 1; }
 grep -q '^closed|.*tray-cursor\.py' "$MOCK_STATE/cursor-events" ||
     { printf 'FAIL: the tray cursor helper was not started with the lock fd closed\n' >&2
       cat "$MOCK_STATE/cursor-events" >&2; exit 1; }

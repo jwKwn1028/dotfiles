@@ -11,8 +11,9 @@ LOG="$TEST_TMP/systemctl-calls"
 PICOM_LOG="$TEST_TMP/picom-calls"
 DISPLAY_LOG="$TEST_TMP/display-calls"
 NOTIFY_LOG="$TEST_TMP/notify-calls"
+TEST_RUNTIME="$TEST_TMP/runtime"
 trap 'rm -rf -- "$TEST_TMP"' EXIT
-mkdir -p "$MOCK_BIN" "$TEST_HOME/.config/dunst"
+mkdir -p "$MOCK_BIN" "$TEST_HOME/.config/dunst" "$TEST_RUNTIME"
 
 cat >"$MOCK_BIN/systemctl" <<'EOF'
 #!/usr/bin/env bash
@@ -45,8 +46,8 @@ chmod +x "$MOCK_BIN/pkill"
 
 cat >"$MOCK_BIN/display-setup" <<'EOF'
 #!/usr/bin/env bash
-printf 'call\nreload=%s\ntext=%s\n' \
-    "${I3_RELOAD_TOAST:-}" "${I3_DISPLAY_TOAST:-}" \
+printf 'call\nreload=%s\ntext=%s\ndelay=%s\n' \
+    "${I3_RELOAD_TOAST:-}" "${I3_DISPLAY_TOAST:-}" "${I3_DISPLAY_SETUP_DELAY-unset}" \
     >>"$SESSION_RELOAD_TEST_DISPLAY_LOG"
 [ "$SESSION_RELOAD_TEST_DISPLAY_FAILURE" = 0 ]
 EOF
@@ -63,7 +64,8 @@ run() {
     : >"$PICOM_LOG"
     : >"$DISPLAY_LOG"
     : >"$NOTIFY_LOG"
-    env PATH="$MOCK_BIN:/usr/bin:/bin" HOME="$TEST_HOME" \
+    env -u I3_DISPLAY_SETUP_DELAY PATH="$MOCK_BIN:/usr/bin:/bin" HOME="$TEST_HOME" \
+        XDG_RUNTIME_DIR="$TEST_RUNTIME" \
         SESSION_RELOAD_TEST_LOG="$LOG" \
         SESSION_RELOAD_TEST_DUNST_STARTED="$1" \
         SESSION_RELOAD_TEST_PICOM_RUNNING="${2:-1}" \
@@ -74,6 +76,7 @@ run() {
         SESSION_RELOAD_TEST_DISPLAY_LOG="$DISPLAY_LOG" \
         SESSION_RELOAD_TEST_NOTIFY_LOG="$NOTIFY_LOG" \
         I3_DISPLAY_SETUP="$MOCK_BIN/display-setup" \
+        ${SESSION_RELOAD_TEST_DELAY:+"I3_DISPLAY_SETUP_DELAY=$SESSION_RELOAD_TEST_DELAY"} \
         sh "$RELOAD"
 }
 fail() {
@@ -104,6 +107,8 @@ grep -Fxq 'reload=1' "$DISPLAY_LOG" ||
     fail 'display setup was not asked to show the reload toast'
 grep -Fxq 'text=' "$DISPLAY_LOG" ||
     fail 'a successful reload unexpectedly supplied failure text'
+grep -Fxq 'delay=unset' "$DISPLAY_LOG" ||
+    fail 'the first parse of a login did not keep the display-setup delay'
 
 # Restart dunst for a newer config.
 touch -d '2030-01-01 00:00:00' "$conf"
@@ -143,5 +148,13 @@ run 'Wed 2026-08-26 10:00:00 KST' 1 '' 0 1
     fail 'display failure did not emit exactly one fallback notification'
 grep -Fxq -- '-u critical i3 reload partial display setup' "$NOTIFY_LOG" ||
     fail 'display failure fallback did not identify the failed component'
+
+: >"$TEST_RUNTIME/i3-reload-toast"
+run 'Wed 2026-08-26 10:00:00 KST'
+grep -Fxq 'delay=0' "$DISPLAY_LOG" ||
+    fail 'a later reload did not skip the display-setup delay'
+SESSION_RELOAD_TEST_DELAY=2 run 'Wed 2026-08-26 10:00:00 KST'
+grep -Fxq 'delay=2' "$DISPLAY_LOG" ||
+    fail 'a later reload overrode an explicit display-setup delay'
 
 printf 'PASS: session reload refreshes services and picom with one summary toast\n'

@@ -9,8 +9,8 @@ autoload -Uz compinit
 _compdump="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/zcompdump"
 mkdir -p -- "${_compdump%/*}" 2>/dev/null
 
-if [[ -n $_compdump(#qN.mh+24) ]]; then
-  compinit -d "$_compdump"
+if [[ ! -f $_compdump || -n $_compdump(#qN.mh+24) ]]; then
+  compinit -d "$_compdump" && touch -- "$_compdump"
 else
   compinit -C -d "$_compdump"
 fi

@@ -5,6 +5,21 @@ import sys
 
 raw = sys.stdin.buffer.read()
 
+managed = {
+    "model": "gpt-6.1-sol",
+    "model_reasoning_effort": "xhigh",
+}
+
+try:
+    import tomllib
+    current = tomllib.loads(raw.decode("utf-8"))
+except (ImportError, ValueError):
+    current = None
+
+if current is not None and all(current.get(key) == value for key, value in managed.items()):
+    sys.stdout.buffer.write(raw)
+    raise SystemExit(0)
+
 try:
     import tomlkit
     from tomlkit.exceptions import ParseError
@@ -18,11 +33,6 @@ try:
 except (UnicodeDecodeError, ParseError):
     print("Codex settings are invalid TOML; refusing to overwrite them.", file=sys.stderr)
     raise SystemExit(1)
-
-managed = {
-    "model": "gpt-6.1-sol",
-    "model_reasoning_effort": "xhigh",
-}
 
 if all(config.get(key) == value for key, value in managed.items()):
     sys.stdout.buffer.write(raw)

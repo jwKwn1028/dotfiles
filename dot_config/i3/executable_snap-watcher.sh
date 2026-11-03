@@ -241,6 +241,7 @@ handle_close() {
 # ---------- subscribe loop ----------
 while true; do
   i3-msg -t subscribe -m '["window"]' 200>&- 2>/dev/null | while IFS= read -r line; do
+    [[ $line =~ \"change\":[[:space:]]*\"(new|close)\" ]] || continue
     change=$(jq -r '.change // empty' <<<"$line" 2>/dev/null) || continue
     case "$change" in
       new)   handle_new   "$line" ;;

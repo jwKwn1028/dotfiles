@@ -198,7 +198,7 @@ _open_gui_editor() {
 c() { _open_gui_editor code; }
 z() { _open_gui_editor zed; }
 alias ':q'='exit'
-_have xdotool && alias ':qa'='xdotool key --clearmodifiers alt+F4'
+_have i3-msg && alias ':qa'='i3-msg -q kill'
 alias hb='${EDITOR:-vi} ~/.bashrc'
 alias sb='source ~/.bashrc && echo "Bash config reloaded."'
 unalias scpo poweroff 2>/dev/null

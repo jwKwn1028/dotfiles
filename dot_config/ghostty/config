@@ -34,6 +34,9 @@ shell-integration = zsh
 # Helix mode owns the cursor; Ghostty's vi-keymap detection misses hxnor/hxins.
 shell-integration-features = no-cursor,sudo,title,ssh-terminfo
 
+quit-after-last-window-closed = true
+quit-after-last-window-closed-delay = 5m
+
 # Matches xfce font-allow-bold = false
 font-style-bold = false
 # No synthesized slant on the fallbacks; JuliaMono's real italic stays.

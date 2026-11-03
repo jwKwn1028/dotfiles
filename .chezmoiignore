@@ -97,7 +97,6 @@ snap/firefox/common/.mozilla/firefox/
 .config/Thunar/
 .toggle-touchpad.sh
 .local/bin/touchpad
-.local/bin/disable-trackpoint-middle-click
 
 # Taskwarrior reminders: dunst rules plus a systemd user timer. dot_taskrc is
 # ungated -- the `remind` UDA is inert without the notifier.

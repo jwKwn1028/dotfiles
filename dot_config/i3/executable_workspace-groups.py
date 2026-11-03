@@ -44,13 +44,16 @@ def serve():
         controller = Controller(i3ipc.Connection(socket_path=socket_path()), directory)
         controller.restore = Restore(controller)
 
+        def forward(kind, event):
+            if kind != "window" or event.change != "title":
+                events.put((kind, event.change, getattr(getattr(event, "container", None), "id", None)))
+
         def listen():
             while not stopped.is_set():
                 try:
                     connection = i3ipc.Connection(socket_path=socket_path())
                     for kind in ("window", "workspace", "output", "mode"):
-                        connection.on(kind, lambda _, event, kind=kind: events.put(
-                            (kind, event.change, getattr(getattr(event, "container", None), "id", None))))
+                        connection.on(kind, lambda _, event, kind=kind: forward(kind, event))
                     events.put(("reconnect", "", None))
                     connection.main()
                 except Exception as error:

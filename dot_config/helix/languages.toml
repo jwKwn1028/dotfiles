@@ -56,7 +56,7 @@ args = ["server"]
 name = "latex"
 language-servers = ["texlab", "harper-ls"]
 auto-format = true
-formatter = { command = "latexindent", args = ["-"] }
+formatter = { command = "latexindent", args = ["-g", "/dev/null", "-"] }
 soft-wrap = { enable = true, wrap-at-text-width = true }
 
 [language-server.texlab]
@@ -117,7 +117,7 @@ formatter = { command = "julia", args = [
   "--startup-file=no",
   "--history-file=no",
   "-e",
-  "using JuliaFormatter; format_text(stdin)",
+  "using JuliaFormatter; print(format_text(read(stdin, String)))",
 ] }
 
 [language-server.julia-lsp]

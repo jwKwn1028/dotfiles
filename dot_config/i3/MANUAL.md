@@ -284,7 +284,8 @@ the hold; a visible fullscreen window suppresses it until the pointer leaves.
 
 `display-setup.sh` puts the first external output at `0x0`, laptop to its right;
 laptop-only uses `0x0`. It reconciles workspaces, dunst, wallpaper, and bars.
-Defaults: `I3_LAPTOP_OUTPUT=eDP`, `I3_DISPLAY_SETUP_DELAY=1` second.
+Defaults: `I3_LAPTOP_OUTPUT=eDP`, `I3_DISPLAY_SETUP_DELAY=1` second (0 on i3
+reloads after login).
 
 `randr-hotplug.sh` debounces connections for `I3_RANDR_HOTPLUG_QUIET` (0.7 s),
 ignores geometry-only events, and rechecks after setup. Rofi reports connection

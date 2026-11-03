@@ -42,6 +42,10 @@ if pgrep -x picom >/dev/null 2>&1; then
 fi
 
 display_setup=${I3_DISPLAY_SETUP:-$HOME/.config/i3/display-setup.sh}
+if [ -e "${XDG_RUNTIME_DIR:-/tmp}/i3-reload-toast" ]; then
+    I3_DISPLAY_SETUP_DELAY=${I3_DISPLAY_SETUP_DELAY:-0}
+    export I3_DISPLAY_SETUP_DELAY
+fi
 display_succeeded=0
 if [ -x "$display_setup" ]; then
     if [ -n "$failures" ]; then

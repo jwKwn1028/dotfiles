@@ -64,7 +64,7 @@ The fzf keys need fzf's installed widgets. Editor keymaps are separate: see
 
 Short aliases: `h` (Helix here), `v` (Vim here), `mo` (Micro), `twt`
 (taskwarrior-tui), `tcal` (task-calendar), `:q` (exit the shell), and `:qa`
-(send Alt+F4 to the active X11 window). `ls` runs eza; `rg` searches smart-case.
+(close the focused i3 window). `ls` runs eza; `rg` searches smart-case.
 
 `cd --`, `cd ---`, and longer runs of `-` step back two, three, or more entries
 in the directory stack. With zoxide installed, plain `cd` also records visits.

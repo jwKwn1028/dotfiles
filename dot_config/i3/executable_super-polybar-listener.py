@@ -241,7 +241,7 @@ def input_command() -> list[str]:
     if xinput is None:
         raise FileNotFoundError("xinput is not installed")
 
-    command = [xinput, "test-xi2", "--root"]
+    command = [xinput, "test-xi2", "--root", "Virtual core keyboard"]
     stdbuf = shutil.which("stdbuf")
     if stdbuf is not None:
         command = [stdbuf, "-oL", *command]

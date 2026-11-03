@@ -69,10 +69,11 @@ STAMP=$(date '+%Y-%m-%d %H:%M:%S')
 icon_docked() {
     local win info
     for win in $(xdotool search --class "$1" 2>/dev/null); do
-        info=$(xwininfo -id "$win" 2>/dev/null) || continue
-        case "$info" in *IsViewable*) ;; *) continue ;; esac
-        awk '$1 == "Width:" { w = $2 } $1 == "Height:" { h = $2 }
-             END { exit !(w > 10 && w <= 64 && h > 10 && h <= 64) }' <<<"$info" &&
+        info=$(xwininfo -id "$win" -tree -stats 2>/dev/null) || continue
+        awk '/^ *Parent window id:/ && /\(the root window\)/ { undocked = 1 }
+             $1 == "Map" && $3 == "IsUnMapped" { undocked = 1 }
+             $1 == "Width:" { w = $2 } $1 == "Height:" { h = $2 }
+             END { exit !(!undocked && w > 10 && w <= 64 && h > 10 && h <= 64) }' <<<"$info" &&
             return 0
     done
     return 1

@@ -15,7 +15,7 @@ set -eu
 
 {{ template "script-helpers/install-root-config.sh" . }}
 
-install_config /etc/X11/90-trackpoint-kbd.conf <<'EOF'
+install_config /etc/X11/xorg.conf.d/90-trackpoint.conf -D <<'EOF'
 Section "InputClass"
     Identifier "Lenovo TrackPoint Keyboard II pointer"
     MatchProduct "Lenovo TrackPoint Keyboard II"
@@ -23,7 +23,20 @@ Section "InputClass"
     Driver "libinput"
     Option "AccelSpeed" "0.8"
 EndSection
+
+Section "InputClass"
+    Identifier "TrackPoint middle button disabled"
+    MatchProduct "TPPS/2 Elan TrackPoint|ELAN0688:00 04F3:320B Mouse|Lenovo TrackPoint Keyboard II"
+    MatchIsPointer "on"
+    Driver "libinput"
+    Option "ButtonMapping" "1 0 3"
+EndSection
 EOF
+
+if [ -e /etc/X11/90-trackpoint-kbd.conf ]; then
+    echo "==> Removing /etc/X11/90-trackpoint-kbd.conf (sudo may prompt for your password)"
+    sudo rm -f /etc/X11/90-trackpoint-kbd.conf
+fi
 
 install_config /etc/default/keyboard <<'EOF'
 # KEYBOARD CONFIGURATION FILE

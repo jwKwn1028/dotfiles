@@ -23,8 +23,4 @@ fi
 
 snap_log "titles -> $NEW"
 
-i3-msg -t get_tree \
-  | jq -r '.. | objects | select(.window != null) | .id' \
-  | while read -r id; do
-      i3-msg "[con_id=$id] border $NEW" >/dev/null
-    done
+i3-msg "[all] border $NEW" >/dev/null

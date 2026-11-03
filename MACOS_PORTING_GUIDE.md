@@ -433,9 +433,8 @@ Do not copy these to a Mac merely because the paths are harmless:
 - `dot_config/pipewire/` and `dot_config/systemd/`.
 - `dot_config/zathura/` unless a supported macOS installation is deliberately
   selected and tested.
-- `dot_local/bin/executable_touchpad`, its
-  `executable_dot_toggle-touchpad.sh` compatibility wrapper, and
-  `dot_local/bin/executable_disable-trackpoint-middle-click`.
+- `dot_local/bin/executable_touchpad` and its
+  `executable_dot_toggle-touchpad.sh` compatibility wrapper.
 - `dot_config/flameshot/` and `dot_config/fontconfig/`.
 - `dot_local/bin/executable_cpu-load`, which parses `/proc/stat`;
   `dot_local/bin/symlink_fd.tmpl`, which exists only for Debian's `fdfind`
