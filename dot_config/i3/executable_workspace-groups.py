@@ -279,38 +279,14 @@ def bar():
         time.sleep(1)
 
 
-def desktop_icons():
-    data = [os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))]
-    data += os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")
-    icons = {}
-    for path in (path for root in data for path in sorted(Path(root, "applications").glob("*.desktop"))):
-        try:
-            entry = path.read_text(errors="replace").split("[Desktop Entry]", 1)[-1].split("\n[", 1)[0]
-        except OSError:
-            continue
-        fields = dict(line.split("=", 1) for line in entry.splitlines() if "=" in line)
-        if fields.get("Icon"):
-            for key in (fields.get("StartupWMClass"), path.stem):
-                if key:
-                    icons.setdefault(key.lower(), fields["Icon"])
-    return icons
-
-
 def window_menu():
-    windows = request("status")["windows"]
-    icons = desktop_icons()
-    lines = []
-    for window in windows:
-        app = window.get("class", "").lower()
-        icon = icons.get(app) or icons.get(window.get("instance", "").lower()) or app
-        text = window["name"].replace("\n", " ").replace("\x00", "").replace("\x1f", "")
-        lines.append(f"{window['group'][0]}:{window['group'][1]}  {text}\0icon\x1f{icon}")
+    menu = request("window-menu")
     selected = subprocess.run(["rofi", "-dmenu", "-i", "-show-icons", "-format", "i", "-p", "Window"],
-                              input="\n".join(lines), text=True, stdout=subprocess.PIPE)
+                              input=menu["menu"], text=True, stdout=subprocess.PIPE)
     if selected.returncode == 0 and selected.stdout.strip().isdigit():
         index = int(selected.stdout.strip())
-        if 0 <= index < len(windows):
-            request("focus", value=windows[index]["id"])
+        if 0 <= index < len(menu["ids"]):
+            request("focus", value=menu["ids"][index])
 
 
 def main():

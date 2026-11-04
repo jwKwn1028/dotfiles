@@ -238,7 +238,7 @@ class ShellClientTests(unittest.TestCase):
         if not self.client.exists():
             self.client = ROOT / "executable_workspace-action.sh"
 
-    def exchange(self, args, reply):
+    def exchange(self, args, *replies):
         received = []
         with socket.socket(socket.AF_UNIX) as server:
             server.bind(str(self.directory / "controller.sock"))
@@ -246,10 +246,11 @@ class ShellClientTests(unittest.TestCase):
             server.settimeout(5)
 
             def serve():
-                client, _ = server.accept()
-                with client, client.makefile("rb") as stream:
-                    received.append(json.loads(stream.readline()))
-                    client.sendall(reply.encode() + b"\n")
+                for reply in replies:
+                    client, _ = server.accept()
+                    with client, client.makefile("rb") as stream:
+                        received.append(json.loads(stream.readline()))
+                        client.sendall(reply.encode() + b"\n")
 
             thread = threading.Thread(target=serve)
             thread.start()
@@ -258,6 +259,7 @@ class ShellClientTests(unittest.TestCase):
             thread.join(5)
         (self.directory / "controller.sock").unlink()
         self.stdout = result.stdout
+        self.received = received
         return result.returncode, received[0] if received else None
 
     def run_client(self, *args):
@@ -286,6 +288,60 @@ class ShellClientTests(unittest.TestCase):
                          (0, dict(action="status", quiet=True), '{"ready": true}'))
         self.assertEqual(self.run_client("switch", "3", "--group", "--click"), 2)
         self.assertEqual(self.run_client("switch", "-1x"), 2)
+
+    def test_window_menu_pipes_the_controller_menu_to_rofi(self):
+        bin_dir = Path(self.temporary.name) / "bin"
+        bin_dir.mkdir()
+        rofi = bin_dir / "rofi"
+        rofi.write_text('#!/bin/sh\ncat > "$ROFI_INPUT"\nprintf "%s\\n" "$ROFI_CHOICE"\n[ -n "$ROFI_CHOICE" ]\n')
+        rofi.chmod(0o755)
+        self.env.update(PATH=f"{bin_dir}:{self.env['PATH']}", ROFI_INPUT=str(bin_dir / "input"),
+                        ROFI_CHOICE="1")
+        menu = dict(menu="A:1  one\0icon\x1fa\nB:2  two\0icon\x1fb", ids=[11, 22])
+        reply = json.dumps(dict(ok=True, result=menu))
+        code, _ = self.exchange(["window-menu"], reply, '{"ok": true, "result": true}')
+        self.assertEqual(code, 0)
+        self.assertEqual(self.received, [dict(action="window-menu", quiet=False),
+                                         dict(action="focus", quiet=False, value="22")])
+        self.assertEqual((bin_dir / "input").read_bytes(), menu["menu"].encode())
+        self.env["ROFI_CHOICE"] = ""
+        self.assertEqual(self.exchange(["window-menu"], reply)[0], 0)
+        self.assertEqual(len(self.received), 1)
+
+
+class WindowMenuTests(unittest.TestCase):
+    def test_menu_lines_use_cached_desktop_icons(self):
+        with tempfile.TemporaryDirectory() as directory:
+            apps = Path(directory, "data", "applications")
+            apps.mkdir(parents=True)
+            (apps / "org.example.Viewer.desktop").write_text(
+                "[Desktop Entry]\nIcon=viewer\nStartupWMClass=Viewer\n")
+            controller = Controller(SimpleNamespace(), directory)
+            controller.status = lambda: dict(windows=[
+                {"id": 11, "name": "one\ntwo", "class": "Viewer", "instance": "viewer", "group": ["A", 1]},
+                {"id": 22, "name": "term", "class": "Term", "instance": "term", "group": ["B", 2]}])
+            data = dict(XDG_DATA_HOME=str(Path(directory, "data")), XDG_DATA_DIRS=str(Path(directory, "none")))
+            with mock.patch.dict(os.environ, data):
+                self.assertEqual(controller.window_menu(), dict(
+                    menu="A:1  one two\0icon\x1fviewer\nB:2  term\0icon\x1fterm", ids=[11, 22]))
+                (apps / "term.desktop").write_text("[Desktop Entry]\nIcon=utilities-terminal\n")
+                stamp = apps.stat()
+                os.utime(apps, ns=(stamp.st_atime_ns, stamp.st_mtime_ns + 1))
+                self.assertIn("\0icon\x1futilities-terminal", controller.window_menu()["menu"])
+
+    def test_python_fallback_focuses_the_choice(self):
+        calls = []
+
+        def request(action, **values):
+            calls.append((action, values))
+            return dict(menu="A:1  one\0icon\x1fa", ids=[11]) if action == "window-menu" else True
+
+        chosen = SimpleNamespace(returncode=0, stdout="0\n")
+        with mock.patch.object(entry, "request", request), \
+                mock.patch.object(entry.subprocess, "run", return_value=chosen) as run:
+            entry.window_menu()
+        self.assertEqual(run.call_args.kwargs["input"], "A:1  one\0icon\x1fa")
+        self.assertEqual(calls, [("window-menu", {}), ("focus", {"value": 11})])
 
 
 if __name__ == "__main__":

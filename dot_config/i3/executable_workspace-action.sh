@@ -54,7 +54,8 @@ for arg do
 done
 [ -z "$expect" ] || python_helper "$@"
 case $action in
-  '' | serve | start | bar | window-menu | path | request | status) python_helper "$@" ;;
+  '' | serve | start | bar | path | request | status) python_helper "$@" ;;
+  window-menu) command -v jq >/dev/null 2>&1 || python_helper "$@" ;;
 esac
 case $action$value$group in
   *[!A-Za-z0-9_-]*) python_helper "$@" ;;
@@ -82,7 +83,24 @@ rest=${key#????????????????????}
 key=${key%"$rest"}
 address=${XDG_RUNTIME_DIR:-/tmp/i3-user-$(id -u)}/i3-groups-$key/controller.sock
 
-reply=$(printf '%s}\n' "$json" | nc -N -U -w 15 "$address" 2>/dev/null) || reply=
+send() {
+  reply=$(printf '%s}\n' "$1" | nc -N -U -w 15 "$address" 2>/dev/null) || reply=
+}
+send "$json"
+if [ "$action" = window-menu ]; then
+  case $reply in
+    '{"ok": true,'*)
+      index=$(printf '%s\n' "$reply" | jq -j '.result.menu' |
+        rofi -dmenu -i -show-icons -format i -p Window) || exit 0
+      case $index in
+        '' | *[!0-9]*) exit 0 ;;
+      esac
+      id=$(printf '%s\n' "$reply" | jq -r ".result.ids[$index] // empty")
+      [ -n "$id" ] || exit 0
+      send "{\"action\": \"focus\", \"quiet\": false, \"value\": \"$id\""
+      ;;
+  esac
+fi
 case $reply in
   '{"ok": true, "result": true}') exit 0 ;;
   '{"ok": true,'*) [ "$action" != placement ] || exit 1

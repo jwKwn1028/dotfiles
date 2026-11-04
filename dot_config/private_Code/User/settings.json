@@ -9,7 +9,7 @@
     "julia.enableTelemetry": true,
     "workbench.editor.empty.hint": "hidden",
     "latex-workshop.message.convertFilenameEncoding": false,
-    "latex-workshop.formatting.latex": "latexindent",
+    "latex-workshop.formatting.latex": "tex-fmt",
     "update.showReleaseNotes": false,
     "workbench.editorAssociations": {
         "*.pdf": "pdf.view"

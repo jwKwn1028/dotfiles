@@ -14,6 +14,27 @@ from workspace_groups import (GroupError, SCRATCH_CLASS, atomic_json, definition
                               identity, number, owner_alive, quote, source_path, validate_view)
 
 
+def application_dirs():
+    data = [os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))]
+    data += os.environ.get("XDG_DATA_DIRS", "/usr/local/share:/usr/share").split(":")
+    return [Path(root, "applications") for root in data]
+
+
+def desktop_icons(directories):
+    icons = {}
+    for path in (path for directory in directories for path in sorted(directory.glob("*.desktop"))):
+        try:
+            entry = path.read_text(errors="replace").split("[Desktop Entry]", 1)[-1].split("\n[", 1)[0]
+        except OSError:
+            continue
+        fields = dict(line.split("=", 1) for line in entry.splitlines() if "=" in line)
+        if fields.get("Icon"):
+            for key in (fields.get("StartupWMClass"), path.stem):
+                if key:
+                    icons.setdefault(key.lower(), fields["Icon"])
+    return icons
+
+
 class Controller:
     def __init__(self, i3, directory):
         self.i3 = i3
@@ -45,6 +66,8 @@ class Controller:
         self.overflow_options = (0.25, True)
         self.restore = None
         self.saved = None
+        self.icons = {}
+        self.icon_stamp = None
 
     def tree(self):
         tree = self.i3.get_tree()
@@ -347,6 +370,8 @@ class Controller:
         changed = False
         if action == "status":
             return self.status()
+        if action == "window-menu":
+            return self.window_menu()
         if action == "session-view":
             return validate_view(dict(selected=group, views=self.state["views"]), self.groups)
         if action == "placement":
@@ -487,6 +512,20 @@ class Controller:
                              "group": identity(con.workspace().num, self.groups)}
                             for con in self.tree().leaves() if con.window and con.workspace() and
                             identity(con.workspace().num, self.groups) and con.window_class != SCRATCH_CLASS]}
+
+    def window_menu(self):
+        directories = application_dirs()
+        stamp = [directory.stat().st_mtime_ns if directory.is_dir() else None for directory in directories]
+        if stamp != self.icon_stamp:
+            self.icons, self.icon_stamp = desktop_icons(directories), stamp
+        windows = self.status()["windows"]
+        lines = []
+        for window in windows:
+            app = window["class"].lower()
+            icon = self.icons.get(app) or self.icons.get(window["instance"].lower()) or app
+            text = window["name"].replace("\n", " ").replace("\x00", "").replace("\x1f", "")
+            lines.append(f"{window['group'][0]}:{window['group'][1]}  {text}\0icon\x1f{icon}")
+        return dict(menu="\n".join(lines), ids=[window["id"] for window in windows])
 
     def initialize(self):
         tree = self.tree()

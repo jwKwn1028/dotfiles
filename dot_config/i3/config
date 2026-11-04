@@ -28,7 +28,7 @@ for_window [class="^com[.]mitchellh[.]ghostty[.]scratchpad$"] floating enable, m
 # $mod+d is tile-right, so rofi takes $mod+space.
 bindsym $mod+space            exec --no-startup-id env XDG_CURRENT_DESKTOP=XFCE:i3 rofi -show drun -theme spotlight
 bindsym $mod+Tab              exec --no-startup-id ~/.config/i3/focus-prev.sh
-bindsym $mod+Shift+Tab        exec --no-startup-id ~/.config/i3/workspace-groups.py window-menu
+bindsym $mod+Shift+Tab        exec --no-startup-id ~/.config/i3/workspace-action.sh window-menu
 bindsym $mod+t                exec --no-startup-id thunar
 bindsym $mod+p                exec --no-startup-id xfce4-display-settings --minimal
 bindsym XF86Display           exec --no-startup-id xfce4-display-settings --minimal
