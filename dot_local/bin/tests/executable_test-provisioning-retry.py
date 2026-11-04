@@ -47,6 +47,10 @@ class ProvisioningTests(unittest.TestCase):
         mock = self.bin / "flatpak"
         mock.write_text(
             '#!/bin/sh\n'
+            'if [ "$1" = list ]; then\n'
+            '  [ -z "${FLATPAK_INSTALLED:-}" ] || printf "%s\\n" $FLATPAK_INSTALLED\n'
+            '  exit 0\n'
+            'fi\n'
             'if [ "$1" = install ]; then\n'
             '  printf "%s\\n" "$*" >> "$ATTEMPT_LOG"\n'
             '  [ "$SIMULATE_FAILURE" = 0 ] || exit 42\n'
@@ -111,13 +115,71 @@ class ProvisioningTests(unittest.TestCase):
         result = self.apply("1")
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertEqual(len(self.attempts()), 1)
-        self.assertIn("--or-update", self.attempts()[0])
+        self.assertEqual(self.attempts()[0], "install -y --noninteractive flathub "
+                         + " ".join(self.packages["flatpak"]["apps"]))
         result = self.apply()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(self.attempts()), 2)
         result = self.apply("1")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(self.attempts()), 2)
+
+    def test_flatpak_installs_only_missing_apps(self):
+        apps = self.packages["flatpak"]["apps"]
+        self.env["FLATPAK_INSTALLED"] = apps[0]
+        self.render()
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.attempts(),
+                         ["install -y --noninteractive flathub " + " ".join(apps[1:])])
+
+    def test_flatpak_skips_installed_apps(self):
+        self.env["FLATPAK_INSTALLED"] = " ".join(self.packages["flatpak"]["apps"])
+        self.render()
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("nothing to do", result.stdout)
+        self.assertEqual(self.attempts(), [])
+
+    def apt_fixture(self, installed):
+        self.mock("dpkg-query", '''
+shift 2
+for package; do
+    case " $DPKG_INSTALLED " in *" $package "*) printf 'ii  %s\\n' "$package" ;; esac
+done
+''')
+        self.mock("sudo", '''
+printf '%s\\n' "$*" >> "$ATTEMPT_LOG"
+''')
+        self.mock("add-apt-repository", "exit 0\n")
+        sources = self.root / "sources.list.d"
+        sources.mkdir()
+        (sources / "present-one-noble.list").write_text(
+            "deb https://ppa.launchpadcontent.net/present/one/ubuntu noble main\n"
+            "# deb https://ppa.launchpadcontent.net/absent/two/ubuntu noble main\n")
+        self.env.update(DPKG_INSTALLED=installed, APT_SOURCES_DIR=str(sources))
+        self.render(script_name="run_once_before_10-install-apt-packages.sh",
+                    data={"desktopProfile": "linuxmint-i3-x11", "packages": {"apt": {
+                        "ppas": ["ppa:present/one", "ppa:absent/two"], "ppas_i3_x11": [],
+                        "common": ["a", "b"], "laptop": [], "desktop": ["c"], "i3_x11": ["d"],
+                    }}})
+        return sources
+
+    def test_apt_installs_only_missing_packages_and_ppas(self):
+        self.apt_fixture("a c")
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.attempts(), ["add-apt-repository -y ppa:absent/two",
+                                           "apt-get update -qq", "apt-get install -y b d"])
+
+    def test_apt_skips_sudo_when_nothing_is_missing(self):
+        sources = self.apt_fixture("a b c d")
+        (sources / "absent-two.sources").write_text(
+            "Types: deb\nURIs: https://ppa.launchpadcontent.net/absent/two/ubuntu/\n")
+        result = self.apply()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("nothing to do", result.stdout)
+        self.assertEqual(self.attempts(), [])
 
     def test_missing_flatpak_remains_pending(self):
         self.render()

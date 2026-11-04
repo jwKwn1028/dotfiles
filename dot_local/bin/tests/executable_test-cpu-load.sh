@@ -52,3 +52,28 @@ if [ "$load" -lt 0 ] || [ "$load" -gt 100 ]; then
 fi
 
 printf 'PASS: cpu-load shares one window across concurrent callers\n'
+
+# --follow prints a first value promptly, then one on each whole interval.
+start=${EPOCHREALTIME//[!0-9]/}
+{ timeout 3.4 bash "$CPU_LOAD" probe 1 --follow || true; } |
+    while IFS= read -r line; do
+        printf '%s %s\n' "${EPOCHREALTIME//[!0-9]/}" "$line"
+    done >"$TEST_TMP/follow"
+mapfile -t follow <"$TEST_TMP/follow"
+[ "${#follow[@]}" -ge 3 ] ||
+    { printf 'FAIL: --follow printed %s lines in 3.4s\n' "${#follow[@]}" >&2; exit 1; }
+for i in "${!follow[@]}"; do
+    read -r stamp load <<<"${follow[i]}"
+    case "$load" in
+        ''|*[!0-9]*) printf 'FAIL: --follow printed non-numeric %s\n' "$load" >&2; exit 1 ;;
+    esac
+    [ "$load" -le 100 ] || { printf 'FAIL: --follow load %s out of range\n' "$load" >&2; exit 1; }
+    if [ "$i" = 0 ]; then
+        [ $((stamp - start)) -lt 1000000 ] ||
+            { printf 'FAIL: --follow took %s us to print\n' $((stamp - start)) >&2; exit 1; }
+    elif [ $((stamp % 1000000)) -ge 200000 ]; then
+        printf 'FAIL: --follow line %s not on a second boundary (%s)\n' "$i" "$stamp" >&2
+        exit 1
+    fi
+done
+printf 'PASS: cpu-load --follow prints on interval boundaries\n'

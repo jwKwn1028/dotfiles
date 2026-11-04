@@ -8,9 +8,10 @@
 # Stateful and non-blocking: each call diffs /proc/stat against the previous
 # snapshot, so the % averages over the time since it.
 #
-# Usage: cpu-load [instance] [interval_seconds]
+# Usage: cpu-load [instance] [interval_seconds] [--follow]
 #   instance  state key, so independent callers keep separate snapshots
 #   interval  the caller's poll rate; decides when a snapshot is too fresh
+#   --follow  keep running and print once per interval, on clock boundaries
 #
 # One key is shared by several processes (polybar runs a bar per monitor). They
 # must not consume each other's snapshot, which would shrink the window to
@@ -24,17 +25,52 @@ interval="${2:-2}"
 state="${XDG_RUNTIME_DIR:-/tmp}/cpu-load.${instance}.state"
 
 # Aggregate cpu line: user nice system idle iowait irq softirq steal guest*.
-# Emit two running totals: "<total_jiffies> <idle_jiffies>".
+# Set the running totals cur_total and cur_idle, in jiffies.
 snapshot() {
   local _ user nice system idle iowait irq softirq steal
   read -r _ user nice system idle iowait irq softirq steal _ < /proc/stat
-  printf '%d %d' \
-    "$(( user + nice + system + idle + iowait + irq + softirq + steal ))" \
-    "$(( idle + iowait ))"
+  cur_total=$(( user + nice + system + idle + iowait + irq + softirq + steal ))
+  cur_idle=$(( idle + iowait ))
 }
 
+percent() {
+  local dt=$(( cur_total - prev_total )) di=$(( cur_idle - prev_idle ))
+  if (( dt <= 0 )); then
+    load=0
+  else
+    load=$(( (100 * (dt - di) + dt / 2) / dt ))   # round to nearest percent
+    (( load < 0 ))   && load=0
+    (( load > 100 )) && load=100
+  fi
+}
+
+if [[ ${3:-} == --follow ]]; then
+  # A timed read on a pipe only this process holds waits without forking;
+  # waking on whole intervals keeps one bar per monitor in step.
+  exec {pause_fd}<> <(:)
+  pause() {
+    printf -v pause_s '%d.%06d' $(( $1 / 1000000 )) $(( $1 % 1000000 ))
+    read -rt "$pause_s" -u "$pause_fd"
+  }
+  step=$(( (interval > 0 ? interval : 2) * 1000000 ))
+  snapshot
+  pause 300000
+  while :; do
+    prev_total=$cur_total prev_idle=$cur_idle
+    snapshot
+    percent
+    echo "$load"
+    now_us=${EPOCHREALTIME/./}
+    next=$(( (now_us + step / 2 + step - 1) / step * step ))
+    while (( now_us < next )); do
+      pause $(( next - now_us ))
+      now_us=${EPOCHREALTIME/./}
+    done
+  done
+fi
+
 now_us=${EPOCHREALTIME/./}
-read -r cur_total cur_idle <<< "$(snapshot)"
+snapshot
 
 prev_total='' prev_idle='' prev_us='' prev_load=''
 [[ -r $state ]] && read -r prev_total prev_idle prev_us prev_load < "$state"
@@ -51,19 +87,11 @@ if [[ -z $prev_total ]]; then
   # No prior snapshot: take one short sample so the first call is meaningful.
   prev_total=$cur_total prev_idle=$cur_idle
   sleep 0.3
-  read -r cur_total cur_idle <<< "$(snapshot)"
+  snapshot
   now_us=${EPOCHREALTIME/./}
 fi
 
-dt=$(( cur_total - prev_total ))
-di=$(( cur_idle - prev_idle ))
-if (( dt <= 0 )); then
-  load=0
-else
-  load=$(( (100 * (dt - di) + dt / 2) / dt ))   # round to nearest percent
-  (( load < 0 ))   && load=0
-  (( load > 100 )) && load=100
-fi
+percent
 
 # Rename, not write-in-place: a concurrent reader must never see a half line.
 printf '%s %s %s %s\n' "$cur_total" "$cur_idle" "$now_us" "$load" > "$state.$$"

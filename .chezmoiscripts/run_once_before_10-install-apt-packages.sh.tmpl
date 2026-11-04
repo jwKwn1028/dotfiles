@@ -7,7 +7,8 @@
 {{ $desktopProfile := "none" -}}
 {{ if or (eq $distro "linuxmint") (eq $distro "ubuntu") }}{{ $desktopProfile = "linuxmint-i3-x11" }}{{ end -}}
 {{ if hasKey . "desktopProfile" }}{{ $desktopProfile = .desktopProfile }}{{ end -}}
-# Installs apt packages listed in .chezmoidata/packages.toml.
+# Installs the apt packages and PPAs from .chezmoidata/packages.toml that are
+# missing.
 # Runs once; re-runs automatically if the rendered content changes.
 set -euo pipefail
 
@@ -17,60 +18,100 @@ if ! command -v apt-get >/dev/null 2>&1; then
 fi
 
 echo "==> apt provisioning (machine class: {{ $class }})"
-echo "    (sudo may prompt for your password)"
 
-sudo apt-get update -qq
-sudo apt-get install -y software-properties-common
+sources=${APT_SOURCES_DIR:-/etc/apt/sources.list.d}
 
-# --- PPAs ---
+ppas=(
 {{- range .packages.apt.ppas }}
-sudo add-apt-repository -y {{ . | quote }}
+    {{ . | quote }}
 {{- end }}
 {{- if and (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") }}
 {{- range .packages.apt.ppas_i3_x11 }}
-sudo add-apt-repository -y {{ . | quote }}
+    {{ . | quote }}
 {{- end }}
 {{- end }}
-sudo apt-get update -qq
+)
 
-# --- common packages ---
-sudo apt-get install -y \
+packages=(
 {{- range .packages.apt.common }}
-    {{ . }} \
+    {{ . | quote }}
 {{- end }}
-    ;
+)
 
-# --- laptop power management ---
 # Runtime gate: class/desktopProfile do not encode "has a battery".
 if compgen -G "/sys/class/power_supply/BAT*" >/dev/null; then
-    sudo apt-get install -y \
+    packages+=(
 {{- range .packages.apt.laptop }}
-        {{ . }} \
+        {{ . | quote }}
 {{- end }}
-        ;
+    )
 else
     echo "No battery present; skipping the laptop power package set."
 fi
 
 {{ if eq $class "desktop" -}}
-# --- desktop class ---
-sudo apt-get install -y \
+packages+=(
 {{- range .packages.apt.desktop }}
-    {{ . }} \
+    {{ . | quote }}
 {{- end }}
-    ;
+)
 {{- end }}
 
 {{ if and (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
-# --- desktop / i3 stack ---
-sudo apt-get install -y \
+packages+=(
 {{- range .packages.apt.i3_x11 }}
-    {{ . }} \
+    {{ . | quote }}
 {{- end }}
-    ;
+)
 {{- else -}}
 echo "Profile is not linuxmint-i3-x11; skipping the i3/X11 package set."
 {{- end }}
+
+# Enabled source lines, in .list or deb822 .sources files.
+ppa_present() {
+    local path=${1#ppa:} file files=()
+    for file in "$sources"/*.list "$sources"/*.sources; do
+        [[ -f $file ]] && files+=("$file")
+    done
+    (( ${#files[@]} )) || return 1
+    awk -v a="ppa.launchpadcontent.net/$path/" -v b="ppa.launchpad.net/$path/" '
+        !/^[[:space:]]*#/ && (index($0, a) || index($0, b)) { found = 1; exit }
+        END { exit !found }' "${files[@]}"
+}
+
+declare -A installed=()
+while read -r package; do
+    installed[$package]=1
+done < <(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' "${packages[@]}" 2>/dev/null |
+    awk '$1 ~ /^.i$/ { print $2 }')
+
+new_ppas=() new_packages=()
+for ppa in "${ppas[@]}"; do
+    ppa_present "$ppa" || new_ppas+=("$ppa")
+done
+for package in "${packages[@]}"; do
+    [[ -n ${installed[$package]:-} ]] || new_packages+=("$package")
+done
+
+if (( ${#new_ppas[@]} + ${#new_packages[@]} == 0 )); then
+    echo "    all packages and PPAs present; nothing to do"
+    exit 0
+fi
+echo "    (sudo may prompt for your password)"
+
+if (( ${#new_ppas[@]} )); then
+    if ! command -v add-apt-repository >/dev/null 2>&1; then
+        sudo apt-get update -qq
+        sudo apt-get install -y software-properties-common
+    fi
+    for ppa in "${new_ppas[@]}"; do
+        sudo add-apt-repository -y "$ppa"
+    done
+fi
+sudo apt-get update -qq
+if (( ${#new_packages[@]} )); then
+    sudo apt-get install -y "${new_packages[@]}"
+fi
 
 echo "==> apt provisioning done."
 {{- end }}

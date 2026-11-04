@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 {{ $class := "desktop" -}}
 {{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
-# Installs Flathub apps listed in .chezmoidata/packages.toml (desktop only).
+# Installs missing Flathub apps listed in .chezmoidata/packages.toml (desktop only).
 set -euo pipefail
 
 {{ if ne $class "desktop" -}}
@@ -14,13 +14,26 @@ if ! command -v flatpak >/dev/null 2>&1; then
 fi
 
 echo "==> flatpak provisioning"
-flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-
-flatpak install -y --noninteractive --or-update flathub \
+apps=(
 {{- range .packages.flatpak.apps }}
-    {{ . }} \
+    {{ . | quote }}
 {{- end }}
-    ;
+)
+declare -A installed=()
+while read -r app; do
+    [[ -z $app ]] || installed[$app]=1
+done < <(flatpak list --app --columns=application)
+missing=()
+for app in "${apps[@]}"; do
+    [[ -n ${installed[$app]:-} ]] || missing+=("$app")
+done
+
+if (( ${#missing[@]} )); then
+    flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+    flatpak install -y --noninteractive flathub "${missing[@]}"
+else
+    echo "    all Flathub apps present; nothing to do"
+fi
 
 echo "==> flatpak provisioning done."
 {{- end }}
