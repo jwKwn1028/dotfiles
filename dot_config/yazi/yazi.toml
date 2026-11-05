@@ -22,10 +22,90 @@ zed = [
 feh = [
 	{ run = 'feh --scale-down --auto-zoom %s', desc = "feh", orphan = true, for = "linux" },
 ]
+vesta = [
+	{ run = '"$(command -v VESTA || echo "$HOME/Applications/VESTA-gtk3/VESTA")" %s', desc = "VESTA", orphan = true, for = "linux" },
+]
+ovito = [
+	{ run = '"$(command -v ovito || ls -d "$HOME"/Applications/ovito-*/bin/ovito | sort -V | tail -n 1)" %s1', desc = "OVITO", orphan = true, for = "linux" },
+]
+avogadro = [
+	{ run = 'avogadro2 %s1', desc = "Avogadro 2", orphan = true, for = "linux" },
+]
+helix = [
+	{ run = 'hx %s', desc = "Helix", block = true, for = "unix" },
+]
 
 [[open.prepend_rules]]
 mime = "application/pdf"
 use = "pdf"
+
+[[open.prepend_rules]]
+url = '\s**/{POSCAR,CONTCAR,XDATCAR,CHG,LOCPOT,ELFCAR,PARCHG}*.{py,sh,jl}'
+use = [ "edit", "zed", "reveal" ]
+
+[[open.prepend_rules]]
+url = '\s**/{POSCAR*,CONTCAR*,XDATCAR*,CHG,CHGCAR*,LOCPOT*,ELFCAR*,PARCHG*}.{gz,zst}'
+use = [ "ovito", "extract", "reveal" ]
+
+[[open.prepend_rules]]
+url = '\s**/{POSCAR*,CONTCAR*,XDATCAR*,CHG,CHGCAR*,LOCPOT*,ELFCAR*,PARCHG*}.{bz2,xz}'
+use = [ "extract", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.{xyz,extxyz,lammpstrj,dump}.{gz,zst}"
+use = [ "ovito", "extract", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.{cif,vasp,cell}"
+use = [ "vesta", "ovito", "helix", "micro", "zed", "edit", "reveal" ]
+
+[[open.prepend_rules]]
+url = '\s**/{POSCAR,CONTCAR}*'
+use = [ "vesta", "ovito", "helix", "micro", "zed", "edit", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.{vesta,mcif}"
+use = [ "vesta", "helix", "micro", "zed", "edit", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.{cube,cub}"
+use = [ "vesta", "avogadro", "ovito", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.xsf"
+use = [ "vesta", "ovito", "reveal" ]
+
+[[open.prepend_rules]]
+url = '\s**/{CHG,CHGCAR*,LOCPOT*,ELFCAR*,PARCHG*}'
+use = [ "vesta", "ovito", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.xyz"
+use = [ "ovito", "avogadro", "vesta", "helix", "micro", "zed", "edit", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.extxyz"
+use = [ "ovito", "avogadro", "helix", "micro", "zed", "edit", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.{lammpstrj,dump,ovito}"
+use = [ "ovito", "reveal" ]
+
+[[open.prepend_rules]]
+url = '\s**/{XDATCAR*,vaspout.h5}'
+use = [ "ovito", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.pdb"
+use = [ "avogadro", "ovito", "vesta", "helix", "micro", "zed", "edit", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.{mol,sdf,cml,cjson,fchk,molden,mold,molf,gamout}"
+use = [ "avogadro", "helix", "micro", "zed", "edit", "reveal" ]
+
+[[open.prepend_rules]]
+url = "*.{in,pwi}"
+use = [ "helix", "ovito", "micro", "zed", "edit", "reveal" ]
 
 [[open.prepend_rules]]
 url = "local://*.txt"
