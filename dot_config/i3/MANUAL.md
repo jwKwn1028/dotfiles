@@ -115,7 +115,8 @@ peek counts as hidden when restoring bar visibility.
 
 | Binding | Action |
 | --- | --- |
-| `XF86AudioRaiseVolume` / `XF86AudioLowerVolume` | Default sink volume ±5%. |
+| `XF86AudioRaiseVolume` / `XF86AudioLowerVolume` | Default sink volume ±1%. |
+| `Shift+XF86AudioRaiseVolume` / `Shift+XF86AudioLowerVolume` | Default sink volume ±5%. |
 | `XF86AudioMute` | Toggle mute. |
 | `XF86AudioPlay` | Play/pause. |
 | `XF86AudioNext` / `XF86AudioPrev` | Next/previous track. |
