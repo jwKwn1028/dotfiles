@@ -277,7 +277,8 @@ directives. Do not try to run it under Wayland.
 
 Current behavior to preserve:
 
-- laptop output defaults to `eDP`
+- laptop output defaults to `eDP`, falling back to the first connected
+  `eDP*`/`LVDS*` output; with no panel the layout is left alone
 - external output, when present, is placed left of the laptop
 - laptop remains primary-equivalent
 - wallpaper is reapplied after output changes

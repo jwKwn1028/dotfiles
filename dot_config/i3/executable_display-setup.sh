@@ -5,10 +5,16 @@
 DIR="$(dirname "$(readlink -f "$0")")"
 # shellcheck source=_toast-common.sh
 . "$DIR/_toast-common.sh"
-LAPTOP_OUTPUT="${I3_LAPTOP_OUTPUT:-eDP}"
+PREFERRED_LAPTOP_OUTPUT="${I3_LAPTOP_OUTPUT:-eDP}"
 
-is_connected() {
-    xrandr --query | awk -v output="$1" '$1 == output && $2 == "connected" { found = 1 } END { exit !found }'
+# I3_LAPTOP_OUTPUT if connected, else the first eDP*/LVDS* (Intel names eDP-1).
+connected_laptop_output() {
+    xrandr --query | awk -v preferred="$PREFERRED_LAPTOP_OUTPUT" '
+        $2 != "connected" { next }
+        $1 == preferred { print $1; exact = 1; exit }
+        internal == "" && $1 ~ /^(eDP|LVDS)/ { internal = $1 }
+        END { if (!exact && internal != "") print internal }
+    '
 }
 
 connected_external_output() {
@@ -39,17 +45,22 @@ if ! command -v xrandr >/dev/null 2>&1 || ! xrandr --query >/dev/null 2>&1; then
     exit 0
 fi
 
+LAPTOP_OUTPUT=""
 for _ in $(seq 1 20); do
-    is_connected "$LAPTOP_OUTPUT" && break
+    LAPTOP_OUTPUT="$(connected_laptop_output)"
+    [ -n "$LAPTOP_OUTPUT" ] && break
     sleep 0.25
 done
 
-EXTERNAL_OUTPUT="$(connected_external_output)"
+# No internal panel: leave the layout as X set it.
+if [ -n "$LAPTOP_OUTPUT" ]; then
+    EXTERNAL_OUTPUT="$(connected_external_output)"
 
-if [ -n "$EXTERNAL_OUTPUT" ]; then
-    apply_two_monitor_layout "$EXTERNAL_OUTPUT"
-else
-    apply_laptop_only_layout
+    if [ -n "$EXTERNAL_OUTPUT" ]; then
+        apply_two_monitor_layout "$EXTERNAL_OUTPUT"
+    else
+        apply_laptop_only_layout
+    fi
 fi
 
 sleep 0.2

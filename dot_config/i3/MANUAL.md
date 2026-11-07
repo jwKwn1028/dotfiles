@@ -285,7 +285,9 @@ the hold; a visible fullscreen window suppresses it until the pointer leaves.
 ## Monitor and Wallpaper Setup
 
 `display-setup.sh` puts the first external output at `0x0`, laptop to its right;
-laptop-only uses `0x0`. It reconciles workspaces, dunst, wallpaper, and bars.
+laptop-only uses `0x0`. The laptop is `I3_LAPTOP_OUTPUT` if connected, else the
+first `eDP*`/`LVDS*` output; with no panel the layout is left alone. It
+reconciles workspaces, dunst, wallpaper, and bars.
 Defaults: `I3_LAPTOP_OUTPUT=eDP`, `I3_DISPLAY_SETUP_DELAY=1` second (0 on i3
 restarts after login).
 
