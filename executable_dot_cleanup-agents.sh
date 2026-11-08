@@ -32,7 +32,8 @@ Usage:
   ./.cleanup-agents.sh --apply [filters]  Actually remove the files/directories
 
 Options:
-  --apply             Delete, instead of previewing.
+  --apply             Delete, instead of previewing. Refused while Claude Code
+                      or Codex is running.
   --include-projects  Also review .claude/.codex directories belonging to other
                       projects under $HOME. Off by default; they hold
                       per-project agents and settings and are usually
@@ -43,27 +44,7 @@ Filters (each one narrows the selection; an item must match all of them):
   --ended-before DATE  Last activity before DATE (YYYY-MM-DD, local midnight).
   --path DIR           Started in DIR or any directory below it.
 
-This preserves:
-  ~/.codex/auth.json
-  ~/.codex/config.toml
-  ~/.codex/statusline.toml
-  ~/.codex/rules/
-  ~/.codex/skills/
-  ~/.codex/plugins/
-  ~/.codex/packages/
-  ~/.codex/app-server-*/
-  ~/.claude/.credentials.json
-  ~/.claude/settings.json
-  ~/.claude/settings.local.json
-  ~/.claude/statusline-command.sh
-  ~/.claude/CLAUDE.md
-  ~/.claude/agents/
-  ~/.claude/commands/
-  ~/.claude/hooks/
-  ~/.claude/skills/
-  ~/.claude/plugins/
-  ~/.claude/backups/
-  ~/.claude.json
+Beyond chats and memory, only known caches and session state are removed.
 
 Claude and Codex chat/memory get the same careful workflow: every transcript is
 previewed and, with --apply, offered for deletion individually (default "no").
@@ -72,7 +53,7 @@ separate confirmation (also default "no").
 
 Claude chats are ~/.claude/projects/**/*.jsonl and Claude memory is everything
 under ~/.claude/projects/*/memory/. Codex chats are
-~/.codex/sessions/**/*.jsonl. Codex's chat index/logs (history.jsonl and
+~/.codex/{sessions,archived_sessions}/**/*.jsonl. Codex's chat index/logs (history.jsonl and
 state_*/logs_* DBs) follow the chat choices, while Codex memory includes
 ~/.codex/memories/, generated summaries in memories_*.sqlite, and goals in
 goals_*.sqlite.
@@ -178,7 +159,7 @@ is_protected() {
 # in the right bucket.
 codex_bucket() {
   case "$(basename "$1")" in
-    sessions|history.jsonl|session_index.jsonl)
+    sessions|archived_sessions|history.jsonl|session_index.jsonl)
       printf 'chat' ;;
     state_*.sqlite|state_*.sqlite-*|logs_*.sqlite|logs_*.sqlite-*)
       printf 'chat' ;;
@@ -205,11 +186,29 @@ claude_bucket() {
   esac
 }
 
+# The sweep removes only these: caches and state the tools recreate.
+is_regenerable() {
+  local name="${1##*/}"
+
+  if [[ "${1%/*}" == "$CLAUDE_DIR" ]]; then
+    case "$name" in
+      cache|ide|paste-cache|sessions|shell-snapshots|state|stats-cache.json|.last-cleanup|.last-update-result.json|policy-limits.json*|remote-settings.json*)
+        return 0 ;;
+    esac
+  elif [[ "${1%/*}" == "$CODEX_DIR" ]]; then
+    case "$name" in
+      cache|ipc|shell_snapshots|thread-writer-locks|tmp|installation_id|models_cache.json|version.json|tui-thread-reference-capabilities|.sandbox_migration|*.lock)
+        return 0 ;;
+    esac
+  fi
+  return 1
+}
+
 # Read a [y/N] answer from the terminal. True only on an explicit yes.
 confirm() {
   local prompt="$1" absent_note="$2" reply=""
 
-  if [[ -r /dev/tty ]]; then
+  if { : </dev/tty; } 2>/dev/null; then
     printf '%s' "$prompt"
     read -r reply < /dev/tty || reply=""
   else
@@ -255,7 +254,13 @@ clean_directory_contents() {
     if [[ "$dir" == "$CODEX_DIR" && -n "$(codex_bucket "$child")" ]]; then
       continue
     fi
-    remove_path "$child"
+    if is_regenerable "$child"; then
+      remove_path "$child"
+    elif is_protected "$child"; then
+      printf 'Keep: %s\n' "$child"
+    else
+      printf 'Keep (unrecognized): %s\n' "$child"
+    fi
   done < <(find "$dir" -mindepth 1 -maxdepth 1 -print0)
 }
 
@@ -313,7 +318,7 @@ prune_jsonl_to_kept() {
   local path="$1" key="$2"
   shift 2
   python3 - "$path" "$key" "$@" <<'PY'
-import json, os, sys
+import json, os, sys, tempfile
 path, key = sys.argv[1], sys.argv[2]
 kept = set(sys.argv[3:])
 out = []
@@ -333,8 +338,11 @@ except OSError:
     print(0)
     raise SystemExit
 if out:
-    with open(path, "w", encoding="utf-8") as fh:
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
         fh.write("\n".join(out) + "\n")
+    os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+    os.replace(tmp, path)
 else:
     try:
         os.remove(path)
@@ -478,7 +486,7 @@ decide_chat() {
     return 0
   fi
 
-  if [[ -r /dev/tty ]]; then
+  if { : </dev/tty; } 2>/dev/null; then
     printf '    Delete this chat transcript? [y/N] '
     read -r reply < /dev/tty || reply=""
   else
@@ -558,7 +566,7 @@ finalize_claude_chat_side() {
 
   printf '\nNo Claude chats kept. Orphaned chat history remains:\n'
   printf '  %s\n' "${hist##*/}"
-  if [[ -r /dev/tty ]]; then
+  if { : </dev/tty; } 2>/dev/null; then
     printf '  Remove this orphaned chat history? [y/N] '
     read -r reply < /dev/tty || reply=""
   else
@@ -668,7 +676,7 @@ process_claude_memory() {
     return 0
   fi
 
-  if [[ -r /dev/tty ]]; then
+  if { : </dev/tty; } 2>/dev/null; then
     printf '  Erase the Claude memory store above? [y/N] '
     read -r reply < /dev/tty || reply=""
   else
@@ -878,7 +886,7 @@ decide_codex_chat() {
     return 0
   fi
 
-  if [[ -r /dev/tty ]]; then
+  if { : </dev/tty; } 2>/dev/null; then
     printf '    Delete this chat transcript? [y/N] '
     read -r reply < /dev/tty || reply=""
   else
@@ -900,9 +908,10 @@ decide_codex_chat() {
 
 # Preview every Codex session transcript and decide each one.
 process_codex_chats() {
-  local sessions="$CODEX_DIR/sessions" found=0 jsonl sid
+  local sessions found=0 jsonl sid
 
-  if [[ -d "$sessions" ]]; then
+  for sessions in "$CODEX_DIR/sessions" "$CODEX_DIR/archived_sessions"; do
+    [[ -d "$sessions" ]] || continue
     while IFS= read -r -d '' jsonl; do
       found=1
       sid="$(codex_session_id "$jsonl")"
@@ -914,7 +923,7 @@ process_codex_chats() {
       find "$sessions" -depth -mindepth 1 -type d -empty -delete 2>/dev/null || true
       rmdir "$sessions" 2>/dev/null || true
     fi
-  fi
+  done
 
   (( found )) || printf 'No Codex chat transcripts found.\n'
 }
@@ -988,7 +997,7 @@ finalize_codex_chat_side() {
 
   printf '\nNo Codex chats kept. Orphaned chat state remains:\n'
   printf '  %s\n' "${orphans[@]##*/}"
-  if [[ -r /dev/tty ]]; then
+  if { : </dev/tty; } 2>/dev/null; then
     printf '  Remove this orphaned chat index/logs? [y/N] '
     read -r reply < /dev/tty || reply=""
   else
@@ -1065,7 +1074,7 @@ process_codex_memory() {
     return 0
   fi
 
-  if [[ -r /dev/tty ]]; then
+  if { : </dev/tty; } 2>/dev/null; then
     printf '  Erase the Codex memory store above? [y/N] '
     read -r reply < /dev/tty || reply=""
   else
@@ -1684,6 +1693,16 @@ if (( ${#FILTER_RAW[@]} )); then
     FILTER_PATH="$(agent_filter parse path "${FILTER_RAW[path]}")" || usage_error
     FILTER_PATH_REAL="${FILTER_PATH#*$'\n'}"
     FILTER_PATH="${FILTER_PATH%%$'\n'*}"
+  fi
+fi
+
+# Running agents own these files; pgrep exits 1 only when none runs.
+if (( ! DRY_RUN )); then
+  pgrep_status=0
+  pgrep -u "$UID" -x 'claude|codex' >/dev/null 2>&1 || pgrep_status=$?
+  if (( pgrep_status != 1 )); then
+    printf 'Claude Code or Codex may be running; quit them before --apply.\n' >&2
+    exit 1
   fi
 fi
 

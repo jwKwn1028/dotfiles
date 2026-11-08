@@ -35,15 +35,16 @@ class PoweroffConfirmationTests(unittest.TestCase):
             executable = shutil.which(shell)
             if executable is None:
                 raise RuntimeError(f"{shell} is required for these tests")
-            # Read only the real wrapper, avoiding unrelated shell startup actions.
+            # Read only the real wrapper and its helpers, not unrelated startup actions.
             text = source_path(source, target).read_text()
-            match = re.search(r"^poweroff\(\) \{\n.*?^\}", text, re.M | re.S)
-            if match is None:
-                raise RuntimeError(f"poweroff wrapper missing from {source}")
+            names = ["_have", "_bash_require", "poweroff"] if shell == "bash" else ["poweroff"]
+            parts = [re.search(rf"^{name}\(\) \{{(?:[^\n]*\}}$|\n.*?^\}})", text, re.M | re.S)
+                     for name in names]
+            if None in parts:
+                raise RuntimeError(f"poweroff wrapper or a helper missing from {source}")
             flags = ["--noprofile", "--norc"] if shell == "bash" else ["-df"]
-            cls.shells[shell] = [
-                executable, *flags, "-c", match.group() + '\npoweroff "$@"', shell,
-            ]
+            script = "\n".join(m.group() for m in parts) + '\npoweroff "$@"'
+            cls.shells[shell] = [executable, *flags, "-c", script, shell]
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="poweroff-confirm-test-")

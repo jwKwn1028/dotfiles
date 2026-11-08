@@ -158,6 +158,30 @@ put private_dot_ssh/private_known_hosts 'x'
 put keys/id_ed25519.pub 'ssh-ed25519 AAAA'
 blocks "other SSH files" "private_dot_ssh/private_known_hosts: SSH file" "keys/id_ed25519.pub: SSH file"
 
+# Assembled so this file holds no complete key header.
+new_repo
+begin='-----BEGIN'
+put notes/key.txt "$begin OPENSSH PRIVATE KEY-----"
+put notes/pgp.asc "$begin PGP PRIVATE KEY BLOCK-----"
+put notes/cert.pem "$begin CERTIFICATE-----"
+put notes/pub.pem "$begin PUBLIC KEY-----"
+blocks "private keys under any name" "notes/key.txt:1: private key" "notes/pgp.asc:1: private key"
+if grep -qE 'notes/(cert|pub)\.pem' "$TEST_TMP/out"; then fail "certificates and public keys must pass"; fi
+
+new_repo
+put dot_config/gh/config.yml 'git_protocol: ssh'
+passes "gh config without its token file"
+put private_dot_gnupg/private-keys-v1.d/a.key 'x'
+put dot_password-store/site.gpg 'x'
+put private_dot_netrc 'x'
+put dot_config/gh/hosts.yml 'x'
+put dot_aws/credentials 'x'
+put dot_config/rclone/rclone.conf 'x'
+blocks "credential files" "private_dot_gnupg/private-keys-v1.d/a.key: credential file" \
+    "dot_password-store/site.gpg: credential file" "private_dot_netrc: credential file" \
+    "dot_config/gh/hosts.yml: credential file" "dot_aws/credentials: credential file" \
+    "dot_config/rclone/rclone.conf: credential file"
+
 new_repo
 printf 'head\0 rdoe77 \0tail\n' >"$REPO/blob.bin"
 printf '\0 192.168.1.20 \0\n' >"$REPO/ip.bin"

@@ -14,9 +14,10 @@
 {{- end }}
 
 # ─── Repo documentation ───────────────────────────────────────────────────
-# Repo docs, not dotfiles: without this, `chezmoi apply` writes them to ~/ and
-# litters $HOME. Whole-path matching lets a nested README.md still apply.
+# Repo docs and tools, not dotfiles; without this, `chezmoi apply` writes them
+# to ~/. Whole-path matching lets a nested README.md still apply.
 README.md
+run-tests.sh
 docs.md
 X2W.md
 MACOS_PORTING_GUIDE.md

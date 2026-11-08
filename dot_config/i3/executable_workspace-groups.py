@@ -61,6 +61,7 @@ def serve():
                         connection.on(kind, lambda _, event, kind=kind: forward(kind, event))
                     events.put(("reconnect", "", None))
                     connection.main()
+                    events.put(("disconnected", "i3 closed the connection", None))
                 except Exception as error:
                     events.put(("disconnected", str(error), None))
                 stopped.wait(0.5)
@@ -110,7 +111,7 @@ def serve():
         with socket.socket(socket.AF_UNIX) as server:
             server.bind(str(path))
             server.listen(16)
-            last_maintenance = 0
+            last_maintenance, lost_since = 0, None
             subscribers, last_push, dirty = [], None, True
             try:
                 controller.recover_workers()
@@ -139,7 +140,9 @@ def serve():
                                 continue
                             if kind == "disconnected":
                                 controller.ready = False
+                                lost_since = lost_since or time.monotonic()
                             elif kind == "reconnect":
+                                lost_since = None
                                 controller.i3 = i3ipc.Connection(socket_path=socket_path())
                                 controller.initialize()
                             else:
@@ -148,12 +151,17 @@ def serve():
                             controller.ready = False
                             print(f"Group event: {error}", file=sys.stderr, flush=True)
                     if time.monotonic() - last_maintenance >= 1:
+                        if lost_since and time.monotonic() - lost_since > 10:
+                            # i3 is gone; restarts reconnect within a second.
+                            print("Group stop: i3 unreachable for 10 s", file=sys.stderr, flush=True)
+                            break
                         try:
-                            controller.restore.maintain()
-                            controller.resume_workers()
-                            if not controller.ready:
-                                dirty = True
-                                controller.select(controller.selected(), force=True)
+                            if not lost_since:
+                                controller.restore.maintain()
+                                controller.resume_workers()
+                                if not controller.ready:
+                                    dirty = True
+                                    controller.select(controller.selected(), force=True)
                         except Exception as error:
                             print(f"Group recovery: {error}", file=sys.stderr, flush=True)
                         last_maintenance = time.monotonic()

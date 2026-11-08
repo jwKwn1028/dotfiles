@@ -23,4 +23,5 @@ Ghostty-TokyoNight `gtk.css`. Text fields are unaffected.
 Enter opens. `h`/`l` move only in icon and compact views. No key sequences or
 visual mode, and bound letters don't start type-to-find.
 
-Reload: `systemctl --user restart thunar.service`
+Thunar stays resident after its first window, so reload it after changing keys
+or the theme: `systemctl --user restart thunar.service`

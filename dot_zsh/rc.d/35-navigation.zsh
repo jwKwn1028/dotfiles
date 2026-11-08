@@ -20,9 +20,11 @@ if _have eza; then
 
   _auto_ls() {
     emulate -L zsh
+    [[ -t 1 ]] || return
     local -a entries=(*(N))
     (( $#entries && $#entries <= AUTO_LS_MAX )) || return
-    eza --color=auto --icons
+    # Without a path, eza reads piped stdin.
+    eza --color=auto --icons .
   }
 
   autoload -Uz add-zsh-hook

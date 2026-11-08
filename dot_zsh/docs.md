@@ -60,7 +60,8 @@ The fzf keys need fzf's installed widgets. Editor keymaps are separate: see
 | `poweroff` | Shut down after a confirmation with a ten-second timeout. |
 
 \* In an interactive Ghostty tab or split outside tmux and SSH, `c`, `z`, and
-`thunar` without arguments close the shell after a successful launch.
+`thunar` without arguments close the shell, then open the window. A missing
+editor, or a Thunar that fails to start, keeps the shell open.
 
 Short aliases: `h` (Helix here), `v` (Vim here), `mo` (Micro), `twt`
 (taskwarrior-tui), `tcal` (task-calendar), `:q` (exit the shell), and `:qa`

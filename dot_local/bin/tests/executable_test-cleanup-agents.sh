@@ -20,6 +20,12 @@ fi
 TEST_TMP="$(mktemp -d)"
 trap 'rm -rf -- "$TEST_TMP"' EXIT
 
+# --apply refuses while an agent runs; this stub says none does.
+mkdir -p -- "$TEST_TMP/bin"
+printf '#!/bin/sh\nexit "${PGREP_STATUS:-1}"\n' >"$TEST_TMP/bin/pgrep"
+chmod +x -- "$TEST_TMP/bin/pgrep"
+export PATH="$TEST_TMP/bin:$PATH"
+
 pass_count=0
 
 fail() {
@@ -115,7 +121,7 @@ test_dry_run_preserves_everything() {
   printf '%s\n' '{"session_id":"'$codex_sid'"}' >"$home/.codex/history.jsonl"
   printf '%s\n' '{"sessionId":"'$claude_sid'"}' >"$home/.claude/history.jsonl"
   printf 'protected\n' >"$home/.codex/config.toml"
-  printf 'remove me\n' >"$home/.codex/cache.tmp"
+  printf 'remove me\n' >"$home/.codex/models_cache.json"
   printf 'memory\n' >"$home/.codex/memories/memory.md"
   printf 'memory\n' >"$home/.claude/projects/fixture/memory/memory.md"
   : >"$home/.codex/state_5.sqlite"
@@ -131,9 +137,9 @@ test_dry_run_preserves_everything() {
   assert_exists "$home/.codex/memories_1.sqlite"
   assert_exists "$home/.codex/memories/memory.md"
   assert_exists "$home/.claude/projects/fixture/memory/memory.md"
-  assert_exists "$home/.codex/cache.tmp"
+  assert_exists "$home/.codex/models_cache.json"
   assert_exists "$home/.codex/config.toml"
-  assert_contains "$output" "Would remove: $home/.codex/cache.tmp"
+  assert_contains "$output" "Would remove: $home/.codex/models_cache.json"
   assert_contains "$output" 'No files were removed.'
   pass 'dry run previews changes and preserves all fixture state'
 }
@@ -155,11 +161,16 @@ test_codex_keep_prunes_history() {
   printf 'protected\n' >"$home/.codex/config.toml"
   : >"$home/.codex/state_5.sqlite"
   : >"$home/.codex/logs_1.sqlite"
+  chmod 600 "$home/.codex/history.jsonl"
+  local inode
+  inode="$(stat -c %i "$home/.codex/history.jsonl")"
 
   run_interactive "$home" "$output" $'n\n'
 
   assert_exists "$transcript"
   assert_same "$expected" "$home/.codex/history.jsonl"
+  [[ "$(stat -c %i "$home/.codex/history.jsonl")" != "$inode" ]] || fail 'history.jsonl rewritten in place'
+  [[ "$(stat -c %a "$home/.codex/history.jsonl")" == 600 ]] || fail 'history.jsonl lost its mode'
   assert_exists "$home/.codex/state_5.sqlite"
   assert_exists "$home/.codex/logs_1.sqlite"
   assert_exists "$home/.codex/config.toml"
@@ -252,13 +263,13 @@ test_claude_hooks_survive_apply() {
   mkdir -p -- "$home/.claude/hooks/nested"
   printf 'hook\n' >"$home/.claude/hooks/session-start.sh"
   printf 'hook\n' >"$home/.claude/hooks/nested/deep.sh"
-  printf 'remove me\n' >"$home/.claude/cache.tmp"
+  printf 'remove me\n' >"$home/.claude/stats-cache.json"
 
   HOME="$home" bash "$CLEANUP" --apply >"$output" 2>&1
 
   assert_exists "$home/.claude/hooks/session-start.sh"
   assert_exists "$home/.claude/hooks/nested/deep.sh"
-  assert_absent "$home/.claude/cache.tmp"
+  assert_absent "$home/.claude/stats-cache.json"
   assert_contains "$output" "Keep: $home/.claude/hooks"
   pass 'Claude hooks directory survives --apply'
 }
@@ -290,7 +301,7 @@ binary = release / "codex"
 binary.write_text("installed daemon binary\n")
 current = release.parents[2] / "current"
 current.symlink_to("releases/fixture")
-cache = codex / "cache.tmp"
+cache = codex / "models_cache.json"
 cache.write_text("disposable cache\n")
 sock_path = codex / "app-server-control" / "control.sock"
 lock_path = codex / "app-server-daemon" / "daemon.lock"
@@ -556,13 +567,13 @@ test_filter_dry_run_lists_only_matches() {
   small="$(write_claude_chat_in "$home" a1111111-1111-1111-1111-111111111111 /work/small 2026-08-01T00:00:00Z)"
   big="$(write_claude_chat_in "$home" a2222222-2222-2222-2222-222222222222 /work/big 2026-08-01T00:00:00Z 4096)"
   write_codex_chat_in "$home" a3333333-3333-3333-3333-333333333333 /work/codex-small 2026-08-01T00:00:00Z >/dev/null
-  printf 'remove me\n' >"$home/.claude/cache.tmp"
+  printf 'remove me\n' >"$home/.claude/stats-cache.json"
 
   HOME="$home" bash "$CLEANUP" --smaller-than 2K >"$output" 2>&1
 
   assert_exists "$small"
   assert_exists "$big"
-  assert_exists "$home/.claude/cache.tmp"
+  assert_exists "$home/.claude/stats-cache.json"
   assert_contains "$output" '/work/small'
   assert_contains "$output" '/work/codex-small'
   assert_not_contains "$output" '/work/big'
@@ -603,7 +614,7 @@ test_filter_apply_takes_matching_chats_with_their_state() {
   mkdir -p -- "$home/.claude/projects/-work-p/memory"
   printf 'a note\n' >"$home/.claude/projects/-work-p/memory/note.md"
   printf 'protected\n' >"$home/.claude/settings.json"
-  printf 'remove me\n' >"$home/.claude/cache.tmp"
+  printf 'remove me\n' >"$home/.claude/stats-cache.json"
   : >"$home/.codex/state_5.sqlite"
 
   # Claude chats: yes; Claude memory: no; Codex chats: yes.
@@ -624,7 +635,7 @@ test_filter_apply_takes_matching_chats_with_their_state() {
   assert_same "$TEST_TMP/filter-apply/codex-history" "$home/.codex/history.jsonl"
   assert_same "$TEST_TMP/filter-apply/codex-index" "$home/.codex/session_index.jsonl"
   assert_exists "$home/.claude/settings.json"
-  assert_exists "$home/.claude/cache.tmp"
+  assert_exists "$home/.claude/stats-cache.json"
   assert_exists "$home/.codex/state_5.sqlite"
   pass '--smaller-than deletes small chats with their state and history lines, nothing else'
 }
@@ -762,7 +773,70 @@ test_filter_rejects_bad_values() {
   pass 'bad filter values exit 2 before touching anything'
 }
 
+test_sweep_keeps_unrecognized_entries() {
+  local home output path
+  home="$(new_home unrecognized)"
+  output="$TEST_TMP/unrecognized/output"
+  mkdir -p -- "$home/.codex/prompts" "$home/.claude/rules" "$home/.claude/output-styles" \
+    "$home/.claude/shell-snapshots" "$home/.codex/tmp"
+  printf 'mine\n' | tee "$home/.codex/AGENTS.md" "$home/.codex/prompts/p.md" \
+    "$home/.claude/rules/r.md" "$home/.claude/output-styles/s.md" \
+    "$home/.claude/keybindings.json" >/dev/null
+  : >"$home/.codex/.sqlite-maintenance.lock"
+
+  HOME="$home" bash "$CLEANUP" --apply >"$output" 2>&1
+
+  for path in .codex/AGENTS.md .codex/prompts/p.md .claude/rules/r.md \
+    .claude/output-styles/s.md .claude/keybindings.json; do
+    assert_exists "$home/$path"
+  done
+  assert_absent "$home/.claude/shell-snapshots"
+  assert_absent "$home/.codex/tmp"
+  assert_absent "$home/.codex/.sqlite-maintenance.lock"
+  assert_contains "$output" "Keep (unrecognized): $home/.codex/AGENTS.md"
+  pass 'the sweep removes known caches and keeps unrecognized entries'
+}
+
+test_codex_archived_chat_is_offered() {
+  local home output sid transcript
+  home="$(new_home archived)"
+  output="$TEST_TMP/archived/output"
+  sid='44444444-4444-4444-4444-444444444444'
+  transcript="$(write_codex_chat "$home" "$sid")"
+  mkdir -p -- "$home/.codex/archived_sessions/2026/08"
+  mv -- "$transcript" "$home/.codex/archived_sessions/2026/08/"
+  transcript="$home/.codex/archived_sessions/2026/08/${transcript##*/}"
+  printf '%s\n' "{\"session_id\":\"$sid\"}" >"$home/.codex/history.jsonl"
+
+  run_interactive "$home" "$output" $'n\n'
+
+  assert_exists "$transcript"
+  assert_contains "$home/.codex/history.jsonl" "$sid"
+  assert_contains "$output" 'Kept chat transcript:'
+  pass 'archived Codex chats are offered like live ones, not swept'
+}
+
+test_apply_refuses_while_an_agent_runs() {
+  local home output status
+  home="$(new_home agent-running)"
+  output="$TEST_TMP/agent-running/output"
+  mkdir -p -- "$home/.claude/sessions"
+
+  for status in 0 2; do
+    PGREP_STATUS="$status" HOME="$home" bash "$CLEANUP" --apply >"$output" 2>&1 \
+      && fail "--apply ran with pgrep status $status"
+    assert_exists "$home/.claude/sessions"
+    assert_contains "$output" 'quit them before --apply'
+  done
+  PGREP_STATUS=0 HOME="$home" bash "$CLEANUP" >"$output" 2>&1
+  assert_contains "$output" "Would remove: $home/.claude/sessions"
+  pass '--apply refuses while an agent may run; the preview still works'
+}
+
 test_dry_run_preserves_everything
+test_sweep_keeps_unrecognized_entries
+test_codex_archived_chat_is_offered
+test_apply_refuses_while_an_agent_runs
 test_codex_keep_prunes_history
 test_codex_delete_removes_chat_state
 test_claude_keep_prunes_history

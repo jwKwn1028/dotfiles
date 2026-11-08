@@ -58,3 +58,8 @@ template and its parameters.
 These insert and paste choices are mirrored in the
 [Zed guide](../zed/docs.md) and `~/.config/Code/User/docs.md` where those
 editors support them.
+
+## Bash and Zsh
+
+`shfmt` formats Bash on save but never Zsh, whose syntax it breaks; Zsh keeps
+Bash's highlighting.

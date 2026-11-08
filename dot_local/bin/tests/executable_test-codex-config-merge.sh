@@ -271,8 +271,9 @@ for malformed in 'model = "unfinished' 'model = "one"\nmodel = "two"'; do
     printf '%b\n' "$malformed" >"$IN"
     RC=0
     "$SUBJECT" <"$IN" >"$OUT" 2>"$ERR" || RC=$?
-    [ "$RC" -ne 0 ] || fail 'invalid TOML was accepted'
-    [ ! -s "$OUT" ] || fail 'invalid TOML produced replacement content'
+    [ "$RC" = 0 ] || fail "invalid TOML exited $RC instead of 0"
+    cmp -s "$IN" "$OUT" || fail 'invalid TOML was not passed through unchanged'
+    grep -q 'leaving them unchanged' "$ERR" || fail 'invalid TOML was left without saying why'
 done
 
 echo 'PASS: Codex config merge pins two top-level keys and leaves tables alone'

@@ -75,6 +75,7 @@ auto-format = false
 
 
 # ---------------- Bash / Zsh ----------------
+# Zsh is its own language because shfmt breaks Zsh syntax.
 [[language]]
 name = "bash"
 language-servers = ["bashls"]
@@ -82,9 +83,23 @@ auto-format = true
 file-types = [
   "sh", "bash", "ebuild", "eclass", "PKGBUILD",
   { glob = ".bashrc" }, { glob = ".bash_profile" }, { glob = ".bash_aliases" },
+]
+shebangs = ["sh", "bash", "dash"]
+formatter = { command = "shfmt", args = ["-ln", "bash", "-i", "2", "-ci", "-bn", "-sr", "-filename", "stdin.sh", "-"] }
+
+# Highlighting: runtime/queries/zsh/ inherits bash.
+[[language]]
+name = "zsh"
+scope = "source.zsh"
+grammar = "bash"
+language-servers = ["bashls"]
+auto-format = false
+file-types = [
   "zsh", { glob = ".zshrc" }, { glob = ".zshenv" }, { glob = ".zprofile" }, { glob = ".zlogin" }, { glob = ".zlogout" },
 ]
-formatter = { command = "shfmt", args = ["-ln", "bash", "-i", "2", "-ci", "-bn", "-sr", "-filename", "stdin.sh", "-"] }
+shebangs = ["zsh"]
+comment-token = "#"
+indent = { tab-width = 2, unit = "  " }
 
 [language-server.bashls]
 command = "bash-language-server"

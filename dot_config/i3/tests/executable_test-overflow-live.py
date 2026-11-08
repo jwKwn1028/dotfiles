@@ -283,7 +283,7 @@ def single_screen():
     spawn("l1", on=4)
     spawn("m1", on=1)
     print(f"    occupancy before: {occupied_map()}")
-    # Exactly what move-to-workspace.sh issues for $mod+Shift+<n>.
+    # A raw i3 move, bypassing the workspace controller.
     i3.command('[title="^m1$"] move container to workspace number 3; workspace number 3')
     check("S5 manual move to packed ws3 lands on ws4", settle("m1"), 4)
 

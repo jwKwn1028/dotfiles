@@ -335,7 +335,14 @@ def run(dual=False):
         wait(lambda: not rpc("status")["windows"])
         print(f"PASS {'dual' if dual else 'single'}: Shift+A closes every group", flush=True)
         session_checks()
-        rpc("stop")
+
+        state = next(Path(environment["XDG_RUNTIME_DIR"]).glob("i3-groups-*/state.json"))
+        workers = [pid for pid, _ in json.loads(state.read_text())["workers"].values()]
+        assert workers
+        subprocess.run(["i3-msg", "-q", "exit"], env=environment)
+        processes[2].wait(timeout=15)
+        assert not any(Path(f"/proc/{pid}").exists() for pid in workers)
+        print(f"PASS {'dual' if dual else 'single'}: controller and workers stop once i3 exits", flush=True)
     except Exception:
         if "i3" in locals():
             (directory / "failed-tree.json").write_text(json.dumps(i3.get_tree().ipc_data))

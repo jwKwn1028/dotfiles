@@ -21,9 +21,9 @@ Document conversion and Typst layouts:
 
 ## Agent cleanup
 
-Preview with `~/.cleanup-agents.sh`; add `--apply` to delete. Chats and memory
-require confirmation. Codex's `packages/` and `app-server-*/` stay intact to
-preserve daemon binaries, sockets, and locks.
+Preview with `~/.cleanup-agents.sh`; quit Claude Code and Codex before adding
+`--apply`. Chats and memory need confirmation; beyond them, only known caches
+and session state are removed.
 
 ## bashrc
 
@@ -77,8 +77,8 @@ executes them without creating that directory in the destination. Their
 `before_`/`after_` attributes and numeric filenames determine the order:
 
 1. `run_once_before_10`: apt sets from `.chezmoidata/packages.toml`, then the
-   files and clones in `.chezmoiexternal.toml`.
-2. `run_once_after_05`: point the source repo's Git hooks at `.githooks`.
+   archives in `.chezmoiexternal.toml`.
+2. `run_after_05`: point the source repo's Git hooks at `.githooks`.
 3. `run_once_after_20`: Flathub apps.
 4. `run_once_after_30`: profile-specific pipx apps, rustup, cargo crates
    (including Taskwarrior TUI), Starship, zoxide, and Miniconda.
@@ -120,8 +120,8 @@ Log out, pick **i3** in LightDM, and log back in.
 - **npm:** install NodeSource's `nodejs`, which bundles npm; apt's `npm`
   conflicts with it, so the manifest installs `nodejs` alone. `~/.npmrc` puts
   global packages in `~/.local/npm-global`.
-- **Optional scientific software:** nothing installs it; `.zshenv` adds it to
-  PATH only when present.
+- **Optional scientific software:** nothing installs it; `.zshenv` adds its
+  usual paths to PATH, harmless when missing.
 
 Claude Code/Codex plugins, skills, MCP servers, and hooks stay installer-owned
 and unmanaged.

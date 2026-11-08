@@ -36,6 +36,18 @@ dot_var/app/app.zen_browser.zen/
 private_dot_ssh/*
 !private_dot_ssh/private_config.tmpl
 
+# Credential stores; .githooks/pre-commit blocks them too.
+*dot_gnupg/
+*dot_password-store/
+*dot_aws/
+*dot_docker/
+*dot_kube/
+*dot_netrc*
+*dot_git-credentials*
+*dot_pypirc*
+**/gh/*hosts.yml*
+*rclone.conf*
+
 __pycache__/
 *.py[cod]
 .ruff_cache/

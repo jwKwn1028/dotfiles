@@ -403,11 +403,11 @@ These are normally portable, but must still be rendered and tested on macOS:
 | `dot_config/starship.toml` | Share. |
 | `dot_config/helix/` | Share; verify every configured language server is installed. |
 | `dot_config/ghostty/` | Share the XDG directory, which Ghostty supports on macOS, but template the contents. The current file includes GTK-only keys and i3-specific tab-bar behavior. Ghostty 1.2.3+ prefers `config.ghostty`; the existing `config` name remains a legacy fallback. Rename only after the Linux Ghostty version is verified. |
-| `dot_config/zed/` | Share; Zed documents `~/.config/zed/settings.json` and `keymap.json` on both platforms. Keep SSH connections local. `private_settings.json.tmpl` is already a template, but its font stack is tuned to this display: 8.9pt with an `Ubuntu Mono` fallback that no Mac has. Select sizes and fallbacks per OS. |
+| `dot_config/zed/` | Share; Zed documents `~/.config/zed/settings.json` and `keymap.json` on both platforms. Keep SSH connections local. `.chezmoitemplates/zed-settings.jsonc` is already a template, but its font stack is tuned to this display: 8.9pt with an `Ubuntu Mono` fallback that no Mac has. Select sizes and fallbacks per OS. |
 | `dot_config/bat/`, `btop/`, `fastfetch/`, `micro/`, `ranger/`, `rtk/`, `yazi/` | Share after installing each command and checking tool-specific platform options. |
 | `dot_condarc.tmpl`, `private_dot_npmrc.tmpl` | Share the rendered policy, but select platform/architecture-specific runtime installations separately. |
 | `dot_nanorc`, `dot_vimrc`, `dot_visidatarc`, `dot_taskrc` | Share after syntax and command-availability checks; do not infer that a similarly named Homebrew formula provides the same program. |
-| `private_dot_claude/`, `private_dot_codex/` | Share only the narrow settings currently owned here and validate status-line interpreters. Both targets are `modify_` scripts, so they execute on Darwin: port the Codex one off GNU sed (`0,/re/`, bare `sed -i`, one-line `1i`) and confirm `python3` for the Claude one. MCP servers, plugins, skills, hooks, auth caches, and project trust are installer/tool-owned machine state and must remain outside this repo on Darwin too. |
+| `private_dot_claude/`, `private_dot_codex/` | Share only the narrow settings currently owned here and validate status-line interpreters. Both targets are `modify_` scripts, so they execute on Darwin: confirm their `python3` interpreters. MCP servers, plugins, skills, hooks, auth caches, and project trust are installer/tool-owned machine state and must remain outside this repo on Darwin too. |
 | `dot_local/bin/executable_weather` | Share after confirming `curl` and `jq`. |
 | `dot_local/bin/executable_clipcopy` | Share; its `pbcopy` branch is the native macOS path. |
 | `.chezmoiexternal.toml` | Share. The five archives are pure Zsh/Vim plugins pinned to checksummed commits, so they are portable; they only need network access at apply time and a matching checksum, and a mismatch fails the Darwin apply exactly as it fails the Linux one. |
@@ -602,7 +602,7 @@ facilities see through it. `lookPath` ignores the override completely and
 searches the host `PATH`, which is why `symlink_fd.tmpl` resolves
 `/usr/bin/fdfind` in this audit and renders empty on a Mac.
 `.chezmoi.sourceDir` stays the real source directory, so
-`.chezmoiscripts/run_once_after_05-enable-git-hooks.sh.tmpl` prints a `/home/...`
+`.chezmoiscripts/run_after_05-enable-git-hooks.sh.tmpl` prints a `/home/...`
 path here: check a `/home` path against its template before calling it a leak.
 The `lstat` and `include` functions follow the paths they are given, so an
 overridden `homeDir` sends the

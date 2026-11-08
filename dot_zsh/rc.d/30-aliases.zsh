@@ -1,11 +1,13 @@
 # --- Aliases ---
-alias twt='taskwarrior-tui'
+_have taskwarrior-tui && alias twt='taskwarrior-tui'
 alias tcal='task-calendar'
-alias v='vim .'
-alias h='hx .'
-alias vi='vim'
-alias mo='micro'
-alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
+if _have vim; then
+  alias v='vim .'
+  alias vi='vim'
+fi
+_have hx && alias h='hx .'
+_have micro && alias mo='micro'
+_have eza && alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 (( $+commands[batcat] )) && alias bat='batcat'
 if _have tlp; then
   alias tlp-bat='sudo tlp-stat -b'
@@ -13,14 +15,19 @@ if _have tlp; then
   alias tlp-restore='sudo tlp setcharge BAT0'
 fi
 unalias c z 2>/dev/null || true
+# Exit a local Ghostty shell, then run "$@": Ghostty 1.3 drops keyboard focus
+# when a tab closes behind another window. Elsewhere, run "$@" here.
 _close_gui_terminal() {
-  [[ -o interactive && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]] && exit 0
-  return 0
+  if [[ -o interactive && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]]; then
+    (( $# )) && { ( sleep 0.05; "$@" ) </dev/null >/dev/null 2>&1 &! }
+    exit 0
+  fi
+  (( $# == 0 )) || "$@"
 }
 _open_gui_editor() {
   emulate -L zsh
-  command "$1" . || return
-  _close_gui_terminal
+  (( $+commands[$1] )) || { print -u2 -- "$1 not found"; return 127; }
+  _close_gui_terminal command "$1" .
 }
 c() { _open_gui_editor code }
 z() { _open_gui_editor zed }

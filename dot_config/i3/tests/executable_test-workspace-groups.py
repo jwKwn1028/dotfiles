@@ -344,5 +344,66 @@ class WindowMenuTests(unittest.TestCase):
         self.assertEqual(calls, [("window-menu", {}), ("focus", {"value": 11})])
 
 
+class StaticI3:
+    """Two outputs whose visible workspaces never change; records commands."""
+
+    def __init__(self, shown, windows=()):
+        self.outputs = [SimpleNamespace(name="eDP-1", active=True, primary=True),
+                        SimpleNamespace(name="DP-2", active=True, primary=False)]
+        self.spaces = [SimpleNamespace(num=num, name=str(num), output=output, visible=True, urgent=False,
+                                       focused=output == "eDP-1", id=1000 + num,
+                                       leaves=lambda num=num: [SimpleNamespace(id=num)] if num in windows else [])
+                       for output, num in shown.items()]
+        self.commands = []
+
+    def get_outputs(self):
+        return self.outputs
+
+    def get_workspaces(self):
+        return self.spaces
+
+    def get_tree(self):
+        focused = SimpleNamespace(id=1, window=None, workspace=lambda: self.spaces[0])
+        return SimpleNamespace(workspaces=lambda: self.spaces, find_focused=lambda: focused)
+
+    def command(self, text):
+        self.commands.append(text)
+        return [SimpleNamespace(success=True, error=None)]
+
+    def shown(self):
+        """The slot each `focus output` in a reselect asked i3 to show."""
+        result, output = {}, None
+        for text in self.commands:
+            if text.startswith("focus output "):
+                output = json.loads(text.removeprefix("focus output "))
+            elif text.startswith("workspace ") and output:
+                result[output] = int(json.loads(text.split(" ", 2)[2]))
+                output = None
+        return result
+
+
+class DisplayMemoryTests(unittest.TestCase):
+    def reselect(self, shown, windows=(), how=lambda controller: controller.dispatch("reconcile")):
+        i3 = StaticI3(shown, windows)
+        with tempfile.TemporaryDirectory() as directory:
+            how(Controller(i3, directory))
+        return i3.shown()
+
+    def test_primary_change_drops_memory_that_breaks_the_slot_policy(self):
+        # Arranged while DP-2 was primary, then display-setup made eDP-1 primary.
+        self.assertEqual(self.reselect({"eDP-1": 3, "DP-2": 1}, (1, 3),
+                                       how=lambda controller: controller.on_event("output", "unspecified")),
+                         {"eDP-1": 1, "DP-2": 3})
+
+    def test_display_setup_replaces_empty_filler_but_keeps_occupied_slots(self):
+        self.assertEqual(self.reselect({"eDP-1": 2, "DP-2": 4}), {"eDP-1": 1, "DP-2": 3})
+        self.assertEqual(self.reselect({"eDP-1": 2, "DP-2": 4}, (2, 4)), {"eDP-1": 2, "DP-2": 4})
+
+    def test_ordinary_reselect_keeps_an_empty_slot_the_user_chose(self):
+        self.assertEqual(self.reselect({"eDP-1": 2, "DP-2": 4},
+                                       how=lambda controller: controller.select("A", force=True)),
+                         {"eDP-1": 2, "DP-2": 4})
+
+
 if __name__ == "__main__":
     unittest.main()

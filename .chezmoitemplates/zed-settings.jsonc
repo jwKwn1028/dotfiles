@@ -1,8 +1,3 @@
-{{- $settingsPath := joinPath .chezmoi.homeDir ".config" "zed" "settings.json" -}}
-{{- $localSettings := dict -}}
-{{- if stat $settingsPath -}}
-{{- $localSettings = include $settingsPath | fromJsonc -}}
-{{- end -}}
 {
   "helix_mode": true,
   "base_keymap": "VSCode",
@@ -180,7 +175,4 @@
     "favorite_models": [],
     "model_parameters": [],
   },
-{{- if hasKey $localSettings "context_servers" }}
-  "context_servers": {{ index $localSettings "context_servers" | toPrettyJson | indent 2 | trim }},
-{{- end }}
 }

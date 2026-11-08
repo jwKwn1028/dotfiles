@@ -58,3 +58,5 @@ These bindings are inactive while a menu is open.
 For the corresponding terminal editor keys, see the
 [Helix guide](../helix/docs.md). This guide contains no machine-specific
 settings; those belong in local chezmoi data, outside the public source.
+chezmoi sets its keys in `settings.json` and keeps the ones Zed adds, such as
+SSH connections.

@@ -172,7 +172,8 @@ class Controller:
         self.command(f"move workspace to output {quote(output)}")
         return name
 
-    def select(self, group, slot=None, force=False, external=False, restore_session=None, remember_view=True):
+    def select(self, group, slot=None, force=False, external=False, restore_session=None, remember_view=True,
+               tidy=False):
         number(group, slot or 1, self.groups)
         old = self.selected()
         if group == old and slot is None and not force and self.state.get("desktop") is None:
@@ -190,9 +191,19 @@ class Controller:
             view = self.state["views"].get(group, {})
             wanted = {}
             used = set()
+            tree = self.tree()
+
+            def empty(local):
+                ws = self.workspace(group, local, tree)
+                return not ws or not ws.leaves()
+
             for index, output in enumerate(outputs):
                 fallback = 1 if index == 0 else min(3 + index - 1, 10)
                 chosen = view.get("outputs", {}).get(output.name, fallback)
+                # Memory from before a primary change breaks the 1-2 rule; an empty
+                # slot after an output change is i3's filler, not a choice.
+                if chosen in range(1, 11) and ((chosen <= 2) != (index == 0) or tidy and empty(chosen)):
+                    chosen = fallback
                 if len(outputs) == 1:
                     chosen = slot or view.get("slot", 1)
                 if chosen not in range(1, 11) or chosen in used:
@@ -210,7 +221,6 @@ class Controller:
             for output in wanted:
                 if output != final_output and wanted[output] == final_slot:
                     wanted[output] = next(value for value in range(1, 11) if value not in wanted.values())
-            tree = self.tree()
             placed = {ws.num: ws.output for ws in self.i3.get_workspaces()}
             for ws in tree.workspaces():
                 current = identity(ws.num, self.groups)
@@ -381,7 +391,7 @@ class Controller:
         if action == "overflow":
             return self.overflow(**values)
         if action == "reconcile":
-            return self.select(group, force=True)
+            return self.select(group, force=True, tidy=True)
         if action == "select":
             changed = self.select(values["group"])
         elif action == "group-previous":
@@ -538,7 +548,7 @@ class Controller:
         if hasattr(self.i3, "get_binding_state"):
             self.mode = self.i3.get_binding_state().name
         self.selected()
-        self.select(self.selected(), force=True)
+        self.select(self.selected(), force=True, tidy=True)
         self.last_outputs = tuple(output.name for output in self.outputs())
 
     def on_event(self, kind, change, con_id=None):
@@ -546,7 +556,7 @@ class Controller:
             self.mode = change
             return
         if kind == "output" or change == "reload":
-            self.select(self.selected(), force=True)
+            self.select(self.selected(), force=True, tidy=True)
             return
         tree = self.tree()
         con = tree.find_by_id(con_id) if con_id else None

@@ -27,7 +27,7 @@ cursor-color = #86be43
 cursor-text = #1d202f
 cursor-style-blink = false
 
-# Keeps ~/.tmux.conf's `terminal-overrides ",xterm-256color:RGB"` working.
+# tmux enables RGB for this TERM (terminal-features).
 term = xterm-256color
 
 shell-integration = zsh

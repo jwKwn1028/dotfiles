@@ -185,18 +185,10 @@ _have micro && alias mo='micro'
 _have eza && alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 [ "$_bash_bat" = batcat ] && alias bat='batcat'
 [ "$_bash_fd" = fdfind ] && alias fd='fdfind'
-unalias c z 2>/dev/null
 _close_gui_terminal() {
   [[ $- == *i* && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]] && exit 0
   return 0
 }
-_open_gui_editor() {
-  _bash_require "$1" || return
-  command "$1" . || return
-  _close_gui_terminal
-}
-c() { _open_gui_editor code; }
-z() { _open_gui_editor zed; }
 alias ':q'='exit'
 _have i3-msg && alias ':qa'='i3-msg -q kill'
 alias hb='${EDITOR:-vi} ~/.bashrc'
@@ -490,20 +482,6 @@ bo() {
   fi
 
   nohup ebook-viewer "$file" >/dev/null 2>&1 &
-}
-
-# --- File manager ---
-# Match the Zsh thunar opener.
-thunar() {
-  _bash_require thunar nohup || return
-  if (( $# == 0 )) && [[ $- == *i* && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]]; then
-    _bash_require systemctl || return
-    command systemctl --user start thunar.service >/dev/null 2>&1 || return
-    command thunar "$PWD" >/dev/null 2>&1 || return
-    _close_gui_terminal
-    return 0
-  fi
-  nohup thunar "${@:-$PWD}" >/dev/null 2>&1 &
 }
 
 # --- Zk ---

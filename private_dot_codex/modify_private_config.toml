@@ -31,8 +31,9 @@ except ImportError:
 try:
     config = tomlkit.parse(raw.decode("utf-8"))
 except (UnicodeDecodeError, ParseError):
-    print("Codex settings are invalid TOML; refusing to overwrite them.", file=sys.stderr)
-    raise SystemExit(1)
+    print("Codex settings are invalid TOML; leaving them unchanged.", file=sys.stderr)
+    sys.stdout.buffer.write(raw)
+    raise SystemExit(0)
 
 if all(config.get(key) == value for key, value in managed.items()):
     sys.stdout.buffer.write(raw)

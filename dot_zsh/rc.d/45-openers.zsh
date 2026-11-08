@@ -147,15 +147,33 @@ io() {
 }
 
 # --- File manager ---
-# Bare thunar closes a local Ghostty shell after launch.
+# --print-reply keeps a first call alive while D-Bus starts thunar.service.
+_thunar_folders() {
+  local dir
+  for dir in "$@"; do
+    command dbus-send --session --print-reply --type=method_call \
+      --dest=org.xfce.FileManager /org/xfce/FileManager \
+      org.xfce.FileManager.DisplayFolder "string:${dir:a}" string: string: \
+      >/dev/null 2>&1 || return
+  done
+}
+
+# Folders use D-Bus, the rest the client. Bare thunar closes a Ghostty shell.
 thunar() {
   emulate -L zsh
-  if (( $# == 0 )) && [[ -o interactive && $TERM_PROGRAM == ghostty && -z $TMUX && -z $SSH_CONNECTION ]]; then
-    # Start the daemon so the client returns promptly.
-    command systemctl --user start thunar.service >/dev/null 2>&1 || return
-    command thunar "$PWD" >/dev/null 2>&1 || return
-    _close_gui_terminal
+  local arg
+  for arg in "${@:-$PWD}"; do
+    [[ -d $arg && -z $SSH_CONNECTION ]] && continue
+    command thunar "${@:-$PWD}" >/dev/null 2>&1 &!
     return 0
+  done
+  if (( $# == 0 )) && [[ -o interactive && $TERM_PROGRAM == ghostty && -z $TMUX ]]; then
+    # Start Thunar first so a failure keeps the shell; the window opens after.
+    command dbus-send --session --print-reply --dest=org.freedesktop.DBus \
+      /org/freedesktop/DBus org.freedesktop.DBus.StartServiceByName \
+      string:org.xfce.FileManager uint32:0 >/dev/null 2>&1 || return
+    _close_gui_terminal _thunar_folders "$PWD"
+    return
   fi
-  command thunar "${@:-$PWD}" >/dev/null 2>&1 &!
+  _thunar_folders "${@:-$PWD}" &!
 }

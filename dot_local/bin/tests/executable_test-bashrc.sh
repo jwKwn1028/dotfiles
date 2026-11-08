@@ -61,7 +61,7 @@ run_session minimal "$TEST_TMP/bin" '
   for name in twt v h vi mo rg :qa sidle sq myq wsidle mytop; do
     ! alias "$name" >/dev/null 2>&1 || fail "alias $name requires a missing tool"
   done
-  for helper in n r y hf zn zs crpf crpd c z thunar tcheck poweroff; do
+  for helper in n r y hf zn zs crpf crpd tcheck poweroff; do
     output=$("$helper" 2>&1)
     status=$?
     [[ $status == 127 && $output == *"not found"* && $output != *"command not found"* ]] ||

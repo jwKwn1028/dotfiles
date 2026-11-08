@@ -4,11 +4,8 @@
 # lives in ~/.zshrc -> ~/.zsh/rc.d/; login-shell extras
 # (miniconda PATH, lazy conda wrappers) in ~/.zprofile.
 # --------------------------------------------------------
-export EDITOR=hx
-export VISUAL=hx
 export MICRO_TRUECOLOR=1
 export BAT_THEME="tokyonight_storm"
-export ZK_EDITOR="hx"
 export TYPST_INSTALL="$HOME/.typst"
 
 typeset -U path PATH
@@ -32,6 +29,9 @@ export PATH
 # Platform compatibility loads before ~/.zshrc and its rc.d modules.
 [[ -r "$HOME/.zsh/macos/compat.zsh" ]] &&
   source "$HOME/.zsh/macos/compat.zsh"
+
+for EDITOR in hx vim vi nano; do whence -p $EDITOR >/dev/null && break; done
+export EDITOR VISUAL=$EDITOR ZK_EDITOR=$EDITOR
 
 # Make `conda` available in non-interactive `zsh -c` shells that do not read
 # ~/.zprofile or ~/.zshrc. Full lazy init remains in the interactive config.

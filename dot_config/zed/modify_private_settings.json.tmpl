@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""Set the managed Zed settings, keep keys Zed adds, pass unreadable files."""
+
+import json
+import re
+import sys
+
+MANAGED = r'''
+{{ template "zed-settings.jsonc" . }}
+'''
+
+# Strings stay; comments and trailing commas go.
+JSONC = re.compile(
+    r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/|,(?=(?:\s|//[^\n]*|/\*.*?\*/)*[]}])', re.S
+)
+
+
+def loads_jsonc(text):
+    return json.loads(JSONC.sub(lambda m: m[0] if m[0][0] == '"' else "", text))
+
+
+data = sys.stdin.buffer.read()
+try:
+    raw = data.decode("utf-8")
+    live = loads_jsonc(raw) if raw.strip() else {}
+    if not isinstance(live, dict):
+        raise ValueError("not a JSON object")
+except ValueError as exc:
+    print(f"Zed settings are invalid; leaving them unchanged: {exc}", file=sys.stderr)
+    sys.stdout.buffer.write(data)
+    raise SystemExit(0)
+
+managed = loads_jsonc(MANAGED)
+if all(live.get(key) == value for key, value in managed.items()):
+    sys.stdout.buffer.write(data)
+else:
+    merged = dict(managed)
+    merged.update((key, value) for key, value in live.items() if key not in managed)
+    json.dump(merged, sys.stdout, ensure_ascii=False, indent=2)
+    sys.stdout.write("\n")

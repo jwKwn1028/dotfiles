@@ -73,25 +73,16 @@ run
 [ "$RC" = 0 ] || fail "whitespace-only input exited $RC"
 jchk "$managed_ok" 'whitespace-only input did not produce the managed settings'
 
-# --- unreadable input is refused, never overwritten --------------------------
-for bad in '{"model": ' 'not json at all' '{"a": 1,}'; do
+# --- unreadable input passes through unchanged, so chezmoi keeps going -------
+for bad in '{"model": ' 'not json at all' '{"a": 1,}' '[]' '"a string"' '3' 'null' 'true' \
+    $'{"a": "\xff"}'; do
     printf '%s' "$bad" >"$IN"
     run
-    [ "$RC" = 1 ] || fail "invalid JSON exited $RC instead of 1"
-    [ -s "$OUT" ] && fail 'invalid JSON still produced output, clobbering the file'
-    grep -q 'refusing to overwrite' "$ERR" ||
-        fail 'invalid JSON was refused without saying why'
-done
-
-for bad in '[]' '"a string"' '3' 'null' 'true'; do
-    printf '%s' "$bad" >"$IN"
-    run
-    [ "$RC" = 1 ] || fail "non-object JSON ($bad) exited $RC instead of 1"
-    [ -s "$OUT" ] && fail "non-object JSON ($bad) still produced output"
-    grep -q 'not a JSON object' "$ERR" ||
-        fail "non-object JSON ($bad) was refused without saying why"
-    grep -q 'Traceback' "$ERR" &&
-        fail "non-object JSON ($bad) crashed instead of refusing cleanly"
+    [ "$RC" = 0 ] || fail "invalid settings ($bad) exited $RC instead of 0"
+    cmp -s "$IN" "$OUT" || fail "invalid settings ($bad) were not passed through unchanged"
+    grep -q 'leaving them unchanged' "$ERR" ||
+        fail "invalid settings ($bad) were left without saying why"
+    grep -q 'Traceback' "$ERR" && fail "invalid settings ($bad) crashed"
 done
 
 # --- installer-owned keys survive -------------------------------------------

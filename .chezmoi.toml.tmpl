@@ -21,7 +21,7 @@
 {{- $sshHpcHostName := promptStringOnce . "sshHpcHostName" "HPC hostname or IP (blank to skip)" "" -}}
 {{- $tailscaleExitNode := promptStringOnce . "tailscaleExitNode" "Tailscale lab exit-node IP or name (blank to disable helper)" "" -}}
 {{- /* Prompted so a local working directory stays out of the repo. */ -}}
-{{- $flameshotSavePath := promptStringOnce . "flameshotSavePath" "Screenshot directory (blank for ~/Pictures)" "" -}}
+{{- $flameshotSavePath := promptStringOnce . "flameshotSavePath" "Screenshot directory (blank for ~/Pictures/Screenshots)" "" -}}
 
 [data]
     name              = {{ $name | quote }}

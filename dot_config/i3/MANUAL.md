@@ -19,7 +19,7 @@ and rollback.
 | `Copilot` | Show/hide the floating Ghostty terminal. |
 | `Super+Space` | Rofi drun (`XDG_CURRENT_DESKTOP=XFCE:i3`, `spotlight` theme). |
 | `Super+Tab` / `Super+Shift+Tab` | Previous window / Rofi list of all windows; see [Focus and Urgency](#focus-and-urgency). |
-| `Super+T` | Thunar. |
+| `Super+T` | Thunar; stays resident after the first window. |
 | `Super+P` / `XF86Display` | Minimal XFCE display settings. |
 | `Super+Shift+P` | Refresh display layout, wallpaper, and Polybars. |
 | `Ctrl+Super+Z` / `Ctrl+Shift+Z` | Zed / Zen Browser Flatpak. |
@@ -41,6 +41,7 @@ history, and stays shared across groups.
 | Binding | Action |
 | --- | --- |
 | `Super+Shift+Q` / `Alt+F4` | Close focused window. |
+| `Ctrl+Super+Shift+Q` / `Ctrl+Alt+F4` | Kill the focused window's client (all its windows). |
 | `Ctrl+Q` | Close apps that ignore it, listed in `QUIT_CLASSES` (`quit-key.py`). |
 | `Super+H/J/K/L` / `Super+Arrow keys` | Focus left/down/up/right. |
 | `Super+Shift+M` / `Super+Ctrl+M` | Show scratchpad / move focused window to scratchpad. |
@@ -170,7 +171,9 @@ establish intent.
 ### Displays
 
 Slots 1–2 use primary, 3–10 external when connected; all work on one monitor.
-The controller applies this policy on switch, reload, and hotplug. Disconnects
+The controller applies this policy on switch, reload, and hotplug. A remembered
+slot that breaks it falls back to primary 1/external 3, as does an empty one on
+start, reload, hotplug, or display setup. Disconnects
 show the last focused slot and preserve external-slot memory. Windows keep
 their group.
 
@@ -178,7 +181,8 @@ their group.
 
 `workspace-groups.py start` replaces the display/i3-socket controller and old
 watchers. It owns `autotiling`, `snap-watcher.sh`, and `overflow-watcher.py`,
-reconnects after i3 restarts, and serializes group operations. Failed IPC does
+reconnects after i3 restarts, stops with them 10 s after i3 exits, and
+serializes group operations. Failed IPC does
 not commit state; unavailable/reconciling groups pause placement and show
 `groups unavailable` in Polybar.
 
@@ -267,8 +271,8 @@ audio, battery, Wi-Fi, Bluetooth, power. Window/menu actions exit; in-place
 toggles stay. Exit restores prior bar visibility, counting a peek as hidden.
 Group tabs use their own shortcuts/mouse and are not cursor stops.
 
-Power entries require mouse confirmation. Media keys change volume by 5%;
-bar scrolling uses 1%.
+Power entries require mouse confirmation. Media keys change volume by 1% (5%
+with Shift); bar scrolling uses 1%.
 
 ### NetworkManager Tray
 
@@ -411,7 +415,7 @@ Python with `python3-i3ipc`, `python3-xlib`, `python3-lz4`; pipx autotiling;
 
 ## Runtime and State Files
 
-Runtime root: `$XDG_RUNTIME_DIR` (fallback `/run/user/$(id -u)`). State:
+Runtime root: `$XDG_RUNTIME_DIR`. State:
 `i3-groups-<hash>/` for groups, `i3-polybar-*` for bars, `i3-*-mode.restore-hidden`
 for prior visibility, `i3-titles.state` for borders, `tile-snap-<id>.lock` for snaps.
 

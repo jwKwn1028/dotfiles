@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Blocks staged changes that carry machine-identifying info: chezmoi data
-# values, local denylist entries, literal home paths, private or Tailscale
-# addresses, and SSH files. Findings name the rule, never the matched value.
+# Blocks staged chezmoi data values, local denylist entries, literal home
+# paths, private or Tailscale addresses, private keys, and SSH or credential
+# files. Findings name the rule, never the matched value.
 
 set -euo pipefail
 
@@ -75,6 +75,8 @@ function check_path(p,   lp, i, base) {
     if ((p ~ /(^|\/)[a-z_]*(dot_ssh|\.ssh)\// && p != "private_dot_ssh/private_config.tmpl") \
         || base ~ /(^|_)(id_(rsa|dsa|ecdsa|ed25519)|known_hosts|authorized_keys)/)
         hit(p, "", "SSH file; only private_dot_ssh/private_config.tmpl is tracked")
+    if (p ~ credpath || base ~ /rclone\.conf/)
+        hit(p, "", "credential file")
 }
 function check_line(p, n, s,   ls, i) {
     ls = tolower(s)
@@ -82,6 +84,7 @@ function check_line(p, n, s,   ls, i) {
         if (index(ls, val[i]) && !exempted(i, p)) hit(p, n, "private value <" name[i] ">")
     # Pattern rules skip binaries, third-party themes, and this hook with its fixtures.
     if (p in binary || p ~ /^(dot_themes|\.githooks)\// || index(s, "privacy:allow")) return
+    if (s ~ /-----BEGIN ([A-Z0-9]+ )*PRIVATE KEY( BLOCK)?-----/) hit(p, n, "private key")
     if (home_path(s)) hit(p, n, "literal home directory path")
     if (s ~ ipv4) hit(p, n, "private or Tailscale IPv4 address")
     if (ls ~ /fd7a:115c:a1e0:/ || ls ~ /[a-z0-9-]\.ts\.net([^a-z0-9.-]|$)/)
@@ -93,6 +96,7 @@ BEGIN {
     exempt["name"] = "LICENSE"
     split("user username you yourname me name example runner audit shared linuxbrew", w, " ")
     for (i in w) placeholder[w[i]] = 1
+    credpath = "(^|/)[a-z_]*(dot_|\\.)(gnupg/|password-store/|aws/[a-z_]*credentials|docker/[a-z_]*config\\.json|kube/[a-z_]*config|(netrc|git-credentials|pypirc)(\\.tmpl)?$)|(^|/)gh/[a-z_]*hosts\\.yml"
     o = "[0-9][0-9]?[0-9]?"
     ipv4 = "(^|[^0-9.])(10\\." o "|172\\.(1[6-9]|2[0-9]|3[01])|192\\.168|100\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7]))\\." o "\\." o "([^0-9.]|\\.[^0-9]|\\.?$)"
 

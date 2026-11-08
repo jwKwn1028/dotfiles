@@ -55,14 +55,20 @@ if [ -z "$state" ]; then
     terminal_pid=$!
     # Stop a pending launch if startup fails or i3 IPC disappears.
     trap 'kill "$terminal_pid" 2>/dev/null || true; wait "$terminal_pid" 2>/dev/null || true' EXIT
+    problem='did not open within 5 seconds'
     for ((attempt = 0; attempt < 100; attempt++)); do
         state="$(terminal_state)"
         [ -z "$state" ] || break
-        kill -0 "$terminal_pid" 2>/dev/null || break
+        if ! kill -0 "$terminal_pid" 2>/dev/null; then
+            # Its window may have mapped after the read above.
+            state="$(terminal_state)"
+            problem='exited before its window appeared'
+            break
+        fi
         sleep 0.05
     done
     if [ -z "$state" ]; then
-        printf 'scratch-terminal: Ghostty did not open within 5 seconds\n' >&2
+        printf 'scratch-terminal: Ghostty %s\n' "$problem" >&2
         exit 1
     fi
     trap - EXIT

@@ -7,22 +7,17 @@ import json
 import sys
 
 
-raw = sys.stdin.read()
+# Pass unreadable settings through so one bad file cannot stop chezmoi.
+data = sys.stdin.buffer.read()
 try:
+    raw = data.decode("utf-8")
     settings = json.loads(raw) if raw.strip() else {}
-except json.JSONDecodeError as exc:
-    print(
-        f"Claude settings are invalid JSON; refusing to overwrite them: {exc}",
-        file=sys.stderr,
-    )
-    raise SystemExit(1) from exc
-
-if not isinstance(settings, dict):
-    print(
-        "Claude settings are not a JSON object; refusing to overwrite them.",
-        file=sys.stderr,
-    )
-    raise SystemExit(1)
+    if not isinstance(settings, dict):
+        raise ValueError("not a JSON object")
+except ValueError as exc:
+    print(f"Claude settings are invalid; leaving them unchanged: {exc}", file=sys.stderr)
+    sys.stdout.buffer.write(data)
+    raise SystemExit(0)
 
 env = settings.get("env")
 permissions = settings.get("permissions")

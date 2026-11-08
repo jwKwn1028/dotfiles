@@ -47,8 +47,8 @@ before creating files with a new prefix.
     `private_dot_ssh/private_config.tmpl`.
   - `.githooks/pre-commit` blocks staged chezmoi-data values, entries in
     `~/.config/chezmoi/denylist` (lab and institution names go there),
-    literal home paths, private and Tailscale addresses, and SSH files.
-    `.chezmoiscripts/run_once_after_05-enable-git-hooks.sh.tmpl` wires it up.
+    literal home paths, private and Tailscale addresses, private keys, and SSH
+    and credential files. `run_after_05-enable-git-hooks.sh.tmpl` wires it up.
     Fix a finding rather than committing with `--no-verify`.
 - `.gitignore` excludes agent scaffolding (`.claude`, `.codex`) on purpose;
   `AGENTS.md` and `CLAUDE.md` are the deliberate exceptions so a fresh clone
@@ -110,8 +110,7 @@ evaluating macOS support — it is the migration contract and file inventory.
 
 ## Verifying
 
-There is no repo-wide test runner. Run the relevant standalone checks under
-`dot_config/i3/tests/`, `dot_config/polybar/tests/`, `dot_local/bin/tests/`, and `.githooks/tests/`;
+`./run-tests.sh` runs every test but the live Xephyr ones;
 `dot_config/i3/MANUAL.md` documents the i3 checks. `chezmoi apply` against live
 config is the risky step, so verify with `chezmoi diff` / `chezmoi status` /
 `chezmoi apply --dry-run`. Check Bash/POSIX scripts with `shellcheck` and

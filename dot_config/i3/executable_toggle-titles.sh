@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Toggle i3 title bars on every window, plus the default for future windows.
+# Toggle title bars on existing windows; snap-watcher.sh applies the saved
+# choice to new ones, since i3 cannot change default_border at runtime.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"

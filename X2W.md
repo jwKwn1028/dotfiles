@@ -155,7 +155,7 @@ Further notes:
 ## The `desktopProfile` Gating Trap
 
 Read this before deciding how a Sway session gets selected, because the choice
-is not free. Eight files branch on the **exact string** `linuxmint-i3-x11`:
+is not free. Eleven files branch on the **exact string** `linuxmint-i3-x11`:
 
 | File | Test | What it gates |
 | --- | --- | --- |
@@ -163,16 +163,19 @@ is not free. Eight files branch on the **exact string** `linuxmint-i3-x11`:
 | `.chezmoiscripts/run_once_before_10-install-apt-packages.sh.tmpl` | `eq` (twice) | the i3 PPA and the `i3_x11` apt list |
 | `.chezmoiscripts/run_once_after_30-install-cli-tools.sh.tmpl` | `eq` | desktop CLI tooling |
 | `.chezmoiscripts/run_after_90-install-x11-input-configs.sh.tmpl` | `eq` | the Xorg rules and `/etc/default/keyboard` |
+| `.chezmoiscripts/run_after_94-configure-gtk-theme.sh.tmpl` | `eq` | the GTK theme settings |
+| `.chezmoiscripts/run_after_94-configure-thunar-downloads-sort.sh.tmpl` | `eq` | Thunar's Downloads sort order |
 | `.chezmoiscripts/run_once_after_95-build-i3lock-color.sh.tmpl` | `eq` | the i3lock-color build |
 | `.chezmoiscripts/run_once_after_96-build-zathura.sh.tmpl` | `eq` | the zathura build |
 | `.chezmoi.toml.tmpl` | — | the prompt that defines the value |
 | `.githooks/tests/test-pre-commit.sh` | — | fixture data |
+| `dot_local/bin/tests/executable_test-provisioning-retry.py` | — | fixture data |
 
 Keeping one profile that installs both stacks, as
 [Provisioning](#provisioning) recommends, sidesteps every row above. That is
 most of why it is the recommendation.
 
-If a `linuxmint-sway-wayland` value is introduced instead, all eight change
+If a `linuxmint-sway-wayland` value is introduced instead, all eleven change
 meaning at once, and they fail in two different directions. `.chezmoiignore`
 is the dangerous one: its `ne` test means a new profile name **silently
 excludes**
@@ -518,15 +521,12 @@ below):
 - `dot_config/i3/executable_focus-prev.sh`
 - `dot_config/i3/executable_resnap.sh`
 - `dot_config/i3/executable_show-desktop.sh`
-- `dot_config/i3/executable_move-to-workspace.sh`
 - `dot_config/i3/executable_workspace-action.sh`
 - `dot_config/i3/executable_overflow-watcher.py`
 - `dot_config/i3/executable_toggle-titles.sh`
 - `dot_config/i3/executable_toggle-titles-resnap.sh`
 
-`move-to-workspace.sh` no longer uses `xrandr`: it validates workspace numbers
-1–10 and sends one move-and-follow `i3-msg` command. `workspace-action.sh`
-sends numbered and relative navigation and moves to the workspace controller's
+`workspace-action.sh` sends numbered and relative navigation and moves to the workspace controller's
 socket. Output policy now lives in the i3 `primary`/`nonprimary` workspace
 directives and the restore script, so the older high-risk description of this
 file as an output detector was stale.
