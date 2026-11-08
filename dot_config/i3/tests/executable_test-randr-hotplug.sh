@@ -9,9 +9,10 @@ set -euo pipefail
 ROOT="$(dirname "$(dirname "$(readlink -f "$0")")")"
 TEST_TMP="$(mktemp -d)"
 
-QUIET=0.15
+# Above the 0.15 s lid drain, so the two can be told apart.
+QUIET=0.35
 # Past one drain window, so a step expecting no run really gave it the chance.
-SETTLE=0.7
+SETTLE=0.9
 
 # Must preserve the exit status: `wait` on the killed daemon reports 143, which
 # would otherwise become the test's own result.
@@ -34,9 +35,12 @@ mkdir -p "$TEST_TMP/bin"
 OUTPUTS="$TEST_TMP/outputs"
 RUN_LOG="$TEST_TMP/runs"
 TOAST_LOG="$TEST_TMP/toasts"
+DELAY_LOG="$TEST_TMP/delays"
+LID="$TEST_TMP/lid"
 FIFO="$TEST_TMP/events"
 : > "$RUN_LOG"
 : > "$TOAST_LOG"
+printf 'state:      open\n' > "$LID"
 mkfifo "$FIFO"
 
 HOTPLUG="$ROOT/randr-hotplug.sh"
@@ -92,6 +96,7 @@ set_outputs eDP
 
 I3_DISPLAY_SETUP="$TEST_TMP/bin/display-setup-mock" \
   I3_RANDR_HOTPLUG_QUIET="$QUIET" \
+  I3_LID_STATE="$LID" \
   bash "$HOTPLUG" &
 DAEMON_PID=$!
 
@@ -150,6 +155,7 @@ cat > "$TEST_TMP/bin/display-setup-mock" <<EOF
 #!/bin/sh
 printf 'run\n' >> '$RUN_LOG'
 printf '%s\n' "\${I3_DISPLAY_TOAST:-}" >> '$TOAST_LOG'
+printf '%s\n' "\${I3_DISPLAY_SETUP_DELAY-}" >> '$DELAY_LOG'
 if [ ! -e '$TEST_TMP/midrun-fired' ]; then
   : > '$TEST_TMP/midrun-fired'
   printf 'eDP connected\nDisplayPort-1 connected\nHDMI-1 connected\n' > '$OUTPUTS'
@@ -160,6 +166,7 @@ chmod +x "$TEST_TMP/bin/display-setup-mock"
 set_outputs eDP
 emit_event
 sleep "$SETTLE"
+sleep "$QUIET"
 [ "$(runs)" = 5 ] ||
   fail "a hotplug during the run left $(runs) runs, want 5 (the mid-run output went unconfigured)"
 [ "$(tail -n 2 "$TOAST_LOG" | head -n 1)" = "Display disconnected" ] ||
@@ -174,5 +181,47 @@ sleep "$SETTLE"
 [ "$(runs)" = 6 ] || fail "a same-count output replacement did not run display-setup"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display changed" ] ||
   fail "a same-count output replacement did not request the changed toast"
+
+# xfsettingsd turns a closed lid's panel off but leaves it connected.
+printf 'state:      closed\n' > "$LID"
+emit_event
+sleep "$SETTLE"
+[ "$(runs)" = 7 ] || fail "closing the lid beside an external did not run display-setup"
+[ -z "$(tail -n 1 "$TOAST_LOG")" ] || fail "a lid change requested a toast"
+[ "$(tail -n 1 "$DELAY_LOG")" = 0 ] || fail "a lid change waited out the hotplug settle"
+
+set_outputs eDP
+emit_event
+sleep "$SETTLE"
+[ "$(runs)" = 8 ] || fail "an unplug with the lid closed produced $(runs) runs, want 8"
+[ "$(tail -n 1 "$TOAST_LOG")" = "Display disconnected" ] ||
+  fail "an unplug with the lid closed did not request the disconnected toast"
+[ -z "$(tail -n 1 "$DELAY_LOG")" ] || fail "an unplug skipped the hotplug settle"
+
+printf 'state:      open\n' > "$LID"
+emit_event
+sleep "$SETTLE"
+[ "$(runs)" = 8 ] || fail "a lid change on the laptop panel alone ran display-setup"
+
+# Closing the lid on the panel alone emits nothing; a dock plugged in next
+# still gets the full settle, so its two outputs land in one run.
+printf 'state:      closed\n' > "$LID"
+set_outputs eDP DisplayPort-1
+emit_event
+sleep 0.25
+set_outputs eDP DisplayPort-1 HDMI-1
+emit_event
+sleep "$SETTLE"
+sleep "$QUIET"
+[ "$(runs)" = 9 ] || fail "a dock plugged into a closed laptop produced $(runs) runs, want 9"
+[ "$(tail -n 1 "$TOAST_LOG")" = "Display connected" ] ||
+  fail "a dock plugged into a closed laptop did not request the connected toast"
+
+printf 'state:      open\n' > "$LID"
+emit_event
+sleep "$SETTLE"
+[ "$(runs)" = 10 ] || fail "opening the lid beside an external did not run display-setup"
+[ -z "$(tail -n 1 "$TOAST_LOG")" ] || fail "opening the lid requested a toast"
+[ "$(tail -n 1 "$DELAY_LOG")" = 0 ] || fail "opening the lid waited out the hotplug settle"
 
 printf 'PASS: randr-hotplug triggers and toasts\n'

@@ -19,11 +19,10 @@ install_config "$dropin" -D <<'EOF'
 [Login]
 # Docked or a second display attached: the lid is just one more screen.
 HandleLidSwitchDocked=ignore
-# On mains, lock instead of suspending so long jobs survive a closed lid.
+# Otherwise lock, not suspend, so Wi-Fi and jobs keep running.
 # xss-lock answers logind's Lock signal.
 HandleLidSwitchExternalPower=lock
-# On battery, suspend: an ignored lid drains the pack flat in a bag.
-HandleLidSwitch=suspend
+HandleLidSwitch=lock
 EOF
 
 if [ "$changed" -eq 1 ]; then

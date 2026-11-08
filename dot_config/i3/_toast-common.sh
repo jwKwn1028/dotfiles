@@ -36,7 +36,7 @@ show_toast() {
     [ -n "${1:-}" ] || return 0
     command -v rofi >/dev/null 2>&1 || return 0
 
-    # -m defaults to the monitor holding the mouse; pin notices to the laptop.
+    # -m defaults to the monitor holding the mouse; pin notices to the primary.
     # rofi 1.7.5 ignores a `timeout` block in -e mode, so time it out here.
     rofi -e "$(wrap_toast "$1")" -theme reload-toast \
         -m "${I3_TOAST_MONITOR:-primary}" &

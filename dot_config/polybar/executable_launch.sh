@@ -130,7 +130,17 @@ if pgrep -x blueman-tray >/dev/null 2>&1; then
     fi
 fi
 
-timeout 5 killall -q --wait polybar 2>/dev/null || killall -q -9 polybar 2>/dev/null
+# Hide first: a bar takes ~1 s to exit, and killall --wait polls once a second.
+mapfile -t OLD_BARS < <(pgrep -x polybar)
+if [ "${#OLD_BARS[@]}" -gt 0 ]; then
+    timeout 0.5 polybar-msg cmd hide >/dev/null 2>&1 || true
+    kill "${OLD_BARS[@]}" 2>/dev/null
+    for _ in {1..100}; do
+        kill -0 "${OLD_BARS[@]}" 2>/dev/null || break
+        sleep 0.05
+    done
+    kill -0 "${OLD_BARS[@]}" 2>/dev/null && killall -q -9 polybar 2>/dev/null
+fi
 
 for monitor in "${ACTIVE_OUTPUTS[@]}"; do
     if [ "$monitor" = "$TRAY_OUTPUT" ]; then

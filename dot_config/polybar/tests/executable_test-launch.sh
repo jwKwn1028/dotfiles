@@ -16,6 +16,7 @@ MOCK_BIN="$TEST_TMP/bin"
 MOCK_STATE="$TEST_TMP/state"
 
 cleanup() {
+    [ -z "${HUNG_BAR:-}" ] || kill -9 "$HUNG_BAR" 2>/dev/null || true
     rm -rf "$TEST_TMP"
 }
 trap cleanup EXIT
@@ -98,6 +99,10 @@ case "$*" in
         wc -l <"$POLYBAR_TEST_STATE_DIR/launch-events"
         ;;
     "-x polybar")
+        if [ -s "$POLYBAR_TEST_STATE_DIR/old-bars" ]; then
+            cat "$POLYBAR_TEST_STATE_DIR/old-bars"
+            exit 0
+        fi
         [ -s "$POLYBAR_TEST_STATE_DIR/launch-events" ]
         ;;
     "-x blueman-tray")
@@ -117,6 +122,11 @@ EOF
 cat >"$MOCK_BIN/polybar-msg" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$POLYBAR_TEST_STATE_DIR/ipc-events"
+printf '%s\n' "$*" >>"$POLYBAR_TEST_STATE_DIR/order"
+# A wedged old bar never answers.
+if [ -s "$POLYBAR_TEST_STATE_DIR/old-bars" ] && [ ! -s "$POLYBAR_TEST_STATE_DIR/launch-events" ]; then
+    exec sleep 60
+fi
 EOF
 
 chmod +x "$MOCK_BIN"/*
@@ -249,20 +259,23 @@ HDMI-A-0 connected 2560x1440+0+0 (normal left inverted right x axis y axis)
 DP-1 connected (normal left inverted right x axis y axis)
 EOF
 
-cat >"$MOCK_BIN/killall" <<'EOF'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >>"$POLYBAR_TEST_STATE_DIR/killall-events"
-case "$*" in
-    *--wait*) sleep 60 ;;
-esac
-EOF
-chmod +x "$MOCK_BIN/killall"
+# The trap stands in for a bar that ignores SIGTERM and logs when it arrives.
+bash -c 'trap "echo term >>\"\$0\"" TERM; while :; do sleep 0.1; done' \
+    "$MOCK_STATE/order" &
+HUNG_BAR=$!
+disown "$HUNG_BAR"
+printf '%s\n' "$HUNG_BAR" >"$MOCK_STATE/old-bars"
 
 : >"$MOCK_STATE/launch-events"
 : >"$MOCK_STATE/ipc-events"
 : >"$MOCK_STATE/killall-events"
-bash "$LAUNCHER"
+: >"$MOCK_STATE/order"
+timeout 15 bash "$LAUNCHER" ||
+    { printf 'FAIL: an unresponsive bar stalled the launcher\n' >&2; exit 1; }
 
+[ "$(head -n 2 "$MOCK_STATE/order" | tr '\n' ' ')" = 'cmd hide term ' ] ||
+    { printf 'FAIL: the old bars were not hidden before being stopped\n' >&2
+      cat "$MOCK_STATE/order" >&2; exit 1; }
 grep -Fq -- '-9 polybar' "$MOCK_STATE/killall-events" ||
     { printf 'FAIL: a hung graceful kill was not escalated to SIGKILL\n' >&2; exit 1; }
 [ "$(wc -l <"$MOCK_STATE/launch-events")" -eq 2 ] ||

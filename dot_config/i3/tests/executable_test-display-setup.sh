@@ -13,6 +13,7 @@ WORK="$TEST_TMP/i3"
 MOCK_BIN="$TEST_TMP/bin"
 OUTPUTS="$TEST_TMP/outputs"
 CALLS="$TEST_TMP/xrandr-calls"
+LID="$TEST_TMP/lid"
 ERRORS="$TEST_TMP/stderr"
 mkdir -p "$WORK" "$MOCK_BIN"
 
@@ -50,11 +51,16 @@ set_outputs() {
     done
 }
 
+set_lid() {
+    printf 'state:      %s\n' "$1" >"$LID"
+}
+
 # env -i keeps I3_* variables exported by the caller's shell out of the run.
 run_setup() {
     : >"$CALLS"
     env -i PATH="$MOCK_BIN:/usr/bin:/bin" \
         XDG_RUNTIME_DIR="$TEST_TMP" \
+        I3_LID_STATE="$LID" \
         I3_DISPLAY_SETUP_DELAY=0 \
         I3_DUNST_START=/nonexistent \
         I3_POLYBAR_LAUNCHER=/nonexistent \
@@ -67,6 +73,7 @@ expect_call() {
     [ "$(cat "$CALLS")" = "$expected" ] || fail "$message"
 }
 
+set_lid open
 set_outputs eDP-1 connected DP-1 disconnected DP-2 connected
 run_setup
 expect_call \
@@ -100,5 +107,18 @@ run_setup I3_LAPTOP_OUTPUT=HDMI-1
 expect_call \
     '--output eDP-1 --auto --pos 0x0 --rotate normal --output HDMI-1 --primary --auto --right-of eDP-1 --rotate normal' \
     'the configured I3_LAPTOP_OUTPUT did not win over the eDP fallback'
+
+set_lid closed
+set_outputs eDP connected DisplayPort-1 connected
+run_setup
+expect_call \
+    '--output DisplayPort-1 --primary --auto --pos 0x0 --rotate normal --output eDP --off' \
+    'a closed lid left the panel on beside the external monitor'
+
+set_outputs eDP connected DisplayPort-1 disconnected
+run_setup
+expect_call \
+    '--output eDP --primary --auto --pos 0x0 --rotate normal' \
+    'a closed lid with no external monitor did not keep the panel on'
 
 printf 'PASS: display setup makes the laptop panel primary under either driver naming\n'

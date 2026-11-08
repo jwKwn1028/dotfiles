@@ -289,16 +289,17 @@ the hold; a visible fullscreen window suppresses it until the pointer leaves.
 ## Monitor and Wallpaper Setup
 
 `display-setup.sh` puts the first external output at `0x0`, laptop to its right;
-laptop-only uses `0x0`. The laptop is `I3_LAPTOP_OUTPUT` if connected, else the
-first `eDP*`/`LVDS*` output; with no panel the layout is left alone. It
-reconciles workspaces, dunst, wallpaper, and bars.
+laptop-only uses `0x0`. A closed lid turns the panel off beside an external. The
+laptop is `I3_LAPTOP_OUTPUT` if connected, else the first `eDP*`/`LVDS*` output;
+with no panel the layout is left alone. It reconciles workspaces, dunst,
+wallpaper, and bars.
 Defaults: `I3_LAPTOP_OUTPUT=eDP`, `I3_DISPLAY_SETUP_DELAY=1` second (0 on i3
 restarts after login).
 
 `randr-hotplug.sh` debounces connections for `I3_RANDR_HOTPLUG_QUIET` (0.7 s),
-ignores geometry-only events, and rechecks after setup. Rofi reports connection
-changes; manual refresh is silent. Wallpapers: `~/.wallpaper-laptop.png` and
-`~/.wallpaper-external.png`.
+ignores geometry-only events, and rechecks after setup. Lid changes apply
+silently after 0.15 s. Rofi reports connection changes; manual refresh is
+silent. Wallpapers: `~/.wallpaper-laptop.png` and `~/.wallpaper-external.png`.
 
 ## USB and Type-C Notices
 
