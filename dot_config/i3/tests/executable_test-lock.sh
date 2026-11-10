@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# lock.sh styles i3lock-color and hands stock i3lock only the flags it accepts.
 
 set -euo pipefail
 

@@ -287,7 +287,6 @@ class RestoreTests(unittest.TestCase):
             with self.subTest(browser=browser):
                 self.write(self.meta / "tree.json", dict(type="workspace", name="1", nodes=[
                     dict(window=n, window_properties={"class": browser}) for n in (1, 2, 3)]))
-                # Reversed order and a completely missing metadata entry are both safe.
                 self.write(self.meta / "zen-pages.json", [
                     dict(workspace="1", window_id="3", browser=browser, url="https://three.test"),
                     dict(workspace="1", window_id="2", browser=browser, url="https://two.test")])

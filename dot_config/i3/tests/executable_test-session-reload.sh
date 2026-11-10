@@ -91,7 +91,6 @@ fail() {
 conf="$TEST_HOME/.config/dunst/dunstrc"
 : >"$conf"
 
-# Leave dunst alone when its config is older.
 touch -d '2020-01-01 00:00:00' "$conf"
 run 'Wed 2026-08-26 10:00:00 KST'
 grep -Fq -- '--user daemon-reload' "$LOG" || fail 'daemon-reload was not run'
@@ -110,31 +109,37 @@ grep -Fxq 'text=' "$DISPLAY_LOG" ||
 grep -Fxq 'delay=unset' "$DISPLAY_LOG" ||
     fail 'the first parse of a login did not keep the display-setup delay'
 
-# Restart dunst for a newer config.
+run 'Wed 2026-08-26 10:00:00 KST'
+grep -Fq -- '--user daemon-reload' "$LOG" &&
+    fail 'daemon-reload ran though no unit file changed'
+mkdir -p "$TEST_HOME/.config/systemd/user"
+touch -d '2030-01-01 00:00:00' "$TEST_HOME/.config/systemd/user/example.service"
+run 'Wed 2026-08-26 10:00:00 KST'
+grep -Fq -- '--user daemon-reload' "$LOG" ||
+    fail 'a changed unit file did not trigger daemon-reload'
+rm -rf "$TEST_HOME/.config/systemd" "$TEST_RUNTIME/i3-units-reloaded"
+
 touch -d '2030-01-01 00:00:00' "$conf"
 run 'Wed 2026-08-26 10:00:00 KST'
 grep -Fq -- 'try-restart dunst.service' "$LOG" ||
     fail 'a changed dunstrc did not restart dunst'
 
-# An inactive dunst is harmless.
+rm -f "$TEST_RUNTIME/i3-units-reloaded"
 run ''
 grep -Fq -- '--user daemon-reload' "$LOG" || fail 'daemon-reload was skipped without dunst'
 grep -Fq -- 'try-restart task-notify.timer' "$LOG" ||
     fail 'the reminder timer was skipped without dunst'
 
-# Missing dunstrc is harmless.
 rm -f "$conf"
 run 'Wed 2026-08-26 10:00:00 KST'
 grep -Fq -- 'try-restart dunst.service' "$LOG" &&
     fail 'dunst was restarted with no dunstrc present'
 
-# i3 autostart handles a stopped Picom.
 run 'Wed 2026-08-26 10:00:00 KST' 0
 [ ! -s "$PICOM_LOG" ] || fail 'a stopped picom was signalled'
 grep -Fxq 'text=' "$DISPLAY_LOG" ||
     fail 'a stopped picom was incorrectly reported as a reload failure'
 
-# Aggregate failures into one toast.
 run 'Wed 2026-08-26 10:00:00 KST' 1 'task-notify.timer' 1
 grep -Fxq 'text=i3 reload partial: task timer, picom' "$DISPLAY_LOG" ||
     fail 'component failures were not aggregated in the reload toast'
@@ -142,7 +147,6 @@ grep -Fxq 'text=i3 reload partial: task timer, picom' "$DISPLAY_LOG" ||
     fail 'a partial failure emitted more than one display toast request'
 [ ! -s "$NOTIFY_LOG" ] || fail 'a working display toast triggered a fallback notification'
 
-# Fall back to notify-send if display setup fails.
 run 'Wed 2026-08-26 10:00:00 KST' 1 '' 0 1
 [ "$(wc -l <"$NOTIFY_LOG")" -eq 1 ] ||
     fail 'display failure did not emit exactly one fallback notification'

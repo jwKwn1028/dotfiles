@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-# Polybar visibility for the Super+X kill-workspace mode. `close` runs on every
-# exit but the number keys, which leave the emptied workspace on screen.
 
 set -u
 
 DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_polybar-common.sh"
 
-# Its own marker: an interleaved bar-nav or window-mode must not consume it.
 RESTORE_HIDDEN="$SNAP_RUNTIME_DIR/i3-kill-workspace.restore-hidden"
 
 case "${1:-}" in

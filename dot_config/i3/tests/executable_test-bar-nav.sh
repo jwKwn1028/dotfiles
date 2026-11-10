@@ -1,19 +1,4 @@
 #!/usr/bin/env bash
-# Cursor bookkeeping for bar-nav.sh. The cursor is module visibility, so the
-# assertions are on the IPC actions it emits. X11 is mocked far enough that
-# polybar_show_persistent finds the bar already up and does nothing.
-#
-# The mocks record rather than act: a stray action must never reach the real
-# session, and xfce4-power-manager-settings and pavucontrol need stand-ins
-# because bar-nav `eval`s them. Mocked geometry: Polybar's window is 1111,
-# everything else a 22x22 tray icon at 150, so a block hugging the icon instead
-# of spanning the 1920x28 bar fails. The painter is long-lived, so its launch is
-# recorded rather than run.
-#
-# Each failure message names what its case pins down. The two non-obvious ones:
-# opening must not reset the stop it is about to select (polybar collapses
-# hide+show and show+hide sent to one pair back to back), and a bar up only for
-# a transient peek counts as hidden even though X11 reports it viewable.
 
 set -euo pipefail
 

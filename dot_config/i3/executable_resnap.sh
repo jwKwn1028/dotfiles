@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Re-apply tile-snap.sh to every window marked `_snap_<region>` after the usable
-# rect changes. One entry per window: the largest mark wins.
 
 set -u
 [ "${I3_GROUP_TRANSITION:-0}" != 1 ] || exit 0

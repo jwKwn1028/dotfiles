@@ -21,6 +21,7 @@ import ctypes.util
 
 SUBSTRUCTURE_NOTIFY_MASK = 1 << 19
 XEVENT_SIZE = 256  # XEvent is a union; oversized scratch space is fine
+CREATE_NOTIFY, MAP_NOTIFY, REPARENT_NOTIFY = 16, 19, 21
 
 Window = ctypes.c_ulong
 
@@ -30,6 +31,16 @@ xcursor = ctypes.CDLL(ctypes.util.find_library("Xcursor"))
 
 class XClassHint(ctypes.Structure):
     _fields_ = [("res_name", ctypes.c_void_p), ("res_class", ctypes.c_void_p)]
+
+
+class EventHead(ctypes.Structure):
+    """The prefix XCreateWindowEvent, XMapEvent and XReparentEvent share.
+
+    `event` is the window that selected the event (`parent` for CreateNotify);
+    `parent` is only meaningful for ReparentNotify.
+    """
+    _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int),
+                ("display", ctypes.c_void_p), ("event", Window), ("window", Window), ("parent", Window)]
 
 
 x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
@@ -102,6 +113,19 @@ def refresh(display, root, cursor):
     x11.XFlush(display)
 
 
+def needs_refresh(display, root, head):
+    """A repaint walks every top-level window, so skip events that cannot dock
+    an icon: moves, unmaps, and other clients mapping elsewhere on screen."""
+    if head.type not in (CREATE_NOTIFY, MAP_NOTIFY, REPARENT_NOTIFY):
+        return False
+    if head.event != root:  # inside a bar
+        return True
+    if head.type == REPARENT_NOTIFY and head.parent != root:
+        return True  # possibly an applet moving into a tray wrapper
+    # A new bar: wait for its map, as WM_CLASS may not be set at creation.
+    return head.type != CREATE_NOTIFY and window_class(display, head.window) == b"Polybar"
+
+
 def main() -> int:
     display = x11.XOpenDisplay(None)
     if not display:
@@ -111,10 +135,12 @@ def main() -> int:
     x11.XSelectInput(display, root, SUBSTRUCTURE_NOTIFY_MASK)
 
     event = ctypes.create_string_buffer(XEVENT_SIZE)
+    head = EventHead.from_buffer(event)
     refresh(display, root, cursor)
     while True:
         x11.XNextEvent(display, event)
-        refresh(display, root, cursor)
+        if needs_refresh(display, root, head):
+            refresh(display, root, cursor)
 
 
 if __name__ == "__main__":

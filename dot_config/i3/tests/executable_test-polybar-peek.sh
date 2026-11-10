@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-# Transient Polybar peek, and the workspace navigation that triggers it.
-#
-# Each failure message names what its case pins down. The mock keeps three
-# pieces of state a real session has: `visibility` (what X maps), `belief`
-# (polybar's own flag, drivable apart from visibility the way i3 does for a
-# fullscreen dock), and `parent` (i3's grip -- reparented means i3 still holds
-# the dock, root means polybar really withdrew it).
 
 set -euo pipefail
 
@@ -43,7 +36,6 @@ case "${1:-}" in
 esac
 EOF
 
-# `-tree` names the root on every window, so Root and Parent stay separate lines.
 cat > "$MOCK_BIN/xwininfo" <<'EOF'
 #!/usr/bin/env bash
 if [ "$(cat "$POLYBAR_TEST_STATE_DIR/visibility")" = visible ]; then
@@ -63,7 +55,6 @@ case " $* " in
 esac
 EOF
 
-# Stands in for the Xlib withdraw: i3 lets go of the dock it was holding.
 cat > "$MOCK_BIN/python3" <<'EOF'
 #!/usr/bin/env bash
 cat > /dev/null
@@ -72,7 +63,6 @@ printf 'root\n' > "$POLYBAR_TEST_STATE_DIR/parent"
 printf 'hidden\n' > "$POLYBAR_TEST_STATE_DIR/visibility"
 EOF
 
-# A command matching the flag is a no-op, exactly as in polybar.
 cat > "$MOCK_BIN/polybar-msg" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$POLYBAR_TEST_STATE_DIR/polybar-events"
@@ -265,8 +255,6 @@ grep -Fqx 'get_tree' "$MOCK_STATE/i3-events" ||
 sleep 0.35
 assert_state visible
 
-# A bar up only for a transient peek counts as hidden on open, so aborting the
-# mode has to take it away again rather than leave the peek promoted forever.
 [ -e "$XDG_RUNTIME_DIR/i3-kill-workspace.restore-hidden" ] ||
   fail "a peek promoted by kill-workspace mode was not marked for restore"
 "$ROOT/kill-workspace-mode.sh" close
@@ -274,7 +262,6 @@ assert_state hidden
 [ ! -e "$XDG_RUNTIME_DIR/i3-kill-workspace.restore-hidden" ] ||
   fail "aborting kill-workspace mode left its restore marker behind"
 
-# The destructive case: a bar the user already had up must survive the abort.
 reset_case visible
 "$ROOT/kill-workspace-mode.sh" open
 assert_state visible
@@ -283,9 +270,6 @@ assert_state visible
 "$ROOT/kill-workspace-mode.sh" close
 assert_state visible
 
-# A number key exits without `close`, leaving the bar up to show the emptied
-# workspace. The marker it leaves behind is harmless: the next open rewrites it
-# from the live state, so the abort after it must not hide a persistent bar.
 reset_case hidden
 "$ROOT/kill-workspace-mode.sh" open
 assert_state visible
@@ -297,8 +281,6 @@ assert_state visible
 "$ROOT/kill-workspace-mode.sh" close
 assert_state visible
 
-# The config strings below are i3 literals: `$mod` and `$ws1` are i3 variables
-# and must reach grep unexpanded, which is what -F and the single quotes are for.
 # shellcheck disable=SC2016
 grep -Fqx \
   'bindsym $mod+x exec --no-startup-id ~/.config/i3/kill-workspace-mode.sh open' \
@@ -308,15 +290,12 @@ for exit_key in Return Escape; do
     "    bindsym $exit_key exec --no-startup-id ~/.config/i3/kill-workspace-mode.sh close, mode \"default\"" \
     "$ROOT/config" || fail "kill-workspace mode's $exit_key does not restore Polybar"
 done
-# The number keys are the one exit that deliberately does not restore.
 # shellcheck disable=SC2016
 grep -Fq 'bindsym 1 exec --no-startup-id ~/.config/i3/workspace-action.sh kill 1' "$ROOT/config" ||
   fail "a kill-workspace number key no longer exits straight to default mode"
 
 reset_case hidden
 
-# Shift+K exits through the same restore as Return and Escape, not an
-# unconditional hide: a bar this mode showed goes away with the windows.
 "$ROOT/kill-workspace-mode.sh" open
 assert_state visible
 grep -Fq \
@@ -335,8 +314,6 @@ mapfile -t final_kill_events < <(tail -n 2 "$MOCK_STATE/i3-events")
 [ "${final_kill_events[1]:-}" = 'get_tree' ] ||
   fail "Shift+K helper did not restore Polybar after the group kill"
 
-# ...and one the user had up on purpose survives it, which the old
-# unconditional hide got wrong.
 reset_case visible
 "$ROOT/kill-workspace-mode.sh" open
 assert_state visible
@@ -345,8 +322,6 @@ assert_state visible
 grep -Fqx 'mode "default"' "$MOCK_STATE/i3-events" ||
   fail "the group kill did not run against an already-persistent bar"
 
-# Hiding a bar i3 already unmapped for fullscreen: polybar clears its flag
-# without unmapping, so the withdraw has to take the dock away now.
 reset_case visible
 printf 'reparented\n' > "$MOCK_STATE/parent"
 "$ROOT/toggle-polybar-resnap.sh"
@@ -356,7 +331,6 @@ grep -q '^withdraw ' "$MOCK_STATE/x-events" ||
 [ "$(cat "$MOCK_STATE/parent")" = root ] ||
   fail "i3 still holds the dock after the withdraw"
 
-# An ordinary hide leaves nothing reparented, so it must not reach the withdraw.
 reset_case visible
 "$ROOT/toggle-polybar-resnap.sh"
 assert_state hidden

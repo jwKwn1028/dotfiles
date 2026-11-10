@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Kill-workspace mode's Shift+K (group) / Shift+A (all groups): close windows, then exit.
 
 set -u
 

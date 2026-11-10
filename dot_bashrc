@@ -214,15 +214,15 @@ wtail() {   # absolutise args so tail -v headers name the full path
   watch -x -d -n 10 tail -v -n 10 "${files[@]}"
 }
 if _have watch && _have top; then
-  alias mytop='watch -n 2 top -bn1 -u "$USER"'
+  alias mytop='watch -x -n 2 top -bn1 -u "$USER"'
 fi
 if _have sinfo; then
   alias sidle='sinfo -t idle -o "%.20P %.6D %N"'
-  _have watch && alias wsidle='watch -d -n 10 '\''sinfo -t idle -o "%.20P %.6D %N"'\'''
+  _have watch && alias wsidle='watch -x -d -n 10 sinfo -t idle -o "%.20P %.6D %N"'
 fi
 if _have squeue; then
   alias sq='squeue'
-  _have watch && alias myq='watch -n 10 squeue -u "$USER"'
+  _have watch && alias myq='watch -x -n 10 squeue -u "$USER"'
 fi
 
 ssh-close() {

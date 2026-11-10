@@ -98,6 +98,22 @@ run_session optional "$TEST_TMP/optional-bin:$TEST_TMP/bin" '
   ! alias myq >/dev/null 2>&1 || fail "watch alias was enabled without watch"
 '
 
+mkdir -p "$TEST_TMP/watch-bin"
+for tool in watch top; do
+  cat > "$TEST_TMP/watch-bin/$tool" <<'MOCK'
+#!/bin/bash
+printf '[%s]' "$@"
+MOCK
+  chmod +x "$TEST_TMP/watch-bin/$tool"
+done
+run_session watch "$TEST_TMP/watch-bin:$TEST_TMP/optional-bin:$TEST_TMP/bin" '
+  for name in myq mytop wsidle; do
+    [[ $(alias "$name") == *"watch -x "* ]] || fail "$name runs through sh: $(alias "$name")"
+  done
+  [[ $(eval wsidle) == "[-x][-d][-n][10][sinfo][-t][idle][-o][%.20P %.6D %N]" ]] ||
+    fail "wsidle passed the wrong sinfo arguments: $(eval wsidle)"
+'
+
 cat > "$TEST_TMP/optional-bin/fzf-preview" <<'MOCK'
 #!/bin/bash
 exit 0

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Toggle one floating Ghostty window without ending its shell.
 set -euo pipefail
 
 TERMINAL_CLASS=com.mitchellh.ghostty.scratchpad
@@ -8,7 +7,6 @@ DISPLAY_TAG="${DISPLAY:-default}"
 DISPLAY_TAG="${DISPLAY_TAG//[^[:alnum:]_.-]/_}"
 mkdir -p "$RUNTIME_DIR"
 exec 9>"$RUNTIME_DIR/i3-scratch-terminal-$DISPLAY_TAG.lock"
-# Prevent duplicate launches during startup.
 flock -n 9 || exit 0
 
 terminal_state() {
@@ -48,19 +46,16 @@ state="$(terminal_state)"
 created=false
 if [ -z "$state" ]; then
     created=true
-    # A separate instance keeps these options local to this window.
     ghostty --class="$TERMINAL_CLASS" --gtk-single-instance=false \
         --env=ZSH_BANNER_DISABLE=1 --working-directory=home \
         </dev/null >/dev/null 2>&1 9>&- &
     terminal_pid=$!
-    # Stop a pending launch if startup fails or i3 IPC disappears.
     trap 'kill "$terminal_pid" 2>/dev/null || true; wait "$terminal_pid" 2>/dev/null || true' EXIT
     problem='did not open within 5 seconds'
     for ((attempt = 0; attempt < 100; attempt++)); do
         state="$(terminal_state)"
         [ -z "$state" ] || break
         if ! kill -0 "$terminal_pid" 2>/dev/null; then
-            # Its window may have mapped after the read above.
             state="$(terminal_state)"
             problem='exited before its window appeared'
             break

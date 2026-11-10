@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# The restore wrapper must preserve Polybar's pre-restore visibility, including
-# failures after the bar has been hidden. The mocks exercise the real shared
-# Polybar helpers without touching the running i3/X11 session.
 
 set -euo pipefail
 
@@ -66,7 +63,6 @@ printf '%s\n' "$*" >>"$RESTORE_TEST_STATE_DIR/i3-events"
 case "$*" in
     '-t get_tree')
         if [ "${RESTORE_TREE_MODE:-empty}" = full ]; then
-            # A full desktop shares workspace 1, where the restored window never appears.
             jq -n '{type:"root", nodes:[range(1;11) |
                 {type:"workspace", name:tostring, nodes:[{id:(90+.),window:(120+.)}]}]}'
         elif [ -e "$RESTORE_TEST_STATE_DIR/launched" ]; then

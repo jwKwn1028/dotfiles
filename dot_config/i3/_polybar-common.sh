@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Shared Polybar visibility, IPC, and transient-peek helpers. Caller must set DIR
-# to this configuration directory before sourcing.
 
 . "$DIR/_snap-common.sh"
 
@@ -22,7 +20,6 @@ now_ms() {
   printf '%s\n' "${now:0:-3}"
 }
 
-# Bar window ids, looked up again whenever visibility is set: bars can be relaunched.
 POLYBAR_WINDOW_IDS=
 POLYBAR_WINDOWS_KNOWN=0
 
@@ -69,16 +66,12 @@ polybar_raise() {
   done
 }
 
-# Drop any bar i3 still manages as a dock once the bar should be hidden: i3
-# unmaps a fullscreened output's dock itself, so polybar's own hide emits no
-# UnmapNotify and it no-ops every later hide until reload.
 polybar_withdraw_orphan_docks() {
   local -a orphans=()
   local win info
 
   polybar_find_windows
   for win in $POLYBAR_WINDOW_IDS; do
-    # Only the Parent line: -tree also names the root.
     info=$(xwininfo -id "$win" -tree 2>/dev/null |
       sed -n 's/^ *Parent window id: *//p') || continue
     [ -z "$info" ] && continue
@@ -116,7 +109,6 @@ polybar_set_state() {
   POLYBAR_WINDOWS_KNOWN=0
   polybar_find_windows
   if polybar-msg cmd "$cmd" >/dev/null 2>&1; then
-    # Let the hide land: until polybar unmaps, the bar still looks reparented.
     if [ "$wanted" = 0 ]; then
       polybar_wait_for_state 0 "$POLYBAR_SETTLE_MS" >/dev/null
       polybar_withdraw_orphan_docks

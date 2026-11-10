@@ -67,14 +67,13 @@ def insertion_parent(ws):
     con = ws
     while con.focus:
         following = next((c for c in con.nodes if c.id == con.focus[0]), None)
-        if following is None:  # focus points at a floating container
+        if following is None:
             break
         con = following
     return ws if con is ws else con.parent
 
 
 def workspace_has_room(ws, fraction: float) -> bool:
-    # Only the arriving window is measured.
     parent = insertion_parent(ws)
     return room_for_one_more(
         area(parent),
@@ -113,7 +112,6 @@ class Watcher:
         con_id = event.container.id
 
         if con_id in self.self_moved:
-            # Cleared when our own move event arrives.
             self.self_moved.discard(con_id)
             return
 

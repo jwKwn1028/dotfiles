@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Keyboard cursor over Polybar's own modules: Super+B, then h/l to move, j/k to
-# adjust, Return to click, Shift+Return to right-click. See MANUAL.md, "Bar Mode".
-#
-# The highlight is a hidden twin module swapped in over IPC (see config.ini),
-# except the tray, where bar-nav-marker.py paints a block instead.
-#
-# The arrays below are parallel, indexed by stop, left to right; empty action =
-# no-op, `*_opens = 1` takes the keyboard so the mode exits first.
 
 set -u
 

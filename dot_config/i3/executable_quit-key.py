@@ -13,7 +13,6 @@ import time
 
 from Xlib import X, XK, display as xdisplay, error as xerror
 
-# Lowercase WM_CLASS class names.
 QUIT_CLASSES = frozenset({"spotify", "kakaotalk.exe", "thunar"})
 
 

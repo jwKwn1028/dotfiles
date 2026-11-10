@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Briefly show Polybar after a workspace keybinding, or hold it open for a
-# standalone Super gesture, but only if the bar was hidden. No resnap: a
-# transient peek must not resize snapped windows.
 
 set -u
 

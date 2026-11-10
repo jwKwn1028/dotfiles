@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Run the fast i3/Polybar checks from either chezmoi source state or the applied
-# ~/.config tree. Source-state executable_ names are mapped into a temporary
-# applied-shaped tree so every test exercises the files being edited.
 
 set -euo pipefail
 

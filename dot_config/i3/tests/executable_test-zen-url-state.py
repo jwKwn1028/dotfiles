@@ -48,8 +48,6 @@ class NormalizeTitleTests(unittest.TestCase):
 
     def test_strips_only_one_suffix(self) -> None:
         self.assertEqual(ZEN.normalize_title("Docs - Zen - Zen"), "Docs - Zen")
-        # Two different suffixes apply in turn; only the trailing one goes, or a
-        # page genuinely titled "Docs - Helium" loses half its name.
         self.assertEqual(ZEN.normalize_title("Docs - Helium - Zen"), "Docs - Helium")
 
     def test_collapses_whitespace(self) -> None:
@@ -121,8 +119,6 @@ class SelectedEntryTests(unittest.TestCase):
         self.assertIsNone(ZEN.selected_entry({"index": -1, "entries": [entry("https://a.test")]}))
 
     def test_a_zero_index_means_absent(self) -> None:
-        # Session-store indices are 1-based, so 0 is not a position; it falls
-        # back to the last entry the way a missing index does.
         tab = {"index": 0, "entries": [entry("https://a.test"), entry("https://b.test")]}
         self.assertEqual(ZEN.selected_entry(tab)["url"], "https://b.test")
 
@@ -234,8 +230,6 @@ class SessionDiscoveryTests(unittest.TestCase):
         self.assertEqual([p.parent.name for p in ZEN.zen_session_files()], ["p1"])
 
     def test_only_the_newest_file_per_firefox_profile_is_read(self) -> None:
-        # recovery and sessionstore both describe the same profile; reading both
-        # would list every window twice.
         prof = self.root / "p1"
         (prof / "sessionstore-backups").mkdir(parents=True)
         payload = {"windows": [{"selected": 1,
@@ -469,8 +463,6 @@ class MainTests(unittest.TestCase):
         self.assertEqual(self.run_main("not json"), "[]")
 
     def test_a_live_url_wins_over_the_session_store(self) -> None:
-        # The session file lags behind the address bar, so a window answered live
-        # must not also be matched from disk.
         real_live, real_pages = ZEN.live_page_state, ZEN.active_pages
         self.addCleanup(setattr, ZEN, "live_page_state", real_live)
         self.addCleanup(setattr, ZEN, "active_pages", real_pages)

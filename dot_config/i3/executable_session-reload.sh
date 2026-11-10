@@ -1,5 +1,4 @@
 #!/bin/sh
-# Refresh services, Picom, displays, and the reload toast.
 
 set -u
 
@@ -13,11 +12,20 @@ record_failure() {
     fi
 }
 
-if ! systemctl --user daemon-reload; then
-    record_failure "systemd units"
+units_stamp=${XDG_RUNTIME_DIR:-/tmp}/i3-units-reloaded
+units_changed=1
+if [ -e "$units_stamp" ]; then
+    units_changed=$(find "$HOME/.config/systemd/user" /etc/systemd/user /usr/lib/systemd/user \
+        -newer "$units_stamp" -print -quit 2>/dev/null)
+fi
+if [ -n "$units_changed" ]; then
+    touch "$units_stamp" 2>/dev/null
+    if ! systemctl --user daemon-reload; then
+        rm -f "$units_stamp"
+        record_failure "systemd units"
+    fi
 fi
 
-# dunst 1.9.2 must restart to load changed config.
 conf=$HOME/.config/dunst/dunstrc
 if [ -r "$conf" ]; then
     started=$(systemctl --user show -P ActiveEnterTimestamp dunst.service 2>/dev/null || true)
@@ -34,7 +42,6 @@ if ! systemctl --user try-restart task-notify.timer; then
     record_failure "task timer"
 fi
 
-# SIGUSR1 reloads Picom v10; autostart handles a stopped process.
 if pgrep -x picom >/dev/null 2>&1; then
     if ! pkill -USR1 -x picom; then
         record_failure "picom"
@@ -65,7 +72,6 @@ else
     record_failure "display setup"
 fi
 
-# Fall back when display setup cannot show the toast.
 if [ "$display_succeeded" -eq 0 ] && [ -n "$failures" ]; then
     if command -v notify-send >/dev/null 2>&1; then
         notify-send -u critical "i3 reload partial" "$failures" || true

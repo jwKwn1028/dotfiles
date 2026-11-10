@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# A save keeps each Ghostty window's shell directory, slot, and first remote
-# session; a restore brings the lab route up before those sessions reattach.
-# Mocks stand in for i3, i3-resurrect, /proc, and the remote helpers.
 
 set -euo pipefail
 
@@ -82,7 +79,6 @@ case "$*" in
 esac
 EOF
 
-# i3-resurrect {save|restore} -w WORKSPACE -d DIRECTORY ...
 cat >"$MOCK_BIN/i3-resurrect" <<'EOF'
 #!/usr/bin/python3
 import json, os, pathlib, shutil, sys
@@ -119,7 +115,6 @@ cat >"$MOCK_BIN/notify-send" <<'EOF'
 printf '%s\n' "$2" >>"$TEST_NOTIFY"
 EOF
 
-# No Polybar windows: the restore leaves the bar alone.
 printf '#!/bin/sh\nexit 0\n' >"$MOCK_BIN/xdotool"
 chmod +x "$MOCK_BIN"/*
 
@@ -137,7 +132,6 @@ labroute() {
 }
 EOF
 
-# pid ppid comm cwd WINDOWID argv...
 add_proc() {
     local pid="$1" ppid="$2" comm="$3" dir="$4" window="$5"
     shift 5
@@ -157,40 +151,32 @@ hpc_attach() {
         "$1" "$1"
 }
 
-# Window 101: splits on tmux dev and zmx shell, then dev again.
 add_proc 100 1 ghostty "$HOME" '' ghostty
 add_proc 110 100 sh "$HOME" 101 /bin/sh -c /usr/bin/zsh
 add_proc 111 110 zsh /work/a 101 /usr/bin/zsh
 add_proc 112 111 ssh /work/a 101 ssh -S none -o ConnectTimeout=8 -t remote.invalid "$(hpc_attach dev)"
 add_proc 120 100 sh "$HOME" 101 /bin/sh -c /usr/bin/zsh
 add_proc 121 120 zsh /work/b 101 /usr/bin/zsh
-# hpcz leaves ~ for the remote shell to expand.
 # shellcheck disable=SC2088
 add_proc 122 121 ssh /work/b 101 ssh -t remote.invalid '~/.local/bin/zmx attach shell'
 add_proc 150 100 sh "$HOME" 101 /bin/sh -c /usr/bin/zsh
 add_proc 151 150 zsh /work/g 101 /usr/bin/zsh
 add_proc 152 151 ssh /work/g 101 ssh -t remote.invalid "$(hpc_attach dev)"
-# Window 102: a plain split, then one on tmux build.
 add_proc 130 100 sh "$HOME" 102 /bin/sh -c /usr/bin/zsh
 add_proc 131 130 zsh /work/c 102 /usr/bin/zsh
 add_proc 140 100 sh "$HOME" 102 /bin/sh -c /usr/bin/zsh
 add_proc 141 140 zsh /work/e 102 /usr/bin/zsh
 add_proc 142 141 ssh /work/e 102 ssh -t remote.invalid "$(hpc_attach build)"
-# Windows 201 and 202: a restored instance, its shell Ghostty's direct child.
 add_proc 200 1 ghostty /work/d '' ghostty --x11-instance-name=ghostty-ws4-1
 add_proc 210 200 zsh /work/d 201 zsh
 add_proc 211 210 ssh /work/d 201 ssh -t remote.invalid "$(hpc_attach logs)"
 add_proc 220 200 sh "$HOME" 202 /bin/sh -c /usr/bin/zsh
 add_proc 221 220 zsh /work/f 202 /usr/bin/zsh
-# Window 502: a directory the quoted i3 exec line cannot carry.
 add_proc 520 100 sh "$HOME" 502 /bin/sh -c /usr/bin/zsh
 add_proc 521 520 zsh '/work/$odd"dir' 502 /usr/bin/zsh
-# Window 601: a session on a workspace whose counts disagree.
 add_proc 610 100 sh "$HOME" 601 /bin/sh -c /usr/bin/zsh
 add_proc 611 610 zsh /work/h 601 /usr/bin/zsh
 add_proc 612 611 ssh /work/h 601 ssh -t remote.invalid "$(hpc_attach solo)"
-# Not Ghostty's surfaces: a stray shell with an inherited WINDOWID, and a
-# process name that needs careful stat parsing.
 add_proc 300 1 zsh /stale 101 /usr/bin/zsh
 add_proc 301 300 ssh /stale 101 ssh -t remote.invalid "$(hpc_attach ghost)"
 add_proc 400 1 'odd) name' / '' odd
@@ -220,7 +206,6 @@ cat >"$FIXTURES/workspaces.json" <<'EOF'
  {"num":5,"name":"5","focused":false},{"num":6,"name":"6","focused":false}]
 EOF
 
-# What i3-resurrect itself writes: bare `ghostty` in the wrapper's directory.
 cat >"$FIXTURES/workspace_3_layout.json" <<'EOF'
 {"type":"workspace","name":"3",
  "floating_nodes":[{"type":"floating_con","nodes":[
@@ -299,7 +284,6 @@ assert_json 'captured Ghostty state' . "$TEST_TMP/state.json" "$(cat "$TEST_TMP/
 bash "$SAVE" 2>"$TEST_TMP/save-stderr" ||
     fail "save failed: $(cat "$TEST_TMP/save-stderr")"
 
-# Assertions inspect the committed generation; environment paths remain profile roots.
 resolve_generation() {
     local resolved
     resolved="$(/usr/bin/python3 "$(managed i3-resurrect-state.py)" resolve \

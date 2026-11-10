@@ -99,7 +99,7 @@ def validate(state, meta):
         require(route.read_text().strip() in ("on", "off"), "invalid lab route state")
     for filename in ("zen-pages.json", "zathura-pages.json", "ghostty-sessions.json"):
         path = meta / filename
-        if not path.exists():  # Older profiles may lack optional application metadata.
+        if not path.exists():
             continue
         entries = read_json(path)
         require(isinstance(entries, list), f"{filename} must be an array")
@@ -168,7 +168,6 @@ def resolve(state, meta, previous=False):
 
 
 def atomic_json(path, data):
-    # The rename is the only publication point; readers never combine generations.
     fd, temporary = tempfile.mkstemp(prefix=".snapshot-", dir=path.parent)
     try:
         with os.fdopen(fd, "w") as stream:
@@ -193,7 +192,6 @@ def archive_legacy(state, meta):
     try:
         workspaces = validate(state, meta)
     except (OSError, ValueError, TypeError, KeyError):
-        # Leave an invalid legacy profile intact; do not advertise it as recoverable.
         return None
     directory = Path(tempfile.mkdtemp(prefix="generation.", dir=state / "snapshots"))
     (directory / "state").mkdir()
@@ -226,7 +224,6 @@ def publish(state, meta, generation):
     require(re.fullmatch(r"generation\.[A-Za-z0-9_-]+", generation), "invalid generation name")
     directory = state / "snapshots" / generation
     validate(directory / "state", directory / "meta")
-    # Flush the complete generation before committing its manifest.
     sync_generation(directory)
     previous = None
     if (meta / "snapshot.json").exists():
@@ -252,7 +249,6 @@ def window_identity(tree, workspace):
 
 
 def browser_commands(state, meta, workspace):
-    # Match metadata by window ID, then use the same leaves order as i3-resurrect.
     path = state / f"workspace_{file_id(workspace)}_programs.json"
     programs = read_json(path)
     node = workspace_node(read_json(meta / "tree.json"), workspace)
@@ -331,7 +327,7 @@ def prepare_restore(state, meta, tree, directory, group="A", operation=None):
             continue
         number = node.get("num", workspace_order(node["name"])[0])
         if number not in pool:
-            continue  # Scratchpad and workspaces outside the numbered pool stay untouched.
+            continue
         require(number not in names, f"multiple live workspaces use number {number}")
         names[number] = node["name"]
         windows = [child["window"] for child in walk(node) if child.get("window") is not None]
@@ -349,7 +345,6 @@ def prepare_restore(state, meta, tree, directory, group="A", operation=None):
             for rule in node.get("swallows", []):
                 if len(rule) > 1:
                     rule.pop("title", None)
-        # i3-resurrect selects the name embedded in the layout even when -w differs.
         layout["name"] = destination
         layout["num"] = number
         (directory / f"workspace_{file_id(destination)}_layout.json").write_text(json.dumps(layout) + "\n")
@@ -383,7 +378,6 @@ def readiness(state, workspace, tree):
         return f"{remaining} placeholder(s) remain"
     if windows < expected:
         return f"{windows}/{expected} expected windows are present"
-    # Unique Ghostty instances provide a stronger identity check than counts.
     expected_instances = [rule["instance"] for entry in walk(layout) for rule in entry.get("swallows", [])
                           if "ghostty-ws" in rule.get("instance", "")]
     instances = [entry.get("window_properties", {}).get("instance", "") for entry in entries

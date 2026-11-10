@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Toast USB attach and detach, naming the connector where it is knowable.
-# `udevadm monitor --udev` is unprivileged, so this needs no udev rule.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"
@@ -8,35 +6,27 @@ DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_toast-common.sh"
 
 SYSFS="${I3_USB_SYSFS_ROOT:-/sys}"
-# One plug's burst: a hub arrives with all of its children.
 QUIET_SECONDS="${I3_USB_HOTPLUG_QUIET:-0.7}"
-# A Type-C partner and a USB enumeration this close together are one plug.
 TYPEC_WINDOW="${I3_USB_TYPEC_WINDOW:-3}"
-# full adds speed, wattage, and alternate modes; compact omits them.
 DETAIL="${I3_USB_TOAST_DETAIL:-full}"
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 MONITOR="${I3_USB_MONITOR:-udevadm monitor --udev --property --subsystem-match=usb --subsystem-match=typec}"
 
-# Keeps a value with its unit, and a wrap from starting on the dot.
 NB=$'\u00a0'
 SEP="$NB· "
 
-declare -A REC=()           # the udev record being read
-declare -A BUS_KIND=()      # bus number -> typec | usb-a | internal | unknown
-declare -A KNOWN=()         # devpath -> cached fields, for the detach toast
-declare -A ADDED=()         # devpath -> fields, this burst
-declare -A REMOVED=()       # devpath -> fields, this burst
-declare -A PARTNER_DESC=()  # typec port -> detail, for the detach toast
+declare -A REC=()
+declare -A BUS_KIND=()
+declare -A KNOWN=()
+declare -A ADDED=()
+declare -A REMOVED=()
+declare -A PARTNER_DESC=()
 PARTNER_PORT=""
 PARTNER_AT=0
 PARTNER_ADDED=""
 PARTNER_REMOVED=""
 HAVE_PENDING=0
 
-# --- topology -------------------------------------------------------------
-# A Type-C connector gets its own single-port xHCI, high and super speed.
-# Counting that is the only mapping: usbN-portM/connector needs an ACPI _PLD
-# match this machine does not provide.
 classify_buses() {
     local hub bus port total hotplug typec_ports=0
     local -a singles=() hotplugged=() typec=()
@@ -72,7 +62,6 @@ classify_buses() {
         [ "${#singles[@]}" -eq "$((typec_ports * 2))" ]; then
         typec=("${singles[@]}")
     else
-        # Unrecognized shape: stay unknown rather than mislabel half the ports.
         return 0
     fi
 
@@ -84,7 +73,6 @@ classify_buses() {
     done
 }
 
-# Silences login and resume, and still lets a detach name what left.
 seed_known() {
     local dev real devpath
     for dev in "$SYSFS"/bus/usb/devices/*-*; do
@@ -95,7 +83,6 @@ seed_known() {
     done
 }
 
-# bDeviceClass is 00 on composite devices; the class lives on the interfaces.
 seed_interfaces() {
     local iface out=""
     for iface in "$1"/*:*.*; do
@@ -119,7 +106,6 @@ seed_fields() {
     printf '%s|%s|%s|' "$conn" "$kind" "$name"
 }
 
-# --- labels ---------------------------------------------------------------
 connector_label() {
     case "$1" in
         typec) printf 'USB-C' ;;
@@ -128,7 +114,6 @@ connector_label() {
     esac
 }
 
-# :CCSSPP: triples, most specific first: keyboard 030101, mouse 030102.
 kind_label() {
     case "$1" in
         *:03??01*) printf 'keyboard' ;;
@@ -145,7 +130,6 @@ kind_label() {
     esac
 }
 
-# Below 480 the number is noise, not news.
 speed_label() {
     case "$1" in
         20000) printf '20%sGbps' "$NB" ;;
@@ -166,13 +150,11 @@ device_name() {
     join_name "${REC[ID_VENDOR]:-}" "${REC[ID_MODEL]:-}"
 }
 
-# --- Type-C detail --------------------------------------------------------
 partner_live() {
     [ -n "$PARTNER_PORT" ] || return 1
     [ "$((EPOCHSECONDS - PARTNER_AT))" -le "$TYPEC_WINDOW" ]
 }
 
-# The alternate-mode and power-delivery objects land just after the partner.
 typec_settle() {
     local partner="$1" want got mode _
     want="$(cat "$partner/number_of_alternate_modes" 2>/dev/null)"
@@ -228,7 +210,6 @@ typec_extras() {
     join_fields "${watts:-}" "${modes:-}"
 }
 
-# --- rendering ------------------------------------------------------------
 join_fields() {
     local field out=""
     for field in "$@"; do
@@ -291,12 +272,10 @@ render_partner() {
 flush_burst() {
     local devpath text="" others=0
 
-    # Once per burst; the device toast and a later detach both use it.
     if [ -n "$PARTNER_ADDED" ]; then
         PARTNER_DESC[$PARTNER_ADDED]="$(typec_extras "$PARTNER_ADDED")"
     fi
 
-    # A device that left and returned inside one burst is a bounce, not news.
     for devpath in "${!ADDED[@]}"; do
         if [ -n "${REMOVED[$devpath]+set}" ]; then
             unset "ADDED[$devpath]" "REMOVED[$devpath]"
@@ -324,13 +303,11 @@ flush_burst() {
     show_toast "$text"
 }
 
-# --- event handling -------------------------------------------------------
 handle_usb() {
     local action="$1" devpath="$2" bus conn kind speed fields
 
     case "$action" in
         add)
-            # A re-enumeration of something already attached is not an arrival.
             [ -n "${KNOWN[$devpath]+set}" ] && return 0
             bus="${REC[BUSNUM]:-0}"
             bus="${bus#"${bus%%[!0]*}"}"
@@ -384,7 +361,6 @@ dispatch_record() {
     REC=()
 }
 
-# The banner and per-event header lines carry no KEY=VALUE, so they fall through.
 collect() {
     case "$1" in
         '') dispatch_record ;;
@@ -403,7 +379,6 @@ dump_topology() {
     done
 }
 
-# --- main -----------------------------------------------------------------
 classify_buses
 
 if [ "${1:-}" = --dump ]; then
@@ -413,15 +388,12 @@ fi
 
 command -v udevadm >/dev/null 2>&1 || exit 0
 
-# Wait, not `flock -n`: exec_always pkills the old watcher, which must release it.
 mkdir -p "$RUNTIME_DIR" 2>/dev/null || true
 exec 200>"$RUNTIME_DIR/i3-usb-hotplug.lock"
 flock -w 5 200 || exit 0
 
 seed_known
 
-# udevadm outlives its parent. A survivor would hold the
-# inherited lock fd and silently block every later watcher.
 stop_monitor() {
     [ -n "${MONITOR_PID:-}" ] && kill "$MONITOR_PID" 2>/dev/null
     return 0
@@ -430,7 +402,6 @@ trap stop_monitor EXIT
 trap 'stop_monitor; exit 0' TERM INT HUP
 
 while true; do
-    # `exec` in the child so MONITOR_PID is the monitor itself, not a wrapper.
     exec 3< <(exec 200>&-; exec $MONITOR 2>/dev/null)
     MONITOR_PID=$!
 
@@ -438,7 +409,6 @@ while true; do
         collect "$line"
         [ "$HAVE_PENDING" = 1 ] || continue
 
-        # Read to the end of the burst, then announce it once.
         while IFS= read -r -t "$QUIET_SECONDS" -u 3 line; do
             collect "$line"
         done
@@ -449,6 +419,5 @@ while true; do
     stop_monitor
     wait "$MONITOR_PID" 2>/dev/null || true
 
-    # exec_always respawns us on an i3 restart; this covers a transient failure.
     sleep 1
 done

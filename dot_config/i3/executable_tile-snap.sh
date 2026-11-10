@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# Snap a window to a region of its workspace (XFWM-style): float it in that rect
-# and add a `_snap_<region>` mark. The first snap records geometry in a
-# `_presnap_` mark (format below) so `unsnap` can restore it.
-#
-# Usage: tile-snap.sh <left|right|up|down|ul|ur|dl|dr|full|unsnap> [con_id]
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"
@@ -119,14 +114,12 @@ if [ "${SNAP_PLACEMENT_CHECKED:-0}" != 1 ] && [ -x "$DIR/workspace-action.sh" ];
   "$DIR/workspace-action.sh" placement "$TARGET" || exit 0
 fi
 
-# Serialize per window: two unsnaps would read the same _presnap_ mark.
 exec {LOCK_FD}>"$SNAP_RUNTIME_DIR/tile-snap-$TARGET.lock" 2>/dev/null
 if [ -n "${LOCK_FD:-}" ] && ! flock -n "$LOCK_FD"; then
   snap_log "skip $REGION $TARGET: another tile-snap holds the lock"
   exit 0
 fi
 
-# ---------- unsnap: restore pre-snap geometry and exit ----------
 if [ "$REGION" = "unsnap" ]; then
   IFS='|' read -r PRE FLOATING TILING <<<"$(i3-msg -t get_tree | jq -r --argjson id "$TARGET" '
     [.. | objects | select(.id? == $id)][0] |
@@ -144,7 +137,6 @@ if [ "$REGION" = "unsnap" ]; then
     apply_autotiling_split "$TARGET"
     exit 0
   fi
-  # _presnap_<x>_<y>_<w>_<h>_<floating0|1>
   IFS=_ read -r _ _ px py pw ph pf <<<"$PRE"
   if ! [[ "$px" =~ ^-?[0-9]+$ && "$py" =~ ^-?[0-9]+$ && "$pw" =~ ^[0-9]+$ && "$ph" =~ ^[0-9]+$ ]]; then
     snap_log "unsnap $TARGET: malformed mark '$PRE'"
@@ -168,7 +160,6 @@ if [ "$REGION" = "unsnap" ]; then
   exit 0
 fi
 
-# ---------- workspace, output, and window state in one read ----------
 IFS='|' read -r X Y W H OX OY OW OH HAS_PRE CUR_X CUR_Y CUR_W CUR_H CUR_FLOAT \
   SLOT_PARENT SLOT_LAYOUT SLOT_PREV SLOT_NEXT OLD_SNAPS <<<"$(i3-msg -t get_tree |
   jq -r --argjson id "$TARGET" --argjson outputs "$(i3-msg -t get_outputs || echo '[]')" '
@@ -216,20 +207,17 @@ IFS='|' read -r X Y W H OX OY OW OH HAS_PRE CUR_X CUR_Y CUR_W CUR_H CUR_FLOAT \
     (($n.marks // []) | map(select(test("^_snap_(full|left|right|up|down|ul|ur|dl|dr)$"))) | join(","))
   ] | map(if . == null then "" else tostring end) | join("|")')"
 
-# jq emits "null" for missing fields; treat any non-positive as failure.
 if ! [[ "${W:-}" =~ ^[0-9]+$ && "${H:-}" =~ ^[0-9]+$ ]] || (( W <= 0 || H <= 0 )); then
   snap_log "could not resolve workspace rect for con_id=$TARGET (got W=$W H=$H)"
   exit 1
 fi
 
-# Mixed-height monitors can expose root-sized pseudo outputs and stale rects.
 if [[ "${OH:-}" =~ ^[0-9]+$ ]]; then
   if (( X < OX || Y < OY || X + W > OX + OW || Y + H > OY + OH )); then
     X=$OX; Y=$OY; W=$OW; H=$OH
   fi
 fi
 
-# Polybar may use struts or just cover the screen; add only the inset i3 missed.
 TOP_INSET=0
 BOT_INSET=0
 for win in $(xdotool search --class '^[Pp]olybar$' 2>/dev/null); do
@@ -240,7 +228,6 @@ for win in $(xdotool search --class '^[Pp]olybar$' 2>/dev/null); do
   pb_y=$(awk '/Absolute upper-left Y:/ {print $4}' <<<"$info")
   pb_x=$(awk '/Absolute upper-left X:/ {print $4}' <<<"$info")
   [ -z "$pb_w" ] || [ -z "$pb_h" ] && continue
-  # Skip polybars on another monitor; both axes, outputs can be vertically offset.
   (( pb_x + pb_w <= X || pb_x >= X + W )) && continue
   (( pb_y + pb_h <= Y || pb_y >= Y + H )) && continue
   if [[ "${OH:-}" =~ ^[0-9]+$ ]] && (( pb_y < OY + OH / 2 )); then
@@ -269,7 +256,6 @@ H=$((H - TOP_INSET - BOT_INSET))
 
 HW=$((W / 2))
 HH=$((H / 2))
-# Other half — use W-HW so odd widths fill exactly with no 1px gap.
 HW2=$((W - HW))
 HH2=$((H - HH))
 
@@ -286,14 +272,12 @@ case "$REGION" in
   *) echo "unknown region: $REGION" >&2; snap_log "unknown region: $REGION"; exit 1 ;;
 esac
 
-# Match the workspace title-bar default: a `normal` border survives floating.
 if [ -f "$SNAP_TITLES_STATE" ] && [ "$(cat "$SNAP_TITLES_STATE")" = "on" ]; then
   BORDER="normal"
 else
   BORDER="pixel 1"
 fi
 
-# First snap only -- resnap re-runs with the same id, so skip if _presnap_ exists.
 if [ "$HAS_PRE" = "false" ]; then
   case "$CUR_FLOAT" in
     user_on|auto_on) pf=1 ;;
@@ -313,8 +297,6 @@ if [ "$HAS_PRE" = "false" ]; then
   fi
 fi
 
-# Strip prior region marks: `mark --add` accumulates, and resnap.sh races otherwise.
-# Restore anchors this window holds for other snapped windows stay.
 UNMARK_PREFIX=""
 if [ -n "$OLD_SNAPS" ]; then
   IFS=',' read -ra _old <<<"$OLD_SNAPS"
@@ -323,9 +305,6 @@ if [ -n "$OLD_SNAPS" ]; then
   done
 fi
 
-# Unfullscreen, set border + float, mark, and place in one command, then shrink
-# by the reported overflow while the rect does not fit -- terminals round to
-# size hints and i3 clamps back to y=0.
 STAGE="${UNMARK_PREFIX}fullscreen disable, border $BORDER, floating enable, mark --add _snap_$REGION, "
 attempts=0
 req_w=$tw

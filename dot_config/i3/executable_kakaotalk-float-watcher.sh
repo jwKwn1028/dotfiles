@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Keep KakaoTalk floating after Wine remaps/retiles it during login.
-# Explicit fullscreen is left alone so i3's fullscreen toggle behaves normally.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"
@@ -58,7 +56,6 @@ fix_kakaotalk_windows() {
       continue
     fi
 
-    # A fullscreen window is intentional; repairing it would fight the i3 toggle.
     if [[ "$fullscreen" != "0" ]]; then
       continue
     fi

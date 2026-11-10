@@ -152,7 +152,6 @@ def serve():
                             print(f"Group event: {error}", file=sys.stderr, flush=True)
                     if time.monotonic() - last_maintenance >= 1:
                         if lost_since and time.monotonic() - lost_since > 10:
-                            # i3 is gone; restarts reconnect within a second.
                             print("Group stop: i3 unreachable for 10 s", file=sys.stderr, flush=True)
                             break
                         try:

@@ -65,7 +65,6 @@ expect_index() {
     [ "$actual" = "$expected" ] || fail "monitor index is $actual, expected $expected"
 }
 
-# Prefer the configured output.
 cat >"$MONITORS" <<'EOF'
 Monitors: 2
  0: +*DP-1 2560/600x1440/340+0+0  DP-1
@@ -84,7 +83,6 @@ grep -Fq -- "-conf $RUNTIME/dunstrc" "$DUNST_LOG" ||
 [ "$(cat "$RUNTIME/monitor-index")" = 1 ] ||
     fail 'the selected monitor index was not recorded'
 
-# Fall back to a generic internal connector.
 cat >"$MONITORS" <<'EOF'
 Monitors: 2
  0: +*DP-1 2560/600x1440/340+0+0  DP-1
@@ -93,7 +91,6 @@ EOF
 I3_LAPTOP_OUTPUT=missing run_env sh "$START" --monitor-index >"$TEST_TMP/index"
 [ "$(cat "$TEST_TMP/index")" = 1 ] || fail 'the internal-panel fallback was not used'
 
-# Then fall back to primary and index 0.
 cat >"$MONITORS" <<'EOF'
 Monitors: 2
  0: +HDMI-1 1920/500x1080/300+0+0  HDMI-1
@@ -103,7 +100,6 @@ expect_index 1
 : >"$MONITORS"
 expect_index 0
 
-# Restart only when the index changes.
 cat >"$MONITORS" <<'EOF'
 Monitors: 2
  0: +*DP-1 2560/600x1440/340+0+0  DP-1

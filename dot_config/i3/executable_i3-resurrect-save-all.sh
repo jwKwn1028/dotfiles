@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Save the selected workspace group and application state.
 
 set -euo pipefail
 
@@ -16,7 +15,6 @@ ZEN_URL_STATE_HELPER="${I3_RESURRECT_ZEN_HELPER:-$DIR/zen-url-state.py}"
 GHOSTTY_SESSION_HELPER="${I3_RESURRECT_GHOSTTY_HELPER:-$DIR/ghostty-session-state.py}"
 [ -r "$GHOSTTY_SESSION_HELPER" ] || GHOSTTY_SESSION_HELPER="$DIR/executable_ghostty-session-state.py"
 HELIUM_DESKTOP_FILE="${HELIUM_DESKTOP_FILE:-$HOME/.local/share/applications/helium.desktop}"
-# Same default as tailscale-remote-connect.
 LABROUTE_MODE_FILE="${TAILSCALE_REMOTE_MODE_FILE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tailscale-remote-proxy-required}"
 
 notify() {
@@ -312,7 +310,6 @@ remember_zathura_pages_for_workspace() {
     mv "$tmp" "$programs_file"
 }
 
-# Pairs by position, so it rewrites only when all three counts agree.
 remember_ghostty_sessions_for_workspace() {
     local workspace="$1"
     local workspace_id
@@ -342,7 +339,6 @@ remember_ghostty_sessions_for_workspace() {
         def is_ghostty_swallow:
             (.class // "") | test("ghostty"; "i");
 
-        # i3-resurrect program order: nodes, then floating nodes.
         def ghostty_paths:
             def visit($path):
                 getpath($path) as $node |
@@ -353,7 +349,6 @@ remember_ghostty_sessions_for_workspace() {
                     visit($path + ["floating_nodes", $i]));
             visit([]);
 
-        # Characters that would break the quoted i3 exec line.
         def usable_dir:
             if type == "string" then
                 startswith("/") and (test("[\"\\\\$`\n]") | not)
@@ -481,7 +476,6 @@ cleanup_save() {
     local status=$?
     local reason
     if [ -n "$STAGING" ]; then
-        # A failure after the manifest rename must never remove published data.
         if [ "$(jq -r '.current // empty' "$PROFILE_META_DIR/snapshot.json" 2>/dev/null)" != "${STAGING##*/}" ]; then
             rm -rf -- "$STAGING"
         fi
@@ -500,7 +494,6 @@ trap cleanup_save EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 mkdir -p "$STATE_DIR/snapshots" "$META_DIR"
-# Read the old pointer now; never overwrite an unreadable manifest.
 resurrect_state resolve "$STATE_DIR" "$META_DIR" >/dev/null
 STAGING="$(mktemp -d "$STATE_DIR/snapshots/generation.XXXXXXXXXX")"
 STATE_DIR="$STAGING/state"

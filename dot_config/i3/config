@@ -39,7 +39,7 @@ bindsym Control+$mod+z        exec --no-startup-id zed
 # bindsym Control+$mod+l        exec --no-startup-id ~/.config/i3/lock.sh  # reserved for workspace nav
 bindsym --release $mod+Escape exec --no-startup-id ~/.config/i3/lock.sh
 bindsym Mod1+Shift+t          exec --no-startup-id ~/.config/ghostty/toggle-tabbar.sh
-# bindsym Control+$mod+h        exec --no-startup-id gtk-launch helium  # reserved for workspace nav
+bindsym $mod+g                exec --no-startup-id gtk-launch helium
 bindsym Control+Shift+z       exec --no-startup-id /usr/bin/flatpak run app.zen_browser.zen
 bindsym --release Control+Mod1+Escape exec --no-startup-id /usr/bin/xkill
 bindsym Control+Shift+Escape  exec --no-startup-id xfce4-taskmanager

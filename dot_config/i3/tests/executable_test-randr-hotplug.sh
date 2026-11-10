@@ -1,21 +1,13 @@
 #!/usr/bin/env bash
-# Trigger bookkeeping for randr-hotplug.sh: which i3 `output` events deserve a
-# display-setup.sh run. Assertions are on the run count per event sequence; X11
-# is mocked to a connected-output list the test rewrites between steps, and
-# events come from a FIFO the test holds open so their timing is known.
 
 set -euo pipefail
 
 ROOT="$(dirname "$(dirname "$(readlink -f "$0")")")"
 TEST_TMP="$(mktemp -d)"
 
-# Above the 0.15 s lid drain, so the two can be told apart.
 QUIET=0.35
-# Past one drain window, so a step expecting no run really gave it the chance.
 SETTLE=0.9
 
-# Must preserve the exit status: `wait` on the killed daemon reports 143, which
-# would otherwise become the test's own result.
 cleanup() {
   local status=$?
   exec 4>&- 2>/dev/null || true
@@ -51,13 +43,10 @@ fail() {
   exit 1
 }
 
-# --- mocks ---------------------------------------------------------------
-# xrandr --query, rendered from whatever output list the current step set.
 printf '%s\n' '#!/bin/sh' \
   "while read -r name state; do printf '%s %s 1920x1080+0+0 (normal left inverted)\\n' \"\$name\" \"\$state\"; done < '$OUTPUTS'" \
   > "$TEST_TMP/bin/xrandr"
 
-# i3-msg -t subscribe -m '["output"]': every event the test writes to the FIFO.
 printf '%s\n' '#!/bin/sh' \
   "if [ -e /proc/\$\$/fd/200 ]; then : > '$TEST_TMP/lock-leaked'; fi" \
   "exec cat '$FIFO'" > "$TEST_TMP/bin/i3-msg"
@@ -71,7 +60,6 @@ printf '%s\n' '#!/bin/sh' \
 chmod +x "$TEST_TMP/bin/xrandr" "$TEST_TMP/bin/i3-msg" \
   "$TEST_TMP/bin/display-setup-mock"
 
-# --- helpers -------------------------------------------------------------
 set_outputs() {
   : > "$OUTPUTS"
   for name in "$@"; do
@@ -91,7 +79,6 @@ toasts() {
   wc -l < "$TOAST_LOG" | tr -d ' '
 }
 
-# --- run -----------------------------------------------------------------
 set_outputs eDP
 
 I3_DISPLAY_SETUP="$TEST_TMP/bin/display-setup-mock" \
@@ -100,21 +87,17 @@ I3_DISPLAY_SETUP="$TEST_TMP/bin/display-setup-mock" \
   bash "$HOTPLUG" &
 DAEMON_PID=$!
 
-# Held open all test, so the daemon keeps one subscription instead of
-# resubscribing on EOF.
 exec 4>"$FIFO"
 sleep "$SETTLE"
 
 [ "$(runs)" = 0 ] || fail "daemon ran display-setup before any event arrived"
 [ "$(toasts)" = 0 ] || fail "daemon announced a display change before any event arrived"
 
-# A mode/position change -- what display-setup.sh itself emits.
 emit_event
 sleep "$SETTLE"
 [ "$(runs)" = 0 ] || fail "an event with an unchanged output set ran display-setup"
 [ "$(toasts)" = 0 ] || fail "an unchanged output set produced a toast"
 
-# One hotplug: many events, one new output, one run.
 set_outputs eDP DisplayPort-1
 emit_event
 emit_event
@@ -126,14 +109,12 @@ sleep "$SETTLE"
 [ ! -e "$TEST_TMP/lock-leaked" ] ||
   fail "a child of the watcher inherited its lock fd"
 
-# The churn display-setup.sh causes must not re-trigger it.
 emit_event
 emit_event
 sleep "$SETTLE"
 [ "$(runs)" = 1 ] || fail "post-run event churn triggered display-setup again"
 [ "$(toasts)" = 1 ] || fail "post-run event churn produced another toast"
 
-# Unplug is a change in the same way.
 set_outputs eDP
 emit_event
 sleep "$SETTLE"
@@ -141,7 +122,6 @@ sleep "$SETTLE"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display disconnected" ] ||
   fail "an unplug did not request the disconnected toast"
 
-# A set returning to a previous value is still a change from the one before.
 set_outputs eDP DisplayPort-1
 emit_event
 sleep "$SETTLE"
@@ -149,8 +129,6 @@ sleep "$SETTLE"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display connected" ] ||
   fail "a replug did not request the connected toast"
 
-# A hotplug during the run emits into the drain that follows it, so nothing is
-# left to wake the daemon. The next mock run stands in for that.
 cat > "$TEST_TMP/bin/display-setup-mock" <<EOF
 #!/bin/sh
 printf 'run\n' >> '$RUN_LOG'
@@ -174,7 +152,6 @@ sleep "$QUIET"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display connected" ] ||
   fail "the second mid-run change did not request the connected toast"
 
-# Replacing one output with another in a single burst has no count direction.
 set_outputs eDP HDMI-1 USB-C-1
 emit_event
 sleep "$SETTLE"
@@ -182,7 +159,6 @@ sleep "$SETTLE"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display changed" ] ||
   fail "a same-count output replacement did not request the changed toast"
 
-# xfsettingsd turns a closed lid's panel off but leaves it connected.
 printf 'state:      closed\n' > "$LID"
 emit_event
 sleep "$SETTLE"
@@ -203,8 +179,6 @@ emit_event
 sleep "$SETTLE"
 [ "$(runs)" = 8 ] || fail "a lid change on the laptop panel alone ran display-setup"
 
-# Closing the lid on the panel alone emits nothing; a dock plugged in next
-# still gets the full settle, so its two outputs land in one run.
 printf 'state:      closed\n' > "$LID"
 set_outputs eDP DisplayPort-1
 emit_event

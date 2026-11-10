@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Toggle title bars, then re-fit snapped windows to the new border geometry.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"

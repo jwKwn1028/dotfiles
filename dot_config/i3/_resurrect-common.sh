@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Shared snapshot paths and one lock for every profile on this display.
 
 RESURRECT_PYTHON="${I3_SYSTEM_PYTHON:-/usr/bin/python3}"
 RESURRECT_HELPER="$DIR/i3-resurrect-state.py"
@@ -28,7 +27,6 @@ resurrect_lock() {
     fi
 }
 
-# These variables are consumed by the save/restore scripts that source us.
 # shellcheck disable=SC2034
 resurrect_paths() {
     WORKSPACES_FILE="$META_DIR/workspaces.txt"

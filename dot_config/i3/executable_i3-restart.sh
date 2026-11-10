@@ -1,5 +1,4 @@
 #!/bin/sh
-# Validate the candidate config before replacing the running i3 instance.
 
 set -u
 

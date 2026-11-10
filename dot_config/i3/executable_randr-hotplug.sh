@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# Re-run display-setup.sh on monitor hotplug, keyed on the connected-output set
-# rather than the raw i3 `output` event -- display-setup.sh drives xrandr itself.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"
 
 DISPLAY_SETUP="${I3_DISPLAY_SETUP:-$DIR/display-setup.sh}"
-# Coalesces one hotplug's event burst; display-setup.sh adds its own settle.
 QUIET_SECONDS="${I3_RANDR_HOTPLUG_QUIET:-0.7}"
 RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 lid_files=(/proc/acpi/button/lid/*/state)
@@ -16,7 +13,6 @@ command -v xrandr >/dev/null 2>&1 || exit 0
 command -v i3-msg >/dev/null 2>&1 || exit 0
 [ -x "$DISPLAY_SETUP" ] || exit 0
 
-# Wait, not `flock -n`: exec_always pkills the old watcher, which must release it.
 mkdir -p "$RUNTIME_DIR" 2>/dev/null || true
 exec 200>"$RUNTIME_DIR/i3-randr-hotplug.lock"
 flock -w 5 200 || exit 0
@@ -33,12 +29,10 @@ connected_signature() {
         awk '$2 == "connected" { print $1 }' |
         LC_ALL=C sort |
         tr '\n' ' ')"
-    # 2+ outputs: xfsettingsd disables a closed lid's still-connected panel.
     case "$outputs" in *' '*' '*) lid_closed && outputs+="lid:closed" ;; esac
     printf '%s' "$outputs"
 }
 
-# Only the lid moved: the panel toggled, so skip the settle and toast.
 lid_only_change() {
     [ "$1" != "$2" ] && [ "${1%lid:closed}" = "${2%lid:closed}" ]
 }
@@ -53,7 +47,6 @@ change_toast() {
     elif [ "$after_count" -lt "$before_count" ]; then
         printf '%s\n' "Display disconnected"
     else
-        # A disconnect and connect can collapse into one debounced event burst.
         printf '%s\n' "Display changed"
     fi
 }
@@ -73,7 +66,6 @@ while true; do
             drain_events
         fi
 
-        # Looped: a monitor plugged in mid-run emits its events into the drain.
         while :; do
             signature="$(connected_signature)"
             [ "$signature" = "$LAST_SIGNATURE" ] && break
@@ -91,6 +83,5 @@ while true; do
         done
     done 3< <(i3-msg -t subscribe -m '["output"]' 200>&- 2>/dev/null)
 
-    # exec_always respawns us on an i3 restart; this covers a transient socket drop.
     sleep 1
 done

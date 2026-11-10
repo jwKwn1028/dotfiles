@@ -8,7 +8,6 @@ import sys
 
 PROC_ROOT = os.environ.get("I3_RESURRECT_PROC_ROOT", "/proc")
 GHOSTTY_CLASS = "com.mitchellh.ghostty"
-# The remote attach commands that hpc and hpcz pass to ssh.
 SESSION_PATTERNS = (
     ("tmux", re.compile(r"\btmux attach-session -t =([A-Za-z0-9_-]+)")),
     ("zmx", re.compile(r"\bzmx attach ([A-Za-z0-9_-]+)")),
@@ -68,7 +67,6 @@ def cwd(pid):
 
 
 def shell_pid(table, pid):
-    # Ghostty's `/bin/sh -c` wrapper never changes directory; its shell does.
     while table[pid]["comm"] == "sh" and len(table[pid]["children"]) == 1:
         pid = table[pid]["children"][0]
     return pid
@@ -121,7 +119,6 @@ def window_state(table, roots):
 
 
 def ghostty_windows(node, workspace=None):
-    # Same order as i3-resurrect's get_leaves: nodes, then floating nodes.
     if node.get("type") == "workspace":
         workspace = node.get("name")
     for child in (node.get("nodes") or []) + (node.get("floating_nodes") or []):

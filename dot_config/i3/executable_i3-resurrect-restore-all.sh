@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Restore a snapshot into one captured workspace group.
 
 set -euo pipefail
 
@@ -89,7 +88,6 @@ wait_for_workspace() {
     return 1
 }
 
-# Brings the saved lab route up before windows reattach; never turns it off.
 restore_labroute() {
     local output
     local status=0
@@ -175,7 +173,6 @@ if [ "$CHECK" = 1 ]; then
     printf 'Destination group %s: %s\n' "$DESTINATION_GROUP" "$RESTORE_PLAN"
     exit 0
 fi
-# Routing must succeed before changing the desktop, not just before launching.
 if ! restore_labroute; then
     notify "Restore aborted; existing windows are unchanged."$'\n'"Lab route not restored: $LABROUTE_ERROR"
     exit 1
@@ -247,7 +244,6 @@ while IFS= read -r workspace || [ -n "$workspace" ]; do
     fi
 done < <(jq -r '.[].workspace' <<< "$RESTORE_PLAN")
 
-# Recheck all successful workspaces: windows may close or move during later restores.
 while IFS= read -r workspace || [ -n "$workspace" ]; do
     if ! detail="$(i3-msg -t get_tree | resurrect_state ready "$RESTORE_STATE_DIR" "$META_DIR" "$workspace" 2>&1)" ||
         ! detail="$(jq -n --arg token "$RESTORE_OPERATION" --arg workspace "$workspace" \
@@ -288,7 +284,6 @@ reattach="$(resurrect_state sessions "$STATE_DIR" "$META_DIR" "$completed")"
 if [ -n "$reattach" ]; then
     summary="$summary"$'\n'"$reattach"
 fi
-# Reports stay outside immutable generations; URLs and paths remain local.
 report="$(mktemp "$PROFILE_META_DIR/.restore-report.XXXXXXXX")"
 jq -n --arg snapshot "$STATE_DIR" --argjson workspaces "$results" --arg sessions "$reattach" \
     --argjson mapping "$RESTORE_PLAN" \

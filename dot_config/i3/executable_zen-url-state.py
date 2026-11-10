@@ -401,8 +401,6 @@ def main():
     windows = list(walk_i3(tree))
     live_matches = live_page_state(windows)
     pages = active_pages()
-    # Reserve fallback candidates for every window before overriding live URLs.
-    # Otherwise a same-title live window's stale page can be given to its sibling.
     by_id = {match["window_id"]: match for match in match_pages(windows, pages)}
     by_id.update({match["window_id"]: match for match in live_matches})
     matches = [by_id.get(window["window_id"], dict(window, url=None)) for window in windows]

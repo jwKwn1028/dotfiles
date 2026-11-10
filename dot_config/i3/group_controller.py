@@ -128,7 +128,7 @@ class Controller:
             return current[1]
         return self.state["views"].get(group, {}).get("slot", 1)
 
-    def remember(self):
+    def remember(self, tree=None):
         group = self.selected()
         view = self.state["views"].setdefault(group, {"outputs": {}, "slot": 1})
         multiple = len(self.outputs()) > 1
@@ -142,7 +142,7 @@ class Controller:
                 view.update(slot=current[1], output=ws.output)
         if multiple:
             view["multi"] = True
-        focused = self.tree().find_focused()
+        focused = (tree or self.tree()).find_focused()
         if focused and focused.window and focused.window_class != SCRATCH_CLASS:
             history = self.state["history"]
             if not history or history[0] != focused.id:
@@ -200,8 +200,6 @@ class Controller:
             for index, output in enumerate(outputs):
                 fallback = 1 if index == 0 else min(3 + index - 1, 10)
                 chosen = view.get("outputs", {}).get(output.name, fallback)
-                # Memory from before a primary change breaks the 1-2 rule; an empty
-                # slot after an output change is i3's filler, not a choice.
                 if chosen in range(1, 11) and ((chosen <= 2) != (index == 0) or tidy and empty(chosen)):
                     chosen = fallback
                 if len(outputs) == 1:
@@ -211,7 +209,7 @@ class Controller:
                 wanted[output.name] = chosen
                 used.add(chosen)
             final_slot = slot or view.get("slot", next(iter(wanted.values())))
-            final_output = self.target_output(final_slot)
+            final_output = self.target_output(final_slot, outputs)
             if slot is None and len(outputs) > 1 and view.get("output") in wanted:
                 final_output = view["output"]
                 final_slot = wanted[final_output]
@@ -229,11 +227,11 @@ class Controller:
                     if placed.get(ws.num) != output:
                         self.command(f"[con_id={ws.id}] move workspace to output {quote(output)}")
             for output, local in wanted.items():
-                name = self.workspace_name(group, local)
+                name = self.workspace_name(group, local, tree)
                 self.command(f"focus output {quote(output)}")
                 self.command(f"workspace --no-auto-back-and-forth {quote(name)}")
                 self.command(f"move workspace to output {quote(output)}")
-            name = self.workspace_name(group, final_slot)
+            name = self.workspace_name(group, final_slot, tree)
             self.command(f"workspace --no-auto-back-and-forth {quote(name)}")
             live = [ws for ws in self.i3.get_workspaces() if ws.visible]
             if any(not identity(ws.num, self.groups) or identity(ws.num, self.groups)[0] != group for ws in live):
@@ -582,7 +580,7 @@ class Controller:
             if current and current[0] != self.selected():
                 self.select(current[0], current[1], external=True)
             elif current:
-                self.remember()
+                self.remember(tree)
         if kind == "workspace" and change in ("move", "rename", "init", "empty"):
             if self.view_signature() != self.last_view and not self.state.get("desktop"):
                 visible = self.i3.get_workspaces()

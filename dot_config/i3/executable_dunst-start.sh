@@ -1,5 +1,4 @@
 #!/bin/sh
-# Start dunst 1.9 with the current internal-panel index.
 
 set -eu
 

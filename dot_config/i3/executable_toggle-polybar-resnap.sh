@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Toggle polybar (or explicitly show/hide it), wait for the change to reach X,
-# raise the bar, then re-fit snapped windows. An explicit request owns the final
-# state, so it cancels any transient peek ownership first.
 
 set -u
 DIR="$(dirname "$(readlink -f "$0")")"

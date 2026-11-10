@@ -35,12 +35,11 @@ if not CONTROLLER.exists():
     CONTROLLER = HERE.parent / "executable_workspace-groups.py"
 RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
 
-i3: Connection = None  # set by boot()
-PEEK_LOG: Path = None  # a stub stands in for polybar-peek.sh; see boot()
+i3: Connection = None
+PEEK_LOG: Path = None
 RESULTS: list[tuple[bool, str, object, object]] = []
 
 
-# --------------------------------------------------------------- the nested wm
 def free_display() -> int:
     for n in range(20, 40):
         if not Path(f"/tmp/.X{n}-lock").exists():
@@ -55,13 +54,9 @@ def write_config(path: Path, socket: Path, dual: bool) -> None:
         "font pango:DejaVu Sans 10",
         "default_border pixel 1",
         "hide_edge_borders smart",
-        # Mirrors the real config; it makes "workspace number N" while already on
-        # N jump away, which the driver has to account for.
         "workspace_auto_back_and_forth yes",
     ]
     if dual:
-        # A two-output split, not the real config's: the handoff rules under
-        # test are about occupancy and wrapping, not which output owns a number.
         lines += [f"workspace {n}  output xinerama-0" for n in range(1, 7)]
         lines += [f"workspace {n} output xinerama-1" for n in range(7, 11)]
     path.write_text("\n".join(lines) + "\n")
@@ -82,8 +77,6 @@ def boot(dual: bool, workdir: Path) -> list[subprocess.Popen]:
     global i3, PEEK_LOG
 
     display = f":{free_display()}"
-    # The socket lives under XDG_RUNTIME_DIR because a UNIX path is capped at
-    # 108 bytes and a temp dir blows straight past it.
     socket = RUNTIME / f"i3-overflow-test{display[1:]}.sock"
     socket.unlink(missing_ok=True)
     config = workdir / "i3.config"
@@ -106,8 +99,6 @@ def boot(dual: bool, workdir: Path) -> list[subprocess.Popen]:
     ).returncode == 0):
         raise RuntimeError(f"Xephyr never came up on {display}")
 
-    # i3 reads RandR, which Xephyr does not emulate, so a second screen only
-    # shows up as a separate output under --force-xinerama.
     procs.append(subprocess.Popen(
         ["i3", *(["--force-xinerama"] if dual else []), "-c", str(config)],
         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
@@ -118,9 +109,6 @@ def boot(dual: bool, workdir: Path) -> list[subprocess.Popen]:
     i3 = Connection(socket_path=str(socket))
     env["I3SOCK"] = str(socket)
 
-    # Never let the nested session run the real polybar-peek.sh: it drives
-    # Polybar over IPC, which ignores DISPLAY, and would leave the session's own
-    # bar stuck on screen. This stub records the calls instead.
     PEEK_LOG = workdir / "peeks"
     PEEK_LOG.touch()
     stub = workdir / "peek-stub.sh"
@@ -133,7 +121,7 @@ def boot(dual: bool, workdir: Path) -> list[subprocess.Popen]:
             argv, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True,
         ))
-    time.sleep(1.5)  # let both subscribe before the first window opens
+    time.sleep(1.5)
     return procs
 
 
@@ -147,7 +135,6 @@ def shutdown(procs: list[subprocess.Popen]) -> None:
             proc.kill()
 
 
-# ------------------------------------------------------------------- the driver
 def tree():
     return i3.get_tree()
 
@@ -183,7 +170,6 @@ def current_ws():
 
 
 def goto(num):
-    # workspace_auto_back_and_forth would bounce us away if we asked twice.
     if current_ws() != num:
         i3.command(f"workspace number {num}")
         wait_for(lambda: current_ws() == num, timeout=5)
@@ -240,7 +226,6 @@ def check(name, got, expected, detail=""):
     print(f"  [{'PASS' if ok else 'FAIL'}] {name}: got {got}, expected {expected} {detail}")
 
 
-# ---------------------------------------------------------------- the scenarios
 def single_screen():
     print("\nS1  a workspace fills up, the overflow goes to the next empty one")
     kill_all()
@@ -283,7 +268,6 @@ def single_screen():
     spawn("l1", on=4)
     spawn("m1", on=1)
     print(f"    occupancy before: {occupied_map()}")
-    # A raw i3 move, bypassing the workspace controller.
     i3.command('[title="^m1$"] move container to workspace number 3; workspace number 3')
     check("S5 manual move to packed ws3 lands on ws4", settle("m1"), 4)
 
@@ -314,7 +298,6 @@ def single_screen():
     spawn("p2", on=1)
     i3.command('[title="^p2$"] move scratchpad')
     wait_for(lambda: ws_of("p2") == -1, timeout=5)
-    # __i3_scratch reports num -1; the watcher must leave it alone.
     check("S8 a scratchpad window is not bounced to a workspace", ws_of("p2"), -1)
 
     print("\nS10  a hand-off asks Polybar for a peek, an ordinary window does not")
@@ -323,10 +306,10 @@ def single_screen():
         return len(PEEK_LOG.read_text().split())
     print(f"    ws1 packed with {pack(1, 'r')} windows")
     before = peeks()
-    spawn("s1", on=2)  # roomy workspace, nothing moves
+    spawn("s1", on=2)
     wait_for(lambda: peeks() > before, timeout=2)
     check("S10 no peek when the window simply stays put", peeks(), before)
-    opened, landed = spawn("t1", on=1)  # ws1 is packed, so this one is handed off
+    opened, landed = spawn("t1", on=1)
     wait_for(lambda: peeks() > before, timeout=5)
     print(f"    window moved to ws{landed}, peek calls {before} -> {peeks()}")
     check("S10 a relocated window triggers exactly one peek", peeks(), before + 1)
@@ -340,8 +323,6 @@ def single_screen():
     opened, landed = spawn("last", on=5)
     print(f"    new window on ws{opened} -> ws{landed}, size {ratios(landed)}")
     check("S11 stays on the source workspace", landed, 5)
-    # One hop only: the watcher's own move is swallowed by the self_moved guard,
-    # so a window with nowhere good to go settles instead of circling.
     time.sleep(3)
     check("S11 stays put afterwards", ws_of("last"), 5)
     check("S11 no peek when no destination fits", peeks(), before)

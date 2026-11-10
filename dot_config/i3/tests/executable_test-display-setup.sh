@@ -32,7 +32,6 @@ else
     printf '%s\n' "\$*" >>'$CALLS'
 fi
 EOF
-# No-op sleep: the no-panel case would otherwise wait out the 5 s panel retry.
 printf '#!/bin/sh\n' >"$MOCK_BIN/sleep"
 chmod +x "$MOCK_BIN/xrandr" "$MOCK_BIN/sleep"
 
@@ -55,7 +54,6 @@ set_lid() {
     printf 'state:      %s\n' "$1" >"$LID"
 }
 
-# env -i keeps I3_* variables exported by the caller's shell out of the run.
 run_setup() {
     : >"$CALLS"
     env -i PATH="$MOCK_BIN:/usr/bin:/bin" \
@@ -120,5 +118,11 @@ run_setup
 expect_call \
     '--output eDP --primary --auto --pos 0x0 --rotate normal' \
     'a closed lid with no external monitor did not keep the panel on'
+
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >"%s/group-action"\n' "$TEST_TMP" >"$WORK/workspace-action.sh"
+chmod +x "$WORK/workspace-action.sh"
+run_setup
+[ "$(cat "$TEST_TMP/group-action" 2>/dev/null)" = 'reconcile --quiet' ] ||
+    fail 'display setup did not reconcile workspaces through workspace-action.sh'
 
 printf 'PASS: display setup makes the laptop panel primary under either driver naming\n'

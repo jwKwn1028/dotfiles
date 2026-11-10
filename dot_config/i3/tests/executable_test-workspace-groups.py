@@ -355,6 +355,7 @@ class StaticI3:
                                        leaves=lambda num=num: [SimpleNamespace(id=num)] if num in windows else [])
                        for output, num in shown.items()]
         self.commands = []
+        self.tree_reads = 0
 
     def get_outputs(self):
         return self.outputs
@@ -363,6 +364,7 @@ class StaticI3:
         return self.spaces
 
     def get_tree(self):
+        self.tree_reads += 1
         focused = SimpleNamespace(id=1, window=None, workspace=lambda: self.spaces[0])
         return SimpleNamespace(workspaces=lambda: self.spaces, find_focused=lambda: focused)
 
@@ -390,7 +392,6 @@ class DisplayMemoryTests(unittest.TestCase):
         return i3.shown()
 
     def test_primary_change_drops_memory_that_breaks_the_slot_policy(self):
-        # Arranged while DP-2 was primary, then display-setup made eDP-1 primary.
         self.assertEqual(self.reselect({"eDP-1": 3, "DP-2": 1}, (1, 3),
                                        how=lambda controller: controller.on_event("output", "unspecified")),
                          {"eDP-1": 1, "DP-2": 3})
@@ -403,6 +404,12 @@ class DisplayMemoryTests(unittest.TestCase):
         self.assertEqual(self.reselect({"eDP-1": 2, "DP-2": 4},
                                        how=lambda controller: controller.select("A", force=True)),
                          {"eDP-1": 2, "DP-2": 4})
+
+    def test_reselect_reuses_the_tree_it_read(self):
+        i3 = StaticI3({"eDP-1": 1, "DP-2": 3})
+        with tempfile.TemporaryDirectory() as directory:
+            Controller(i3, directory).select("A", force=True)
+        self.assertLessEqual(i3.tree_reads, 4)
 
 
 if __name__ == "__main__":

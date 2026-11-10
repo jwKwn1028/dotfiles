@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
 
-# Geometry and mark protocol for tile-snap.sh, the XFWM-style snapper documented
-# in MANUAL.md, "XFWM-Style Snap System".
-#
-# The i3 mock is stateful because tile-snap polls: stage 1 waits for `floating`
-# to flip before placing, and stage 2 re-reads the rect and shrinks by the
-# reported overflow until it fits. A mock that answered from a fixed fixture
-# would let a broken convergence loop pass.
-
 set -euo pipefail
 
 ROOT="$(dirname "$(dirname "$(readlink -f "$0")")")"
@@ -45,8 +37,6 @@ fail() {
     exit 1
 }
 
-# --- the fake i3 -----------------------------------------------------------
-# Applies the commands tile-snap sends, so a later poll sees their effect.
 cat >"$SNAP_TEST_APPLY" <<'PY'
 import json, os, re, sys
 
@@ -71,10 +61,6 @@ node = next((n for n in walk(tree) if n.get("id") == target), None)
 if node is None:
     sys.exit(0)
 
-# Size hints, three shapes. "grow N": the window comes back N larger than asked,
-# so the rect overflows and tile-snap must shrink by the reported excess.
-# "cell N": the window quantises up to a multiple of N, the way a terminal rounds
-# to its character cell. "min N": it refuses to go below N, so nothing fits.
 hint_kind, hint_n = "", 0
 hint_file = os.environ.get("SNAP_TEST_HINT", "")
 if hint_file and os.path.exists(hint_file):
@@ -132,7 +118,6 @@ fi
 printf '[{"success":true}]\n'
 EOF
 
-# One line per fake Polybar: "x y w h", read by both xdotool and xwininfo.
 cat >"$MOCK_BIN/xdotool" <<'EOF'
 #!/usr/bin/env bash
 [ "${1:-}" = "search" ] || exit 0
@@ -156,8 +141,6 @@ EOF
 
 chmod +x "$MOCK_BIN/i3-msg" "$MOCK_BIN/xdotool" "$MOCK_BIN/xwininfo"
 
-# --- fixtures --------------------------------------------------------------
-# ws_rect and out_rect are given separately so a pseudo-output can disagree.
 make_tree() {
     local ws_x="$1" ws_y="$2" ws_w="$3" ws_h="$4" floating="${5:-user_off}"
     local marks="${6:-[]}" siblings="${7:-0}"
@@ -218,7 +201,6 @@ snap() {
     echo "$rc"
 }
 
-# "w h x y" from the placement tile-snap settled on.
 placed() {
     local last
     last=$(grep -o 'resize set [0-9-]* [0-9-]*, move position [0-9-]* [0-9-]*' \
@@ -237,7 +219,6 @@ expect_placed() {
     [ "$got" = "$want" ] || fail "$region placed [$got], wanted [$want]"
 }
 
-# --- the nine regions on an even workspace ---------------------------------
 expect_placed full  '1920 1080 0 0'
 expect_placed left  '960 1080 0 0'
 expect_placed right '960 1080 960 0'
@@ -248,8 +229,6 @@ expect_placed ur    '960 540 960 0'
 expect_placed dl    '960 540 0 540'
 expect_placed dr    '960 540 960 540'
 
-# --- odd sizes must still tile exactly, with no 1px seam -------------------
-# The halves are computed as W/2 and W-W/2 precisely so this holds.
 declare -A R=()
 for region in full left right up down ul ur dl dr; do
     reset
@@ -293,7 +272,6 @@ ok = area == 1921 * 1081 and len(cells) == 16
 sys.exit(0 if ok else 1)
 PY
 
-# --- a workspace rect outside its output falls back to the output ----------
 reset
 make_tree -100 -100 4000 4000
 make_outputs 0 0 1920 1080
@@ -301,8 +279,6 @@ make_outputs 0 0 1920 1080
 [ "$(placed)" = '1920 1080 0 0' ] ||
     fail "a workspace rect larger than its output was not clamped: $(placed)"
 
-# --- Polybar insets --------------------------------------------------------
-# i3 has reserved nothing, so the whole bar height comes off the top.
 reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080
@@ -311,7 +287,6 @@ printf '0 0 1920 30\n' >"$SNAP_TEST_POLYBARS"
 [ "$(placed)" = '1920 1050 0 30' ] ||
     fail "a top Polybar was not inset: $(placed)"
 
-# i3 already reserved the strut, so nothing further comes off.
 reset
 make_tree 0 30 1920 1050
 make_outputs 0 0 1920 1080
@@ -320,10 +295,6 @@ printf '0 0 1920 30\n' >"$SNAP_TEST_POLYBARS"
 [ "$(placed)" = '1920 1050 0 30' ] ||
     fail "a strutted Polybar was inset twice: $(placed)"
 
-# i3 reserved only part of the bar's height, so just the remainder comes off and
-# the total inset still equals the bar. This is the case the RESERVED_TOP
-# subtraction exists for; a full-strut bar is skipped by the overlap test above
-# and never reaches it.
 reset
 make_tree 0 10 1920 1070
 make_outputs 0 0 1920 1080
@@ -332,7 +303,6 @@ printf '0 0 1920 30\n' >"$SNAP_TEST_POLYBARS"
 [ "$(placed)" = '1920 1050 0 30' ] ||
     fail "a partly strutted Polybar was not inset by the remainder: $(placed)"
 
-# A bar below the output midpoint is a bottom bar.
 reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080
@@ -341,7 +311,6 @@ printf '0 1050 1920 30\n' >"$SNAP_TEST_POLYBARS"
 [ "$(placed)" = '1920 1050 0 0' ] ||
     fail "a bottom Polybar was not inset: $(placed)"
 
-# The same remainder arithmetic on the bottom edge.
 reset
 make_tree 0 0 1920 1070
 make_outputs 0 0 1920 1080
@@ -350,7 +319,6 @@ printf '0 1050 1920 30\n' >"$SNAP_TEST_POLYBARS"
 [ "$(placed)" = '1920 1050 0 0' ] ||
     fail "a partly strutted bottom Polybar was not inset by the remainder: $(placed)"
 
-# A bar on another monitor must not shrink this workspace.
 reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080
@@ -359,9 +327,6 @@ printf '2000 0 1920 30\n' >"$SNAP_TEST_POLYBARS"
 [ "$(placed)" = '1920 1080 0 0' ] ||
     fail "a Polybar on another monitor was counted: $(placed)"
 
-# --- size hints: shrink by the reported overflow until it fits -------------
-# The window overshoots by 40px, so the first placement overflows the region and
-# the second, shrunk by exactly that, fits inside it.
 reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080
@@ -374,8 +339,6 @@ grep -qE 'snap 101 ul 960x540\+0\+0 \(attempts=2\)' "$SNAP_LOG" ||
 [ "$(grep -c 'resize set' "$SNAP_TEST_CMDS")" = 2 ] ||
     fail "the shrink took $(grep -c 'resize set' "$SNAP_TEST_CMDS") placements, wanted 2"
 
-# A window that quantises to a 120px cell cannot hit 540 exactly, so the fit it
-# settles for is the largest one inside the region.
 reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080
@@ -384,7 +347,6 @@ printf 'cell 120\n' >"$SNAP_TEST_HINT"
 grep -q 'snap 101 ul inside 960x480+0+0' "$SNAP_LOG" ||
     fail 'a cell-quantised window did not settle as an inside fit'
 
-# A window whose minimum exceeds the region can never fit; say so and stop.
 reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080
@@ -395,8 +357,6 @@ grep -q 'rect did not converge' "$SNAP_LOG" ||
 [ "$(grep -c 'resize set' "$SNAP_TEST_CMDS")" -le 10 ] ||
     fail 'the convergence loop ran past its attempt cap'
 
-# --- marks -----------------------------------------------------------------
-# First snap records the pre-snap geometry, float flag included.
 reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080
@@ -413,7 +373,6 @@ make_outputs 0 0 1920 1080
 grep -q 'mark --add _presnap_100_200_640_480_1' "$SNAP_TEST_CMDS" ||
     fail 'a floating window was recorded with float=0'
 
-# A resnap must not overwrite the geometry the first snap recorded.
 reset
 make_tree 0 0 1920 1080 user_off '["_presnap_5_6_7_8_0","_snap_left"]'
 make_outputs 0 0 1920 1080
@@ -425,7 +384,6 @@ grep -q 'unmark _snap_left' "$SNAP_TEST_CMDS" ||
 grep -q 'mark --add _snap_right' "$SNAP_TEST_CMDS" ||
     fail 'a resnap did not add the new region mark'
 
-# Restore anchors held for other snapped windows survive a snap.
 reset
 make_tree 0 0 1920 1080 user_off '["_snap_prev_999","_snap_left"]'
 make_outputs 0 0 1920 1080
@@ -435,7 +393,6 @@ grep -q 'unmark _snap_prev_999' "$SNAP_TEST_CMDS" &&
 grep -q 'unmark _snap_left' "$SNAP_TEST_CMDS" ||
     fail 'a snap of an anchor-holding window kept its old region mark'
 
-# A tiled window with a sibling gets the marks unsnap needs to rebuild its slot.
 reset
 make_tree 0 0 1920 1080 user_off '[]' 2
 make_outputs 0 0 1920 1080
@@ -447,7 +404,6 @@ grep -q 'mark --add _snap_parent_101' "$SNAP_TEST_CMDS" ||
 grep -q 'mark --add _snap_next_101' "$SNAP_TEST_CMDS" ||
     fail 'the following sibling was not marked'
 
-# An only child has no slot to rebuild, so no tiling marks.
 reset
 make_tree 0 0 1920 1080 user_off '[]' 0
 make_outputs 0 0 1920 1080
@@ -455,7 +411,6 @@ make_outputs 0 0 1920 1080
 grep -q '_pretiling_' "$SNAP_TEST_CMDS" &&
     fail 'an only child recorded a tiling slot it cannot restore'
 
-# --- border follows the workspace title-bar state --------------------------
 reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080
@@ -471,7 +426,6 @@ make_outputs 0 0 1920 1080
 grep -q 'border pixel 1' "$SNAP_TEST_CMDS" ||
     fail 'title bars off did not select the pixel border'
 
-# --- unsnap ----------------------------------------------------------------
 reset
 make_tree 0 0 1920 1080 user_on '["_presnap_11_22_333_444_1","_snap_left"]'
 make_outputs 0 0 1920 1080
@@ -509,7 +463,6 @@ grep -q 'unmark _snap_left' "$SNAP_TEST_CMDS" ||
 grep -q 'unmark _snap_next_999' "$SNAP_TEST_CMDS" &&
     fail 'unsnap removed a restore anchor held for another window'
 
-# --- argument validation ---------------------------------------------------
 reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080
@@ -522,15 +475,11 @@ reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080
 [ "$(snap sideways 101)" = 1 ] || fail 'an unknown region was accepted'
-# Not stderr: the `exec {LOCK_FD}> ... 2>/dev/null` that takes the per-window
-# lock sends the rest of this script's stderr to /dev/null, so the snap log is
-# the only channel a bad region can report on.
 grep -q 'unknown region: sideways' "$SNAP_LOG" ||
     fail 'an unknown region was not logged'
 [ "$(grep -c 'resize set' "$SNAP_TEST_CMDS")" = 0 ] ||
     fail 'an unknown region still placed the window'
 
-# A workspace i3 cannot resolve must not be guessed at.
 reset
 printf '{"id":1,"type":"root","nodes":[],"floating_nodes":[]}\n' >"$SNAP_TEST_TREE"
 make_outputs 0 0 1920 1080
@@ -538,7 +487,6 @@ make_outputs 0 0 1920 1080
 grep -q 'could not resolve workspace rect' "$SNAP_LOG" ||
     fail 'an unresolvable workspace rect was not logged'
 
-# --- the per-window lock serialises concurrent snaps ----------------------
 reset
 make_tree 0 0 1920 1080
 make_outputs 0 0 1920 1080

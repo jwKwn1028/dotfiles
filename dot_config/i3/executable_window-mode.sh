@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-# Polybar visibility for the Super+R window mode: a bar already up stays up on
-# exit, one hidden -- or up only for a transient peek -- hides again.
 
 set -u
 
 DIR="$(dirname "$(readlink -f "$0")")"
 . "$DIR/_polybar-common.sh"
 
-# Its own marker: an interleaved bar-nav session must not consume this one.
 RESTORE_HIDDEN="$SNAP_RUNTIME_DIR/i3-window-mode.restore-hidden"
 
 case "${1:-}" in

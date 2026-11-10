@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Shared helpers for tile-snap / resnap / snap-watcher / toggle-titles.
-# Source from sibling scripts:  . "$DIR/_snap-common.sh"
 
 SNAP_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 SNAP_TITLES_STATE="$SNAP_RUNTIME_DIR/i3-titles.state"
@@ -10,7 +8,6 @@ export SNAP_RUNTIME_DIR SNAP_TITLES_STATE
 
 snap_log() {
   [ -d "$SNAP_LOG_DIR" ] || mkdir -p "$SNAP_LOG_DIR" 2>/dev/null || return 0
-  # Checking the size costs a process, so sample one call in 16.
   if (( RANDOM % 16 == 0 )) && [ -f "$SNAP_LOG" ]; then
     local sz
     sz=$(stat -c%s "$SNAP_LOG" 2>/dev/null || echo 0)

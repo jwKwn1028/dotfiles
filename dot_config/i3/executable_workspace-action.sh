@@ -1,7 +1,4 @@
 #!/bin/sh
-# Fast client for workspace-groups.py: sends one request over the controller
-# socket without starting Python. Must match session_dir() and request() in
-# workspace_groups.py; anything it cannot express goes to the Python CLI.
 set -u
 case $0 in
   */*) DIR=${0%/*} ;;
