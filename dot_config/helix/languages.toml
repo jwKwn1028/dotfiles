@@ -54,7 +54,7 @@ args = ["server"]
 # ---------------- LaTeX ----------------
 [[language]]
 name = "latex"
-language-servers = ["texlab", "harper-ls"]
+language-servers = ["texlab"]
 auto-format = true
 formatter = { command = "tex-fmt", args = ["--stdin", "--nowrap", "--quiet"] }
 soft-wrap = { enable = true, wrap-at-text-width = true }
@@ -110,7 +110,7 @@ config = { bashIde = { shellcheck = { enable = true, executablePath = "shellchec
 # ---------------- Typst ----------------
 [[language]]
 name = "typst"
-language-servers = ["tinymist", "harper-ls"]
+language-servers = ["tinymist"]
 auto-format = true
 formatter = { command = "typstyle" }
 soft-wrap = { enable = true, wrap-at-text-width = true }
@@ -143,8 +143,8 @@ args = [ "--project=@helix-lsp", "--startup-file=no", "--history-file=no", "-e",
 # ---------------- Markdown ----------------
 [[language]]
 name = "markdown"
-# marksman: wiki-link nav + completion. zk: your notebook. harper-ls: grammar.
-language-servers = ["marksman", "zk", "harper-ls"]
+# marksman: wiki-link nav + completion. zk: your notebook.
+language-servers = ["marksman", "zk"]
 auto-format = true
 # `--prose-wrap preserve` keeps manual wrapping; "always" reflows at print-width.
 formatter = { command = "prettier", args = ["--parser", "markdown", "--prose-wrap", "preserve"] }
@@ -164,29 +164,5 @@ args = ["lsp"]
 name = "text"
 scope = "text.plain"
 file-types = ["txt"]
-language-servers = ["harper-ls"]
+language-servers = []
 soft-wrap = { enable = true, wrap-at-text-width = true }
-
-
-# ---------------- Grammar (harper-ls) ----------------
-# Pure-Rust, runs locally, no Java. Wired into markdown / latex / typst above;
-# remove "harper-ls" from a language's list to opt out.
-[language-server.harper-ls]
-command = "harper-ls"
-args = ["--stdio"]
-
-[language-server.harper-ls.config.harper-ls]
-diagnosticSeverity = "warning"
-
-[language-server.harper-ls.config.harper-ls.linters]
-SpellCheck = true
-SentenceCapitalization = true
-AnA = true
-RepeatedWords = true
-LongSentences = false
-
-# For the heavier ltex-ls-plus alongside harper, install it and add:
-#
-# [language-server.ltex]
-# command = "ltex-ls-plus"
-# config = { ltex = { language = "en-US" } }

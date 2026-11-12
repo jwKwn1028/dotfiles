@@ -39,8 +39,8 @@ read_trigger() {
 }
 
 hold_is_live() {
-  local holder_pid
-  holder_pid=$(hold_pid)
+  local holder_pid=
+  read -r holder_pid 2>/dev/null < "$POLYBAR_PEEK_HOLD" || true
   [[ "$holder_pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$holder_pid" 2>/dev/null
 }
 
@@ -56,18 +56,19 @@ hide_owned_peek() {
 }
 
 run_worker() {
-  local trigger now wait_ms seconds
+  local trigger now wait_ms seconds pause_fd
 
   command -v flock > /dev/null 2>&1 || exit 0
 
   exec 8> "$POLYBAR_PEEK_WORKER_LOCK"
   flock -n 8 || exit 0
   exec 9> "$POLYBAR_CONTROL_LOCK"
+  exec {pause_fd}<> <(:)
 
   while [ -e "$POLYBAR_PEEK_OWNER" ]; do
     if [ -e "$POLYBAR_PEEK_HOLD" ]; then
       if hold_is_live; then
-        sleep 0.05
+        read -rt 0.05 -u "$pause_fd" || true
         continue
       fi
     else
@@ -84,7 +85,7 @@ run_worker() {
     fi
 
     if ! flock -w 2 9; then
-      sleep 0.05
+      read -rt 0.05 -u "$pause_fd" || true
       continue
     fi
 

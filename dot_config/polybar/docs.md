@@ -28,6 +28,11 @@ moves away. See [Workspace Groups](../i3/MANUAL.md#workspace-groups).
 CPU/memory are display-only. Power offers shutdown, restart, lock, and an
 exit-i3 submenu; shutdown/restart require confirmation, with timeout cancelling.
 
+Volume shows the loudest channel; scrolling preserves balance and caps at
+100%, while keyboard controls may exceed it. One i3-started watcher updates
+both modules without idle polling and reconnects after audio restarts,
+showing `unavailable` while disconnected.
+
 ## Keyboard bar mode
 
 | Keys | Action |
@@ -51,3 +56,5 @@ actions exit bar mode; in-place toggles stay active.
 `~/.config/polybar/tests/test-launch.sh`. See the
 [i3 integration reference](../i3/MANUAL.md#polybar-integration) for lifecycle,
 peek gestures, and log overrides.
+
+Volume watcher checks: `python3 ~/.config/polybar/tests/test-volume.py`.

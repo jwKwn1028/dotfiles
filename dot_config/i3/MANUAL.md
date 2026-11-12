@@ -209,6 +209,9 @@ and `wm-restack` off, and keep the launcher lock out of detached children
 (`9>&-`). The `groups` module shows `A [B] C | 1 2 [3] 7 10`, with `!` on urgent
 inactive groups; `internal/i3` shows mode labels.
 
+One i3-started volume watcher updates both modules without idle polling.
+See [Polybar controls](../polybar/docs.md#pointer-actions) for volume limits.
+
 Workspace keys and Super taps peek a hidden bar for `I3_POLYBAR_PEEK_MS`
 (200 ms), extended by repeats. Holding Super alone keeps it until release;
 `I3_SUPER_HOLD_MS` sets the threshold. Peeks never resnap, and toggles cancel
@@ -226,8 +229,10 @@ restores prior visibility. Power entries need mouse confirmation.
 
 The pointer within 2 px of a monitor's top reveals a hidden bar until it moves
 40 px away (`I3_POLYBAR_EDGE_ENTER_PX`, `I3_POLYBAR_EDGE_LEAVE_PX`, polled every
-`I3_POLYBAR_EDGE_POLL_MS`, 100 ms). Scrolling keeps the hold; a visible
+`I3_POLYBAR_EDGE_POLL_MS`, 25 ms). Scrolling keeps the hold; a visible
 fullscreen window suppresses it until the pointer leaves.
+
+Held peeks check their holder every 50 ms without spawning child processes.
 
 ## Monitors, Wallpaper, and USB
 

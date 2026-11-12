@@ -21,6 +21,7 @@ window-padding-balance = true
 theme = TokyoNight Storm
 # Match Helix's exact background (theme default is #24283b)
 background = #292d3e
+palette = 8=#414868
 
 cursor-style = block
 cursor-color = #86be43

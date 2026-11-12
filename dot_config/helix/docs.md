@@ -5,6 +5,12 @@ keymap still applies. `languages.toml` supplies the Python debugger used by the
 debug keys below. A space between keys means press them in sequence; uppercase
 letters require Shift.
 
+## Writing language servers
+
+Markdown uses `marksman` for wiki-link navigation and completion, and `zk` for
+notebook integration. LaTeX and BibTeX use `texlab`; Typst uses `tinymist`.
+Plain-text buffers use soft wrapping without a language server.
+
 ## Normal mode
 
 | Keys | Action |

@@ -174,6 +174,16 @@ assert_state hidden
 wait_for_peek_exit
 
 reset_case hidden
+sleep 30 &
+holder=$!
+"$ROOT/polybar-peek.sh" --hold-start "$holder"
+assert_state visible
+kill "$holder"
+wait "$holder" 2>/dev/null || true
+wait_for_state hidden
+wait_for_peek_exit
+
+reset_case hidden
 "$ROOT/polybar-peek.sh" --hold-start "$$"
 "$ROOT/polybar-peek.sh" --hold-end "$(($$ + 1))"
 sleep 0.05

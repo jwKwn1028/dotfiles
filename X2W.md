@@ -646,7 +646,7 @@ omitting every line containing `xfce`:
   does not produce a race between them.
 
 The session also starts gnome-keyring, a polkit agent, NetworkManager and
-Bluetooth applets, Dropbox, and `autotiling`. They are not inherently X11-only,
+Bluetooth applets, and `autotiling`. They are not inherently X11-only,
 but their startup environment, tray behavior, and (for `autotiling`) Sway IPC
 compatibility must be tested. Waybar's tray cannot be assumed to reproduce the
 current XEmbed tray ordering.

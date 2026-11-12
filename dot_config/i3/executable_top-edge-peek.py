@@ -30,7 +30,7 @@ from Xlib import display as xdisplay
 
 ENTER_PX = 2
 LEAVE_PX = 40
-POLL_SECONDS = 0.1
+POLL_SECONDS = 0.025
 MONITOR_REFRESH_SECONDS = 5.0
 
 

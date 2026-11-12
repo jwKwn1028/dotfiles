@@ -136,7 +136,6 @@ registry = [
     { crate = "typst-cli",     bin = "typst" },
     { crate = "texlab",        bin = "texlab" },
     { crate = "tex-fmt",       bin = "tex-fmt" },
-    { crate = "harper-ls",     bin = "harper-ls" },
     { crate = "watchexec-cli", bin = "watchexec" },
     { crate = "cargo-update",  bin = "cargo-install-update" },
 ]

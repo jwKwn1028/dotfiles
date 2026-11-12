@@ -293,6 +293,7 @@ exec_always --no-startup-id sh -c 'pkill -f "bash .*/usb-hotplug\.sh$"; setsid ~
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/super-polybar-listener\.py$"; exec /usr/bin/python3 ~/.config/i3/super-polybar-listener.py'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/top-edge-peek\.py$"; exec /usr/bin/python3 ~/.config/i3/top-edge-peek.py'
 exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/quit-key\.py$"; exec /usr/bin/python3 ~/.config/i3/quit-key.py'
+exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/polybar/scripts/volume\.py watch$"; exec /usr/bin/python3 ~/.config/polybar/scripts/volume.py watch'
 exec --no-startup-id xrdb -merge ~/.Xresources
 exec --no-startup-id xsetroot -cursor_name left_ptr
 exec_always --no-startup-id ~/.local/bin/touchpad apply
@@ -304,6 +305,4 @@ exec_always --no-startup-id sh -c 'pgrep -x blueman-applet      >/dev/null || bl
 # After nm-applet for tray order; `exec` since launch.sh restarts it.
 exec --no-startup-id sh -c 'sleep 2; pgrep -x blueman-tray >/dev/null || blueman-tray &'
 exec_always --no-startup-id sh -c 'pgrep -f "^unclutter-xfixes " >/dev/null || unclutter-xfixes --timeout 3 &'
-# Not provisioned.
-exec --no-startup-id dropbox start -i
 exec_always --no-startup-id sh -c 'pgrep -x xss-lock >/dev/null || xss-lock --transfer-sleep-lock -- ~/.config/i3/lock.sh &'

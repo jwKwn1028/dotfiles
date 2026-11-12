@@ -96,6 +96,7 @@ run 'provisioning contract tests' \
     /usr/bin/python3 "$I3_ROOT/tests/test-provisioning-contract.py"
 
 run 'bar navigation tests' bash "$I3_ROOT/tests/test-bar-nav.sh"
+run 'bar marker notification tests' /usr/bin/python3 "$I3_ROOT/tests/test_bar_nav_marker.py"
 run 'Polybar peek tests' bash "$I3_ROOT/tests/test-polybar-peek.sh"
 run 'resurrect Polybar tests' \
     bash "$I3_ROOT/tests/test-i3-resurrect-polybar.sh"
@@ -117,5 +118,6 @@ run 'snap watcher tests' bash "$I3_ROOT/tests/test-snap-watcher.sh"
 run 'Polybar launcher tests' bash "$POLYBAR_ROOT/tests/test-launch.sh"
 run 'power confirmation tests' \
     bash "$POLYBAR_ROOT/tests/test-confirm-poweroff.sh"
+run 'volume watcher tests' /usr/bin/python3 "$POLYBAR_ROOT/tests/test-volume.py"
 
 printf 'PASS: all fast i3/Polybar checks\n'

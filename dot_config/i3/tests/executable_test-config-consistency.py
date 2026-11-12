@@ -145,6 +145,18 @@ class ConfigConsistencyTests(unittest.TestCase):
         self.assertIn("polybar_set_state hide 0", self.restore)
         self.assertIn("polybar_set_state show 1", self.restore)
 
+    def test_volume_ipc_modules_have_a_session_watcher(self) -> None:
+        import configparser
+
+        config = configparser.ConfigParser(interpolation=None)
+        config.read_string(self.polybar)
+        self.assertEqual(config["module/pulseaudio"]["type"], "custom/ipc")
+        self.assertEqual(config["module/pulseaudio"]["initial"], "1")
+        self.assertIn("scripts/volume.py", config["module/pulseaudio"]["hook-0"])
+        self.assertEqual(config["module/pulseaudio-sel"]["inherit"], "module/pulseaudio")
+        self.assertEqual(config["module/pulseaudio-sel"]["format-background"], "${colors.selection}")
+        self.assertIn("exec /usr/bin/python3 ~/.config/polybar/scripts/volume.py watch", self.i3_config)
+
     def test_locked_watchers_close_the_lock_in_their_subscribers(self) -> None:
         checked = 0
         for path in I3_ROOT.glob("*.sh"):

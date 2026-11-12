@@ -106,6 +106,7 @@ class ProvisioningContractTests(unittest.TestCase):
             ("x11-xserver-utils", source_file("display-setup.sh"), "xrandr"),
             ("xinput", source_file("super-polybar-listener.py"), 'shutil.which("xinput")'),
             ("pulseaudio-utils", source_file("bar-nav.sh"), "pactl"),
+            ("pulseaudio-utils", polybar_file("scripts/volume.py"), "pactl"),
             ("zenity", polybar_file("scripts/confirm-poweroff.sh"), "zenity"),
             ("xss-lock", config, "xss-lock"),
             ("i3lock", source_file("lock.sh"), "exec i3lock -n"),
