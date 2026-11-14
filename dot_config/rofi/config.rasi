@@ -3,5 +3,8 @@ configuration {
   modi: "drun,run,window";
   show-icons: true;
   drun-display-format: "{name}";
+  /* pkexec refuses a dead parent, and rofi exits after launching. sh waits;
+     "|| :" keeps bash from exec'ing away. */
+  run-command: "sh -c '\"$@\" || :' rofi-run {cmd}";
 }
 @theme "spotlight"

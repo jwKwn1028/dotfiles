@@ -15,7 +15,7 @@ and activation uses i3's `smart` policy.
 | --- | --- |
 | `Super+Return` / `Super+Shift+Return` | Ghostty / `xfce4-terminal`. |
 | `Copilot` | Toggle the [floating Ghostty](#copilot-terminal). |
-| `Super+Space` | Rofi drun (`spotlight` theme). |
+| `Super+Space` | Rofi drun (`spotlight` theme); a waiting `sh` lets `pkexec` apps open. |
 | `Super+Tab` / `Super+Shift+Tab` | Previous window / Rofi list of all windows. |
 | `Super+T` | Thunar; stays resident after the first window. |
 | `Super+P` / `XF86Display` | XFCE display settings. |
