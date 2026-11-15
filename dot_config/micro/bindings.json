@@ -34,6 +34,7 @@
     "Ctrl-o": "lua:fzf.fzf",
     "Ctrl-g": "command-edit:goto ",
     "\u001b[27;5;13~": "InsertNewline",
+    "\u001b[27;2;13~": "InsertNewline",
     "Alt-g": "CursorStart",
     "Alt-G": "CursorEnd",
     "Alt-m": "JumpToMatchingBrace",

@@ -1,16 +1,4 @@
-# TokyoNight Storm for Micro — matched to the local Helix theme.
-#
-# Mirrors ~/.config/helix/themes/tokyonight_storm.toml, which inherits Helix's
-# bundled `tokyonight` theme (/usr/lib/helix/runtime/themes/tokyonight.toml).
-# Storm palette overrides used below:
-#   bg #292d3e   bg-menu #1f2335   bg-cursorline #363d5c
-#   bg-selection #373d5a   bg-focus #2e3c64
-#   border #1d202f   fg #c0caf5   fg-dark #a9b1d6
-#   fg-gutter #3b4261   fg-linenr-selected #7dcfff (bold)
-#
-# The `scrollbar` group only renders when settings.json sets "scrollbar": true.
-# `cursor-line` is foreground-only on purpose: micro reads that group's fg and
-# applies it as the line's background.
+# TokyoNight Storm, as in Helix. cursor-line's fg is the line background.
 
 color-link default "#c0caf5,#292d3e"
 color-link comment "italic #565f89,#292d3e"
