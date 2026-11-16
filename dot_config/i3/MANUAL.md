@@ -40,6 +40,7 @@ banner, snapshots, and focus history, and is shared across groups.
 | `Super+Shift+Q` / `Alt+F4` | Close the focused window. |
 | `Ctrl+Super+Shift+Q` / `Ctrl+Alt+F4` | Kill the focused window's client. |
 | `Ctrl+Q` | Close apps listed in `QUIT_CLASSES` (`quit-key.py`). |
+| `Ctrl+W` | Close OnlyOffice from its start page (`START_TITLES`). |
 | `Super+H/J/K/L` / `Super+Arrows` | Focus left/down/up/right. |
 | `Super+Shift+M` / `Super+Ctrl+M` | Show scratchpad / move window there. |
 | `Super+Shift+N` | Centre a floating window on its output. |

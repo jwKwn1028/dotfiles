@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Make Ctrl+Q close windows of QUIT_CLASSES, apps that ignore it."""
+"""Ctrl+Q closes QUIT_CLASSES windows; Ctrl+W closes START_TITLES start pages."""
 
 from __future__ import annotations
 
@@ -13,7 +13,9 @@ import time
 
 from Xlib import X, XK, display as xdisplay, error as xerror
 
-QUIT_CLASSES = frozenset({"spotify", "kakaotalk.exe", "thunar"})
+QUIT_CLASSES = frozenset({"spotify", "kakaotalk.exe", "thunar", "onlyoffice"})
+# Class -> title while no document is open.
+START_TITLES = {"onlyoffice": "ONLYOFFICE"}
 
 
 class StopWatcher(Exception):
@@ -31,6 +33,15 @@ def grab_masks(numlock: int) -> list[int]:
 
 def quit_target(window: int | None, wm_class) -> int | None:
     return window if window and wants_quit_key(wm_class) else None
+
+
+def start_title(wm_class) -> str | None:
+    return START_TITLES.get(wm_class[-1].lower()) if wm_class else None
+
+
+def start_page_target(window: int | None, wm_class, title) -> int | None:
+    start = start_title(wm_class)
+    return window if window and start is not None and title == start else None
 
 
 def close_window(window: int) -> None:
@@ -53,14 +64,17 @@ class QuitKey:
         self.root = display.screen().root
         self.active_atom = display.intern_atom("_NET_ACTIVE_WINDOW")
         self.class_atom = display.intern_atom("WM_CLASS")
-        self.target = None
+        self.name_atom = display.intern_atom("_NET_WM_NAME")
+        self.utf8_atom = display.intern_atom("UTF8_STRING")
+        self.targets: dict[int, int] = {}
         self.watched = None
-        self.grabbed = False
+        self.grabbed: set[int] = set()
         self.load_keyboard()
         self.root.change_attributes(event_mask=X.PropertyChangeMask)
 
     def load_keyboard(self) -> None:
-        self.keycode = self.display.keysym_to_keycode(XK.XK_q)
+        self.quit_key = self.display.keysym_to_keycode(XK.XK_q)
+        self.close_key = self.display.keysym_to_keycode(XK.XK_w)
         numlock = self.display.keysym_to_keycode(XK.XK_Num_Lock)
         mask = X.Mod2Mask
         for index, keycodes in enumerate(self.display.get_modifier_mapping()):
@@ -69,20 +83,21 @@ class QuitKey:
                 break
         self.masks = grab_masks(mask)
 
-    def set_grab(self, on: bool) -> None:
-        if on == self.grabbed:
+    def set_grabs(self, wanted: set[int]) -> None:
+        if wanted == self.grabbed:
             return
         ignore = xerror.CatchError()
-        for mask in self.masks:
-            if on:
+        for keycode in self.grabbed - wanted:
+            for mask in self.masks:
+                self.root.ungrab_key(keycode, mask, onerror=ignore)
+        for keycode in wanted - self.grabbed:
+            for mask in self.masks:
                 self.root.grab_key(
-                    self.keycode, mask, False,
+                    keycode, mask, False,
                     X.GrabModeAsync, X.GrabModeAsync, onerror=ignore,
                 )
-            else:
-                self.root.ungrab_key(self.keycode, mask, onerror=ignore)
         self.display.sync()
-        self.grabbed = on
+        self.grabbed = wanted
 
     def active_window(self) -> int | None:
         prop = self.root.get_full_property(self.active_atom, X.AnyPropertyType)
@@ -101,38 +116,54 @@ class QuitKey:
                 event_mask=X.PropertyChangeMask, onerror=ignore
             )
 
+    def title(self) -> str | None:
+        try:
+            prop = self.watched.get_full_property(self.name_atom, self.utf8_atom)
+        except xerror.XError:
+            return None
+        if prop is None:
+            return None
+        value = prop.value
+        return value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value)
+
     def refresh(self) -> None:
         window = self.active_window()
         if (self.watched.id if self.watched else None) != window:
             self.watch(window)
-        wm_class = None
+        wm_class = title = None
         if self.watched is not None:
             try:
                 wm_class = self.watched.get_wm_class()
             except xerror.XError:
                 pass
-        self.target = quit_target(window, wm_class)
-        self.set_grab(self.target is not None)
+            if start_title(wm_class) is not None:
+                title = self.title()
+        targets = {
+            self.quit_key: quit_target(window, wm_class),
+            self.close_key: start_page_target(window, wm_class, title),
+        }
+        self.targets = {k: w for k, w in targets.items() if k and w is not None}
+        self.set_grabs(set(self.targets))
 
     def handle(self, event) -> None:
         if event.type == X.KeyPress:
-            if self.target is not None:
-                close_window(self.target)
+            target = self.targets.get(event.detail)
+            if target is not None:
+                close_window(target)
         elif event.type == X.PropertyNotify:
             if event.window.id == self.root.id and event.atom == self.active_atom:
                 self.refresh()
             elif (
-                event.atom == self.class_atom
+                event.atom in (self.class_atom, self.name_atom)
                 and self.watched is not None
                 and event.window.id == self.watched.id
             ):
                 self.refresh()
         elif event.type == X.MappingNotify and event.request != X.MappingPointer:
             self.display.refresh_keyboard_mapping(event)
-            grabbed = self.grabbed
-            self.set_grab(False)
+            self.set_grabs(set())
             self.load_keyboard()
-            self.set_grab(grabbed)
+            self.refresh()
 
     def run(self) -> None:
         self.refresh()

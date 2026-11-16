@@ -133,5 +133,10 @@ snap/firefox/common/.mozilla/firefox/
 .local/share/flatpak/overrides/app.zen_browser.zen
 {{ end -}}
 
+# ONLYOFFICE titlebar; desktop-class flatpak.
+{{ if or (ne $class "desktop") (ne .chezmoi.os "linux") -}}
+.var
+{{ end -}}
+
 prospect.md
 commitmsg.txt
