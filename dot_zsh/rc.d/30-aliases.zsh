@@ -133,6 +133,26 @@ alias .....='cd ../../../..'
 # --- Ripgrep (rg) ---
 alias rg='rg --smart-case'
 
+# --- tmux ---
+alias t='tmux new -A -s main'
+alias ta='tmux attach'
+alias tl='tmux ls'
+alias tn='tmux new -s'
+alias tk='tmux kill-session -t'
+
+# tm [NAME]: attach or create NAME, else pick one; switches when inside tmux.
+tm() {
+  local s=${1-}
+  [[ -n $s ]] || s=$(tmux ls -F '#S' 2>/dev/null | fzf --height=40% --reverse --prompt='tmux> ') || return
+  if [[ -n ${TMUX-} ]]; then
+    tmux has -t "=$s" 2>/dev/null || tmux new -d -s "$s"
+    tmux switch-client -t "=$s"
+  else
+    _ghostty_tmux_mode on
+    { tmux new -A -s "$s" } always { _ghostty_tmux_mode off }
+  fi
+}
+
 # --- Taskwarrior quick-add by weekday ---
 #   t<W><D><d|s>[hml][HH:MM][r<offsets>]   W = weeks ahead 0-4, D = ISO weekday
 #   d = due, s = scheduled, h/m/l = priority, r = reminder offsets (bare = hours)

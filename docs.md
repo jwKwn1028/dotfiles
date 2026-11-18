@@ -117,6 +117,12 @@ Log out, pick **i3** in LightDM, and log back in.
   sqlite data `dot_taskrc` targets. Enable reminders with
   `systemctl --user daemon-reload && systemctl --user enable --now task-notify.timer`.
   See `~/.config/task/MANUAL.md`.
+- **tmux sessions:** save the local tmux every 15 minutes with
+  `systemctl --user daemon-reload && systemctl --user enable --now tmux-resurrect-save.timer`;
+  restore after a reboot with `C-b C-r`, or press `C-b C-s` to start fresh.
+  Until you do either, the timer does not save, so it cannot replace the
+  pre-reboot snapshot. Restored panes rerun `hpc`/`hpcz` attaches and plain
+  `ssh` commands.
 - **npm:** install NodeSource's `nodejs`, which bundles npm; apt's `npm`
   conflicts with it, so the manifest installs `nodejs` alone. `~/.npmrc` puts
   global packages in `~/.local/npm-global`.

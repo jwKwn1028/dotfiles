@@ -23,14 +23,38 @@ tab so its shell starts with the updated integration features.
 | `Ctrl+Shift+J` / `Ctrl+Shift+K` | Focus the split below / above. |
 | `Ctrl+Tab` | Focus the next split. This replaces Ghostty's default next-tab shortcut. |
 | `Alt+Shift+H` / `Alt+Shift+L` | Switch to the previous / next tab. |
+| `Ctrl+Shift+O` / `Ctrl+Shift+E` | Split right / below. |
+| `Ctrl+Shift+T` | New tab. |
+| `Ctrl+Shift+M` | Toggle tmux mode in the focused split. |
+| `Ctrl+Alt+Shift+M` / `Ctrl+Alt+Shift+N` | Force tmux mode on / off (zsh uses these). |
 | `Ctrl+Alt+K` / `Ctrl+Alt+J` | Scroll up / down five lines. |
 
 `Ctrl+Shift+J` replaces Ghostty's default write-screen-file action. Ghostty
-still provides other default shortcuts for creating tabs and splits, copying,
-pasting, and searching. For example, `Ctrl+Shift+T` creates a tab,
-`Ctrl+Shift+O` creates a split to the right, `Ctrl+Shift+E` creates one below,
+still provides other default shortcuts for copying, pasting, and searching,
 and `Alt+1` through `Alt+8` jump to tabs 1 through 8 (`Alt+9` jumps to the last
 tab).
+
+## tmux mode
+
+Per split: the split, tab, and focus keys drive tmux instead of Ghostty. New
+splits start with it off.
+
+| Keys in tmux mode | Sends | tmux action |
+| --- | --- | --- |
+| `Ctrl+Shift+O` / `Ctrl+Shift+E` | `C-b %` / `C-b "` | Split right / below. |
+| `Ctrl+Shift+T` | `C-b c` | New window. |
+| `Ctrl+Shift+H` / `J` / `K` / `L` | `C-b C-h` / `C-j` / `C-k` / `C-l` | Focus pane (no repeat, so a quick `h`/`j`/`k`/`l` after it is typed). |
+| `Alt+Shift+H` / `Alt+Shift+L` | `C-b p` / `C-b n` | Previous / next window. |
+| `Alt+1` … `Alt+9`, `Alt+0` | the same keys | Window 1–9, 10 of the local tmux when nested. |
+
+Zsh turns it on when `hpc` or a typed tmux attach (`tmux`, `tmux a`, `tmux new`
+without `-d`, `ssh … tmux …`) starts, and off when it returns: X11 only, and
+only while that shell's Ghostty window has focus. Inside a local tmux it only
+turns on. Otherwise use `Ctrl+Shift+M`; left on outside tmux, the keys type
+stray characters.
+
+`key-state.css` hides the mode's badge. `chain=ignore` on the split and tab
+defaults keeps GTK menu shortcuts from overriding the mode.
 
 ## i3 shortcuts affecting Ghostty
 

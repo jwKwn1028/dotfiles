@@ -55,6 +55,9 @@ The fzf keys need fzf's installed widgets. Editor keymaps are separate: see
 | `tlp-bat` | Show battery statistics with `sudo tlp-stat -b`. |
 | `tlp-full` | Temporarily set BAT0 to 90% start / 95% stop until limits are restored or the machine reboots. |
 | `tlp-restore` | Restore BAT0's configured charge thresholds (currently 75% start / 80% stop). |
+| `t` / `ta` / `tl` | tmux: attach or create `main` / attach the last session / list. |
+| `tn NAME` / `tk NAME` | New / kill a tmux session. |
+| `tm [NAME]` | Attach or create NAME, or pick a session; switches when inside tmux. |
 | `wtail FILE...` | Watch each file's last ten lines, refreshing every ten seconds. |
 | `zpup` | Fast-forward Git-based Zsh plugins; `sz` loads the updates. |
 | `poweroff` | Shut down after a confirmation with a ten-second timeout. |
@@ -90,7 +93,7 @@ Unsuffixed helpers use the default remote; `-gpu` / `-hpc` select a named role.
 | `cdcluster`, `sftp-gpu`, `sftp-hpc` | Open SFTP to the remote. |
 | `grem`, `grem-gpu`, `grem-hpc` | Download remote paths into the current directory. |
 | `prem`, `prem-gpu`, `prem-hpc` | Upload local paths, optionally to a given remote destination. |
-| `hpc-list`, `hpc [SESSION]` | List remote tmux sessions, or attach to one. |
+| `hpc-list`, `hpc [SESSION]` | List remote tmux sessions, or attach to one. While attached, hides a local tmux's bar and turns on Ghostty's tmux mode. |
 | `hpc-detach SESSION`, `hpc-kill [-f] SESSION` | Detach a tmux session's clients, or terminate it. |
 | `hpcz-list`, `hpcz`, `hpcz-detach`, `hpcz-kill` | The same, for zmx sessions. |
 

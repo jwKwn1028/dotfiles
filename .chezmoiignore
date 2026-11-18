@@ -74,6 +74,9 @@ snap/firefox/common/.mozilla/firefox/
 .local/bin/restic-backup
 
 .config/systemd/user/tailscale-remote-proxy.service
+.config/systemd/user/tmux-resurrect-save.service
+.config/systemd/user/tmux-resurrect-save.timer
+.local/bin/tmux-resurrect-autosave
 .local/bin/tailscale-remote-connect
 {{ end -}}
 

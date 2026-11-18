@@ -38,3 +38,10 @@ url = "https://github.com/ghifarit53/tokyonight-vim/archive/4e82e0f0452a6ce8f387
 stripComponents = 1
 exact = true
 checksum.sha256 = "9bf3d7955096dbabd798e4ec5db395f5142c34f75ac814a4d84af07454503dd0"
+
+[".tmux/plugins/tmux-resurrect"]
+type = "archive"
+url = "https://github.com/tmux-plugins/tmux-resurrect/archive/cff343cf9e81983d3da0c8562b01616f12e8d548.tar.gz"
+stripComponents = 1
+exact = true
+checksum.sha256 = "9f1dda18554291ee7f8a0f499e2af90bbadc2ebceb7a995bb13b76529fe0c5c9"

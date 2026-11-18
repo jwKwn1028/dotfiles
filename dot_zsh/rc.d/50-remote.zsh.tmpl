@@ -632,6 +632,91 @@ hpc-list() {
   done
 }
 
+# Re-check the local tmux bar (dot_tmux.conf hooks) once ssh returns.
+_hpc_local_bar() {
+  [[ -n ${TMUX-} && -n ${TMUX_PANE-} ]] || return 0
+  command tmux set-hook -R -t "$TMUX_PANE" session-window-changed >/dev/null 2>&1
+  return 0
+}
+
+_hpc_local_bar_preexec() {
+  [[ -n ${TMUX-} && ${${(z)1}[1]-} == ssh ]] && typeset -g _HPC_LOCAL_BAR_PENDING=1
+  return 0
+}
+
+_hpc_local_bar_precmd() {
+  [[ -n ${_HPC_LOCAL_BAR_PENDING-} ]] || return 0
+  unset _HPC_LOCAL_BAR_PENDING
+  _hpc_local_bar
+}
+
+# Force Ghostty's tmux mode on/off via xdotool (X11), only while this shell's
+# Ghostty window has focus. Inside tmux: on only, for any focused Ghostty.
+_ghostty_tmux_mode() {
+  [[ -n ${DISPLAY-} ]] && (( $+commands[xdotool] && $+commands[xprop] )) || return 0
+  local key=ctrl+alt+shift+m win
+  [[ $1 == off ]] && key=ctrl+alt+shift+n
+  win=$(command xdotool getactivewindow 2>/dev/null) && [[ -n $win ]] || return 0
+  if [[ -n ${TMUX-} ]]; then
+    [[ $1 == on ]] || return 0
+    [[ $(command xprop -id "$win" WM_CLASS 2>/dev/null) == *'"com.mitchellh.ghostty"'* ]] || return 0
+  else
+    [[ -n ${WINDOWID-} && $win == "$WINDOWID" ]] || return 0
+  fi
+  command xdotool key --clearmodifiers $key >/dev/null 2>&1
+  return 0
+}
+
+# True if tmux args attach a client: bare, attach*, or new* without -d.
+_ghostty_tmux_attaches() {
+  local cmd=
+  while (( $# )); do
+    case $1 in
+      -[cfLST]) shift; (( $# )) && shift ;;
+      -*) shift ;;
+      *) cmd=$1; shift; break ;;
+    esac
+  done
+  case $cmd in
+    ''|a|at|att|atta|attac|attach|attach-*) return 0 ;;
+    new|new-*) [[ ${@[(I)-d]} == 0 ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# $3 has aliases expanded, so `t`/`ta` count too.
+_ghostty_tmux_mode_preexec() {
+  local -a w=("${(@Q)${(z)${3:-$1}}}") rest
+  local i attaches=
+  case ${w[1]-} in
+    tmux) _ghostty_tmux_attaches "${(@)w[2,-1]}" && attaches=1 ;;
+    ssh)
+      rest=(${=${(j: :)w[2,-1]}})
+      i=${rest[(I)tmux]}
+      (( i )) && _ghostty_tmux_attaches "${(@)rest[i+1,-1]}" && attaches=1
+      ;;
+  esac
+  if [[ -n $attaches ]]; then
+    typeset -g _GHOSTTY_TMUX_MODE_PENDING=1
+    _ghostty_tmux_mode on
+  fi
+  return 0
+}
+
+_ghostty_tmux_mode_precmd() {
+  [[ -n ${_GHOSTTY_TMUX_MODE_PENDING-} ]] || return 0
+  unset _GHOSTTY_TMUX_MODE_PENDING
+  _ghostty_tmux_mode off
+}
+
+if [[ -o interactive ]]; then
+  autoload -Uz add-zsh-hook
+  add-zsh-hook preexec _hpc_local_bar_preexec
+  add-zsh-hook precmd _hpc_local_bar_precmd
+  add-zsh-hook preexec _ghostty_tmux_mode_preexec
+  add-zsh-hook precmd _ghostty_tmux_mode_precmd
+fi
+
 hpc() {
   emulate -L zsh
   local base={{ .sshHpcHost | quote }}
@@ -653,8 +738,14 @@ hpc() {
   remote_cmd+="exec tmux attach-session -t =$1"
 
   print -u2 -- "hpc: connecting to remote host for tmux session '$1'..."
-  ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 -t "$base" "$remote_cmd"
-  rc=$?
+  _ghostty_tmux_mode on
+  {
+    ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 -t "$base" "$remote_cmd"
+    rc=$?
+  } always {
+    _hpc_local_bar
+    _ghostty_tmux_mode off
+  }
   if (( rc == 255 )); then
     print -u2 -- 'hpc: SSH connection to the remote host failed'
   elif (( rc != 0 && rc != 1 && rc != 127 )); then

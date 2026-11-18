@@ -17,5 +17,7 @@ set recolor-reverse-video true
 set synctex true
 set synctex-editor-command "hxp-jump %{input}:%{line}"
 
+map T exec "sh -c 'exec ghostty +new-window --working-directory=\"${1%/*}\"' zathura-term \"$FILE\""
+
 set incremental-search true
 set adjust-open "width"

@@ -24,6 +24,8 @@ fi
 
 [[ -r $REMOTE_FILE ]] || fail "cannot read remote helpers"
 source "$REMOTE_FILE"
+# Never touch a real tmux pane or X display.
+unset TMUX TMUX_PANE DISPLAY WINDOWID
 
 typeset -g HPC_SESSIONS_MODE=success
 typeset -g ZMX_CLIENTS=0
@@ -328,5 +330,90 @@ SSH_COMMANDS=()
 I3_RESURRECT_REMOTE_SESSION=bogus:dev
 _hpc_restore_session >| "$TEST_TMP/output" 2>&1
 (( ${#SSH_COMMANDS} == 0 )) || fail 'restore hook acted on an unknown session kind'
+
+# Local tmux bar re-check: after hpc and typed ssh only.
+mkdir -p "$TEST_TMP/fakebin"
+print -r -- '#!/bin/sh
+printf "%s\n" "tmux $*" >> "$TMUX_LOG"' >| "$TEST_TMP/fakebin/tmux"
+chmod +x "$TEST_TMP/fakebin/tmux"
+export TMUX_LOG=$TEST_TMP/tmux.log
+recheck='tmux set-hook -R -t %9 session-window-changed'
+for SSH_MODE in success unreachable; do
+  : >| "$TMUX_LOG"
+  (
+    export TMUX=/tmp/tmux-test/default,1,0 TMUX_PANE=%9
+    PATH=$TEST_TMP/fakebin:$PATH
+    functions[_test_ssh]=$functions[ssh]
+    ssh() { print -r -- ssh >> "$TMUX_LOG"; _test_ssh "$@"; }
+    hpc dev
+  ) >| "$TEST_TMP/output" 2>&1 || true
+  [[ $(<"$TMUX_LOG") == ssh$'\n'"$recheck" ]] ||
+    fail "hpc ($SSH_MODE) did not re-check the local tmux bar after ssh: $(<"$TMUX_LOG")"
+done
+SSH_MODE=success
+: >| "$TMUX_LOG"
+(
+  export TMUX=/tmp/tmux-test/default,1,0 TMUX_PANE=%9
+  PATH=$TEST_TMP/fakebin:$PATH
+  _hpc_local_bar_preexec 'ls -la'; _hpc_local_bar_precmd
+  print -r -- after-ls >> "$TMUX_LOG"
+  _hpc_local_bar_preexec 'ssh -t host tmux attach'; _hpc_local_bar_precmd; _hpc_local_bar_precmd
+)
+[[ $(<"$TMUX_LOG") == after-ls$'\n'"$recheck" ]] ||
+  fail "typed commands re-checked the local tmux bar wrongly: $(<"$TMUX_LOG")"
+: >| "$TMUX_LOG"
+( PATH=$TEST_TMP/fakebin:$PATH; hpc dev; _hpc_local_bar_preexec 'ssh host'; _hpc_local_bar_precmd ) >| "$TEST_TMP/output" 2>&1
+[[ ! -s $TMUX_LOG ]] || fail "helpers outside tmux ran tmux: $(<"$TMUX_LOG")"
+
+# Ghostty tmux mode: on/off around hpc and typed attaches, only when focused.
+print -r -- '#!/bin/sh
+case $1 in
+  getactivewindow) printf "%s\n" "$FAKE_ACTIVE" ;;
+  key) printf "%s\n" "xdotool $*" >> "$TMUX_LOG" ;;
+esac' >| "$TEST_TMP/fakebin/xdotool"
+print -r -- '#!/bin/sh
+if [ "$2" = "$FAKE_GHOSTTY" ]; then
+  echo "WM_CLASS(STRING) = \"ghostty\", \"com.mitchellh.ghostty\""
+else
+  echo "WM_CLASS(STRING) = \"org.pwmt.zathura\", \"Zathura\""
+fi' >| "$TEST_TMP/fakebin/xprop"
+chmod +x "$TEST_TMP/fakebin/xdotool" "$TEST_TMP/fakebin/xprop"
+on='xdotool key --clearmodifiers ctrl+alt+shift+m'
+off='xdotool key --clearmodifiers ctrl+alt+shift+n'
+recheck_pane='tmux set-hook -R -t %9 session-window-changed'
+expect_keys() {
+  local label=$1 expected=$2 code=$3
+  : >| "$TMUX_LOG"
+  (
+    PATH=$TEST_TMP/fakebin:$PATH
+    export DISPLAY=:999 FAKE_GHOSTTY=300
+    functions[_test_ssh]=$functions[ssh]
+    ssh() { print -r -- ssh >> "$TMUX_LOG"; _test_ssh "$@"; }
+    eval "$code"
+  ) >| "$TEST_TMP/output" 2>&1 || true
+  [[ $(<"$TMUX_LOG") == "$expected" ]] ||
+    fail "$label pressed the wrong tmux-mode keys: [$(<"$TMUX_LOG")], expected [$expected]"
+}
+here='export WINDOWID=100 FAKE_ACTIVE=100'
+for SSH_MODE in success unreachable; do
+  expect_keys "hpc ($SSH_MODE) in its focused Ghostty window" "$on"$'\n'ssh$'\n'"$off" "$here; hpc dev"
+done
+SSH_MODE=success
+expect_keys 'hpc while another window has focus' ssh 'export WINDOWID=100 FAKE_ACTIVE=200; hpc dev'
+expect_keys 'hpc outside Ghostty (no WINDOWID)' ssh 'export FAKE_ACTIVE=300; hpc dev'
+expect_keys 'hpc without an X display' ssh "unset DISPLAY; $here; hpc dev"
+expect_keys 'hpc inside tmux in a focused Ghostty window' "$on"$'\n'ssh$'\n'"$recheck_pane" \
+  'export TMUX=/tmp/t,1,0 TMUX_PANE=%9 WINDOWID=1 FAKE_ACTIVE=300; hpc dev'
+expect_keys 'hpc inside tmux while another app has focus' ssh$'\n'"$recheck_pane" \
+  'export TMUX=/tmp/t,1,0 TMUX_PANE=%9 FAKE_ACTIVE=400; hpc dev'
+for typed in 'tmux' 'tmux a' 'tmux attach -t dev' 'tmux -L work new -s x' "ssh host 'tmux attach -t dev'" 'ssh -t host tmux'; do
+  expect_keys "typed: $typed" "$on"$'\n'"$off" \
+    "$here; _ghostty_tmux_mode_preexec ${(q)typed}; _ghostty_tmux_mode_precmd; _ghostty_tmux_mode_precmd"
+done
+for typed in 'tmux ls' 'tmux new -d -s x' 'tmux kill-server' 'ssh host cat .tmux.conf' 'ssh host' 'ls -la'; do
+  expect_keys "typed: $typed" '' "$here; _ghostty_tmux_mode_preexec ${(q)typed}; _ghostty_tmux_mode_precmd"
+done
+expect_keys 'typed tmux attach inside tmux' "$on" \
+  "export TMUX=/tmp/t,1,0 TMUX_PANE=%9 FAKE_ACTIVE=300; _ghostty_tmux_mode_preexec 'tmux a'; _ghostty_tmux_mode_precmd"
 
 print 'PASS: remote helpers report connection failures, act only on existing sessions, and reattach restored ones'

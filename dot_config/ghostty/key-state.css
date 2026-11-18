@@ -1,0 +1,5 @@
+/* Hide the key-table badge; opacity alone still blocks clicks there. */
+.key-state-overlay {
+  opacity: 0;
+  margin: 0 0 -200px 0;
+}

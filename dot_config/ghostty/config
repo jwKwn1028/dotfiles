@@ -59,6 +59,8 @@ gtk-toolbar-style = flat
 gtk-custom-css = tabbar.css
 # Focused split outline uses TokyoNight cyan.
 gtk-custom-css = split-focus.css
+# Hides the tmux-mode badge.
+gtk-custom-css = key-state.css
 
 keybind = ctrl+enter=unbind
 keybind = ctrl+0=reset_font_size
@@ -77,6 +79,38 @@ keybind = ctrl+tab=goto_split:next
 # ^[h / ^[l) and not Super (i3 owns $mod+H/L for focus).
 keybind = alt+shift+h=previous_tab
 keybind = alt+shift+l=next_tab
+
+# tmux mode: Ctrl+Shift+M toggles, Ctrl+Alt+Shift+M/N force on/off (zsh uses
+# these). chain=ignore stops GTK menu shortcuts from beating the key table.
+keybind = ctrl+shift+o=new_split:right
+keybind = chain=ignore
+keybind = ctrl+shift+e=new_split:down
+keybind = chain=ignore
+keybind = ctrl+shift+t=new_tab
+keybind = chain=ignore
+keybind = ctrl+shift+m=activate_key_table:tmux
+keybind = ctrl+alt+shift+m=activate_key_table:tmux
+keybind = ctrl+alt+shift+n=deactivate_all_key_tables
+keybind = tmux/ctrl+shift+m=deactivate_key_table
+keybind = tmux/ctrl+shift+o=text:\x02%
+keybind = tmux/ctrl+shift+e=text:\x02"
+keybind = tmux/ctrl+shift+t=text:\x02c
+keybind = tmux/ctrl+shift+h=text:\x02\x08
+keybind = tmux/ctrl+shift+j=text:\x02\x0a
+keybind = tmux/ctrl+shift+k=text:\x02\x0b
+keybind = tmux/ctrl+shift+l=text:\x02\x0c
+keybind = tmux/alt+shift+h=text:\x02p
+keybind = tmux/alt+shift+l=text:\x02n
+keybind = tmux/alt+digit_1=esc:1
+keybind = tmux/alt+digit_2=esc:2
+keybind = tmux/alt+digit_3=esc:3
+keybind = tmux/alt+digit_4=esc:4
+keybind = tmux/alt+digit_5=esc:5
+keybind = tmux/alt+digit_6=esc:6
+keybind = tmux/alt+digit_7=esc:7
+keybind = tmux/alt+digit_8=esc:8
+keybind = tmux/alt+digit_9=esc:9
+keybind = tmux/alt+digit_0=esc:0
 
 keybind = ctrl+alt+k=scroll_page_lines:-5
 keybind = ctrl+alt+j=scroll_page_lines:5
