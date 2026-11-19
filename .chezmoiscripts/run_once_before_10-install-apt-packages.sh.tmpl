@@ -25,11 +25,6 @@ ppas=(
 {{- range .packages.apt.ppas }}
     {{ . | quote }}
 {{- end }}
-{{- if and (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") }}
-{{- range .packages.apt.ppas_i3_x11 }}
-    {{ . | quote }}
-{{- end }}
-{{- end }}
 )
 
 packages=(

@@ -632,7 +632,7 @@ hpc-list() {
   done
 }
 
-# Re-check the local tmux bar (dot_tmux.conf hooks) once ssh returns.
+# Re-check the local tmux bar after ssh.
 _hpc_local_bar() {
   [[ -n ${TMUX-} && -n ${TMUX_PANE-} ]] || return 0
   command tmux set-hook -R -t "$TMUX_PANE" session-window-changed >/dev/null 2>&1
@@ -650,12 +650,10 @@ _hpc_local_bar_precmd() {
   _hpc_local_bar
 }
 
-# Force Ghostty's tmux mode on/off via xdotool (X11), only while this shell's
-# Ghostty window has focus. Inside tmux: on only, for any focused Ghostty.
+# Ghostty tmux mode, if this window has focus; on only in tmux.
 _ghostty_tmux_mode() {
-  [[ -n ${DISPLAY-} ]] && (( $+commands[xdotool] && $+commands[xprop] )) || return 0
-  local key=ctrl+alt+shift+m win
-  [[ $1 == off ]] && key=ctrl+alt+shift+n
+  [[ -n ${DISPLAY-} ]] && (( $+commands[xdotool] && $+commands[xprop] && $+commands[ghostty-tmux-mode] )) || return 0
+  local win
   win=$(command xdotool getactivewindow 2>/dev/null) && [[ -n $win ]] || return 0
   if [[ -n ${TMUX-} ]]; then
     [[ $1 == on ]] || return 0
@@ -663,11 +661,11 @@ _ghostty_tmux_mode() {
   else
     [[ -n ${WINDOWID-} && $win == "$WINDOWID" ]] || return 0
   fi
-  command xdotool key --clearmodifiers $key >/dev/null 2>&1
+  command ghostty-tmux-mode $1 >/dev/null 2>&1
   return 0
 }
 
-# True if tmux args attach a client: bare, attach*, or new* without -d.
+# True if tmux args attach (bare, attach*, new* without -d).
 _ghostty_tmux_attaches() {
   local cmd=
   while (( $# )); do
@@ -684,7 +682,7 @@ _ghostty_tmux_attaches() {
   esac
 }
 
-# $3 has aliases expanded, so `t`/`ta` count too.
+# $3 has aliases expanded.
 _ghostty_tmux_mode_preexec() {
   local -a w=("${(@Q)${(z)${3:-$1}}}") rest
   local i attaches=

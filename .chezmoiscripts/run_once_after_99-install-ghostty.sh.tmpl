@@ -1,0 +1,133 @@
+{{- if eq .chezmoi.os "linux" -}}
+{{- $distro := .chezmoi.osRelease.id -}}
+{{- if or (eq $distro "linuxmint") (eq $distro "ubuntu") -}}
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" }}{{ $class = .class }}{{ end -}}
+{{- $profile := "linuxmint-i3-x11" -}}
+{{- if hasKey . "desktopProfile" }}{{ $profile = .desktopProfile }}{{ end -}}
+{{- if and (eq $class "desktop") (eq $profile "linuxmint-i3-x11") -}}
+{{- $app := .packages.appimage.ghostty -}}
+{{- $build := index $app .chezmoi.arch -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+{{ if $build -}}
+version={{ $app.version | quote }}
+sha256={{ $build.sha256 | quote }}
+url={{ printf "%s/v%s/Ghostty-%s-%s.AppImage" $app.url $app.version $app.version $build.arch | quote }}
+ppa={{ $app.legacy_ppa | quote }}
+id=com.mitchellh.ghostty
+opt="$HOME/.local/opt"
+appdir="$opt/ghostty-$version"
+launcher="$HOME/.local/bin/ghostty"
+data="${XDG_DATA_HOME:-$HOME/.local/share}"
+units="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+icons="$data/icons/hicolor/256x256/apps"
+
+install -d "$opt" "${launcher%/*}" "$data/applications" "$data/dbus-1/services" \
+    "$units" "$icons" "$HOME/.terminfo/x" "$HOME/.terminfo/g"
+work=$(mktemp -d "$opt/.ghostty.XXXXXXXX")
+trap 'rm -rf -- "$work"' EXIT
+
+check_version() {
+    local reported
+    reported=$("$1" +version)
+    [[ ${reported%%$'\n'*} == "Ghostty $version" ]]
+}
+
+if [[ ! -x "$appdir/AppRun" ]]; then
+    (
+        cd "$work"
+        curl --fail --location --silent --show-error --retry 2 --output Ghostty.AppImage "$url"
+        printf '%s  Ghostty.AppImage\n' "$sha256" | sha256sum --check --status
+        chmod +x Ghostty.AppImage
+        ./Ghostty.AppImage --appimage-extract > /dev/null
+        check_version "$work/squashfs-root/AppRun"
+        mv -T -- "$(realpath squashfs-root)" "$appdir"
+    )
+fi
+
+# Share host font settings, but keep the bundled Fontconfig cache separate.
+sed -e 's|>conf.d</include>|>/etc/fonts/conf.d</include>|' \
+    -e 's|>fontconfig</cachedir>|>ghostty/fontconfig</cachedir>|' \
+    /etc/fonts/fonts.conf > "$work/fonts.conf"
+install -m 644 "$work/fonts.conf" "$appdir/host-fonts.conf"
+
+{
+    printf '#!/usr/bin/env bash\n'
+    printf 'export GHOSTTY_RESOURCES_DIR=%q\n' "$appdir/share/ghostty"
+    printf "if [[ -z \${FONTCONFIG_FILE:-} ]]; then export FONTCONFIG_FILE=%q; fi\n" "$appdir/host-fonts.conf"
+    printf "export GTK_PATH=%q\${GTK_PATH:+\":\$GTK_PATH\"}\n" {{ printf "/usr/lib/%s-linux-gnu/gtk-4.0" $build.arch | quote }}
+    cat <<'EOF'
+# During the apt migration, a running 1.3 instance can still own the app ID.
+if [[ ${1:-} == +new-window ]] &&
+    owner=$(busctl --user --timeout=1s call org.freedesktop.DBus /org/freedesktop/DBus \
+        org.freedesktop.DBus GetConnectionUnixProcessID s com.mitchellh.ghostty 2>/dev/null) &&
+    [[ $owner =~ ^u\ ([0-9]+)$ ]] &&
+    [[ $(readlink "/proc/${BASH_REMATCH[1]}/exe" 2>/dev/null) == '/usr/bin/ghostty (deleted)' ]]; then
+    shift
+    set -- --gtk-single-instance=false "$@"
+fi
+EOF
+    printf 'exec %q "$@"\n' "$appdir/AppRun"
+} > "$work/ghostty"
+chmod 755 "$work/ghostty"
+check_version "$work/ghostty"
+mv -Tf -- "$work/ghostty" "$launcher"
+ln -sfnT "$appdir/share/icons/hicolor/256x256/apps/$id.png" "$icons/$id.png"
+ln -sfnT "$appdir/share/terminfo/x/xterm-ghostty" "$HOME/.terminfo/x/xterm-ghostty"
+ln -sfnT "$appdir/share/terminfo/g/ghostty" "$HOME/.terminfo/g/ghostty"
+
+escaped_launcher=$(printf '%s' "$launcher" | sed 's/[&|\\]/\\&/g')
+sed -e "s|^TryExec=ghostty$|TryExec=$escaped_launcher|" \
+    -e "s|^Exec=ghostty --gtk-single-instance=true$|Exec=$escaped_launcher +new-window|" \
+    -e 's/^DBusActivatable=true$/DBusActivatable=false/' \
+    "$appdir/share/applications/$id.desktop" > "$work/entry"
+install -m 644 "$work/entry" "$data/applications/$id.desktop"
+sed "s|^Exec=ghostty\b|Exec=$escaped_launcher|" "$appdir/share/dbus-1/services/$id.service" > "$work/entry"
+install -m 644 "$work/entry" "$data/dbus-1/services/$id.service"
+unit="app-$id.service"
+sed "s|^ExecStart=ghostty\b|ExecStart=$escaped_launcher|" "$appdir/share/systemd/user/$unit" > "$work/entry"
+install -m 644 "$work/entry" "$units/$unit"
+if systemctl --user show-environment >/dev/null 2>&1; then
+    systemctl --user daemon-reload
+fi
+
+ppa_enabled() {
+    local path=${ppa#ppa:}
+    apt-get indextargets --format "\$(URI)" |
+        grep -F -e "ppa.launchpadcontent.net/$path/" -e "ppa.launchpad.net/$path/" >/dev/null
+}
+
+if ppa_enabled; then
+    sudo add-apt-repository -yr {{ if eq $distro "ubuntu" }}--no-update {{ end }}"$ppa"
+    if ppa_enabled; then
+        echo "Ghostty PPA is still enabled: $ppa" >&2
+        exit 1
+    fi
+fi
+if [[ $(dpkg-query -W -f='${db:Status-Status}' ghostty 2>/dev/null || true) == installed ]]; then
+    sudo apt-get remove -y ghostty
+fi
+
+terminal=/usr/local/bin/ghostty-terminal-emulator
+cat > "$work/terminal" <<'EOF'
+{{ template "script-helpers/ghostty-terminal-emulator.sh" . -}}
+EOF
+metadata=$(stat -c '%u:%g:%a' "$terminal" 2>/dev/null || true)
+if [[ $metadata != '0:0:755' ]] || ! cmp -s "$work/terminal" "$terminal"; then
+    sudo install -o root -g root -m 0755 "$work/terminal" "$terminal"
+fi
+if [[ $(readlink -f /usr/bin/x-terminal-emulator) != "$terminal" ]]; then
+    sudo update-alternatives --install /usr/bin/x-terminal-emulator x-terminal-emulator "$terminal" 20
+    sudo update-alternatives --set x-terminal-emulator "$terminal"
+fi
+
+echo "==> Ghostty $version installed to $launcher"
+{{ else -}}
+echo 'Ghostty AppImage is unavailable for {{ .chezmoi.arch }}.' >&2
+exit 1
+{{ end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

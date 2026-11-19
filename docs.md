@@ -19,6 +19,8 @@ chezmoi update      # git pull + apply
 Document conversion and Typst layouts:
 [Pandoc and Typst presets](dot_local/share/pandoc/docs.md).
 
+Terminal PDF viewer: [fancy-cat manual](dot_config/fancy-cat/MANUAL.md).
+
 ## Agent cleanup
 
 Preview with `~/.cleanup-agents.sh`; quit Claude Code and Codex before adding
@@ -96,6 +98,10 @@ executes them without creating that directory in the destination. Their
     zathura into `~/.local`, installing build dependencies with sudo.
 14. `run_once_after_97`: build pinned btop into `~/.local` to fix AMD GPU crashes,
     using `g++-14` and installing dependencies with sudo.
+15. `run_once_after_98`: build [fancy-cat](dot_config/fancy-cat/MANUAL.md) into
+    `~/.local`.
+16. `run_once_after_99`: install the pinned Ghostty AppImage as
+    `x-terminal-emulator`, replacing the apt package and PPA.
 
 `run_once_` tracks successful rendered content; `run_onchange_` also tracks the
 script path. Moving an unchanged `run_onchange_` script into `.chezmoiscripts/`
@@ -117,12 +123,9 @@ Log out, pick **i3** in LightDM, and log back in.
   sqlite data `dot_taskrc` targets. Enable reminders with
   `systemctl --user daemon-reload && systemctl --user enable --now task-notify.timer`.
   See `~/.config/task/MANUAL.md`.
-- **tmux sessions:** save the local tmux every 15 minutes with
-  `systemctl --user daemon-reload && systemctl --user enable --now tmux-resurrect-save.timer`;
-  restore after a reboot with `C-b C-r`, or press `C-b C-s` to start fresh.
-  Until you do either, the timer does not save, so it cannot replace the
-  pre-reboot snapshot. Restored panes rerun `hpc`/`hpcz` attaches and plain
-  `ssh` commands.
+- **tmux sessions:** save every 15 minutes with
+  `systemctl --user daemon-reload && systemctl --user enable --now tmux-resurrect-save.timer`.
+  After a reboot, `C-b C-r` restores (hpc/ssh too) or `C-b C-s` starts fresh.
 - **npm:** install NodeSource's `nodejs`, which bundles npm; apt's `npm`
   conflicts with it, so the manifest installs `nodejs` alone. `~/.npmrc` puts
   global packages in `~/.local/npm-global`.

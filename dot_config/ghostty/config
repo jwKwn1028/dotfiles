@@ -59,7 +59,7 @@ gtk-toolbar-style = flat
 gtk-custom-css = tabbar.css
 # Focused split outline uses TokyoNight cyan.
 gtk-custom-css = split-focus.css
-# Hides the tmux-mode badge.
+# Hide the tmux-mode badge.
 gtk-custom-css = key-state.css
 
 keybind = ctrl+enter=unbind
@@ -80,8 +80,7 @@ keybind = ctrl+tab=goto_split:next
 keybind = alt+shift+h=previous_tab
 keybind = alt+shift+l=next_tab
 
-# tmux mode: Ctrl+Shift+M toggles, Ctrl+Alt+Shift+M/N force on/off (zsh uses
-# these). chain=ignore stops GTK menu shortcuts from beating the key table.
+# tmux mode; chain=ignore keeps GTK accelerators off these keys.
 keybind = ctrl+shift+o=new_split:right
 keybind = chain=ignore
 keybind = ctrl+shift+e=new_split:down
@@ -101,6 +100,8 @@ keybind = tmux/ctrl+shift+k=text:\x02\x0b
 keybind = tmux/ctrl+shift+l=text:\x02\x0c
 keybind = tmux/alt+shift+h=text:\x02p
 keybind = tmux/alt+shift+l=text:\x02n
+keybind = tmux/ctrl+alt+shift+h=esc:H
+keybind = tmux/ctrl+alt+shift+l=esc:L
 keybind = tmux/alt+digit_1=esc:1
 keybind = tmux/alt+digit_2=esc:2
 keybind = tmux/alt+digit_3=esc:3
@@ -122,7 +123,7 @@ resize-overlay = never
 mouse-hide-while-typing = true
 clipboard-trim-trailing-spaces = true
 confirm-close-surface = false
-copy-on-select = clipboard
+copy-on-select = both
 # Default discrete:3 felt slow vs Firefox/xfce4-terminal
 mouse-scroll-multiplier = precision:3,discrete:5
 

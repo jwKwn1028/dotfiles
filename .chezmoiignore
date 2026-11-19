@@ -72,11 +72,13 @@ snap/firefox/common/.mozilla/firefox/
 .config/systemd/user/restic-maintenance.service
 .config/systemd/user/restic-maintenance.timer
 .local/bin/restic-backup
+.local/bin/fancy-cat-open
 
 .config/systemd/user/tailscale-remote-proxy.service
 .config/systemd/user/tmux-resurrect-save.service
 .config/systemd/user/tmux-resurrect-save.timer
 .local/bin/tmux-resurrect-autosave
+.local/bin/ghostty-tmux-mode
 .local/bin/tailscale-remote-connect
 {{ end -}}
 
@@ -96,6 +98,7 @@ snap/firefox/common/.mozilla/firefox/
 .config/picom/
 .config/rofi/
 .config/dunst/
+.config/fancy-cat/
 .config/systemd/user/dunst.service.d/
 .config/fcitx5/
 .config/Thunar/

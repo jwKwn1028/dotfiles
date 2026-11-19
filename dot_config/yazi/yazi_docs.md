@@ -96,17 +96,19 @@ opener; `O` or `Shift-Enter` lists them all.
 | Folder | Helix (`l` goes inside) | Open (Thunar), Zed, Reveal |
 | Text, code, JSON, JavaScript | Helix (`$EDITOR`) | Zed, Reveal |
 | `.txt` | micro | Zed |
-| PDF | Zathura | — |
+| PDF | fancy-cat | Zathura |
 | Image | `xdg-open` | feh, Reveal |
 | Audio, video | `xdg-open` (VLC) | Show media info, Reveal |
 | Archive | [Extract here](#archives) | Reveal |
 | Empty file | Helix | Reveal |
 | Anything else | `xdg-open` | Reveal |
 
-Reveal opens the folder in Thunar and comes with Show EXIF (`exiftool`). Helix
-and micro take over the terminal; GUI apps run detached. With several files
-selected, Helix, micro, Zed and feh get them all (feh as a slideshow);
+Reveal opens the folder in Thunar and comes with Show EXIF (`exiftool`). Helix,
+micro, and fancy-cat take over the terminal; GUI apps run detached. With several
+files selected, Helix, micro, Zed and feh get them all (feh as a slideshow);
 `xdg-open` gets the first.
+
+fancy-cat opens the first selected PDF (see its manual); `q` returns to Yazi.
 
 ### Structure and simulation files
 
@@ -335,14 +337,13 @@ version.
 | `xclip`, `python3` | `y` file list, `c i` |
 | `clipcopy` | `c y`, `c r` |
 | `exiftool` | Show EXIF |
-| `hx`, `micro`, `zathura`, `zed`, `feh`, `ghostty` | Openers and quick actions |
+| `hx`, `micro`, `fancy-cat`, `fancy-cat-open`, `zathura`, `zed`, `feh`, `ghostty` | Openers and quick actions |
 | `VESTA`, `ovito`, `avogadro2` | Structure and simulation openers |
 | `taskwarrior-tui` | `W` |
 
 ## Known limitations
 
-- **No image previews in tmux:** `dot_tmux.conf` doesn't enable
-  `allow-passthrough`.
+- **Image previews in tmux** need local tmux under Ghostty.
 - **Show media info fails:** `mediainfo` isn't installed.
 - **Clipboard keys are X11-only:** `y`'s file list, `c i` and `c r` need xclip
   or GNU `realpath`; a Sway session needs Wayland versions.

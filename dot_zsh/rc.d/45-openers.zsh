@@ -82,6 +82,23 @@ _zsh_open_pdf() {
 so() { _zsh_open_pdf sioyek "$@"; }
 zo() { _zsh_open_pdf zathura "$@"; }
 
+# fo [FILE [PAGE]]: fancy-cat in the foreground.
+fo() {
+  emulate -L zsh
+  (( $# <= 2 )) || { print -u2 'usage: fo [FILE [PAGE]]'; return 2; }
+  _have fancy-cat-open || { print -u2 'fo: fancy-cat-open not found'; return 127; }
+  if (( $# )); then
+    fancy-cat-open "$@"
+    return
+  fi
+
+  local file
+  _have fzf || { print -u2 'fo: fzf not found'; return 127; }
+  file="$(_zsh_ls_files pdf | fzf --prompt='Open PDF> ')" || return
+  [[ -n "$file" ]] || return 1
+  fancy-cat-open "$file"
+}
+
 bo() {
   emulate -L zsh
   local file

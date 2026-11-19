@@ -1,7 +1,5 @@
 #!/bin/sh
-# Timer save for tmux-resurrect. A fresh server (after a reboot) must not
-# replace the last snapshot, so wait until C-b C-r or C-b C-s arms autosave
-# (the @resurrect-hook-post-* options in ~/.tmux.conf).
+# Skip until C-b C-r / C-b C-s, so a fresh server keeps the snapshot.
 tmux has-session 2>/dev/null || exit 0
 dir=$(tmux show -gqv @resurrect-dir)
 dir=${dir:-${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect}

@@ -160,7 +160,8 @@ is not free. Eleven files branch on the **exact string** `linuxmint-i3-x11`:
 | File | Test | What it gates |
 | --- | --- | --- |
 | `.chezmoiignore` | `ne` | the whole desktop config tree |
-| `.chezmoiscripts/run_once_before_10-install-apt-packages.sh.tmpl` | `eq` (twice) | the i3 PPA and the `i3_x11` apt list |
+| `.chezmoiscripts/run_once_before_10-install-apt-packages.sh.tmpl` | `eq` | the `i3_x11` apt list |
+| `.chezmoiscripts/run_once_after_99-install-ghostty.sh.tmpl` | `eq` | the Ghostty AppImage |
 | `.chezmoiscripts/run_once_after_30-install-cli-tools.sh.tmpl` | `eq` | desktop CLI tooling |
 | `.chezmoiscripts/run_after_90-install-x11-input-configs.sh.tmpl` | `eq` | the Xorg rules and `/etc/default/keyboard` |
 | `.chezmoiscripts/run_after_94-configure-gtk-theme.sh.tmpl` | `eq` | the GTK theme settings |

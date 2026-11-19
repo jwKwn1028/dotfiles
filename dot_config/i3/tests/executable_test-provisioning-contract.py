@@ -95,7 +95,6 @@ class ProvisioningContractTests(unittest.TestCase):
         packages = set(data["packages"]["apt"]["i3_x11"])
         config = source_file("config")
         contracts = (
-            ("ghostty", config, "exec --no-startup-id ghostty +new-window"),
             ("xfce4-terminal", config, "xfce4-terminal"),
             ("xfce4-settings", config, "xfsettingsd"),
             ("xfce4-power-manager", config, "xfce4-power-manager"),
@@ -123,6 +122,18 @@ class ProvisioningContractTests(unittest.TestCase):
                     packages,
                     f"{command_marker} requires {package} in packages.apt.i3_x11",
                 )
+
+    def test_ghostty_appimage_is_pinned(self) -> None:
+        manifest, data = self.manifest_data()
+        packages = data["packages"]
+        self.assertNotIn("ghostty", packages["apt"]["i3_x11"])
+        app = packages["appimage"]["ghostty"]
+        self.assertNotIn(app["legacy_ppa"], packages["apt"]["ppas"])
+        for arch in ("amd64", "arm64"):
+            self.assertRegex(app[arch]["sha256"], r"^[0-9a-f]{64}$")
+        self.assertIn("exec --no-startup-id ghostty +new-window", source_file("config").read_text())
+        installer = manifest.parent.parent / ".chezmoiscripts/run_once_after_99-install-ghostty.sh.tmpl"
+        self.assertIn(".packages.appimage.ghostty", installer.read_text())
 
     def test_autotiling_is_pipx_provisioned(self) -> None:
         manifest, data = self.manifest_data()

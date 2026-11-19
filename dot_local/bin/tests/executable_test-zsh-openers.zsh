@@ -9,6 +9,8 @@ OPENERS_FILE=${ZSH_OPENERS_FILE:-$REPO_ROOT/dot_zsh/rc.d/45-openers.zsh}
 [[ -r $OPENERS_FILE ]] || OPENERS_FILE=$HOME/.zsh/rc.d/45-openers.zsh
 ALIASES_FILE=${ZSH_ALIASES_FILE:-$REPO_ROOT/dot_zsh/rc.d/30-aliases.zsh}
 [[ -r $ALIASES_FILE ]] || ALIASES_FILE=$HOME/.zsh/rc.d/30-aliases.zsh
+FANCY_OPEN_FILE=${FANCY_OPEN_FILE:-$REPO_ROOT/dot_local/bin/executable_fancy-cat-open}
+[[ -r $FANCY_OPEN_FILE ]] || FANCY_OPEN_FILE=$HOME/.local/bin/fancy-cat-open
 
 fail() {
   print -u2 -- "FAIL: $1"
@@ -46,6 +48,7 @@ _log_viewer() {
 }
 sioyek() { _log_viewer sioyek "$@"; }
 zathura() { _log_viewer zathura "$@"; }
+fancy-cat-open() { _log_viewer fancy-cat "$@"; return "${FANCY_STATUS:-0}"; }
 ebook-viewer() { _log_viewer ebook-viewer "$@"; }
 feh() { _log_viewer feh "$@"; }
 xviewer() { _log_viewer xviewer "$@"; }
@@ -81,6 +84,7 @@ run_session() {
       RUN_MODE="$mode" \
       PICK_FILE="$file" \
       FZF_STATUS="$fzf_status" \
+      FANCY_STATUS="${FANCY_STATUS:-0}" \
       MISSING="${MISSING:-}" \
       OPEN_LOG="$OPEN_LOG" \
       CONTROL_LOG="$CONTROL_LOG" \
@@ -142,17 +146,105 @@ MISSING=xviewer expect_picked_closes io feh "$PNG_FILE"
 
 expect_direct_stays_open so sioyek "$PDF_FILE"
 expect_direct_stays_open zo zathura "$PDF_FILE"
+expect_direct_stays_open fo fancy-cat "$PDF_FILE"
 expect_direct_stays_open bo ebook-viewer "$EPUB_FILE"
 expect_direct_stays_open io xviewer "$PNG_FILE"
 MISSING=xviewer expect_direct_stays_open io feh "$PNG_FILE"
 
 expect_cancel_stays_open so "$PDF_FILE"
 expect_cancel_stays_open zo "$PDF_FILE"
+expect_cancel_stays_open fo "$PDF_FILE"
 expect_cancel_stays_open bo "$EPUB_FILE"
 expect_cancel_stays_open io "$PNG_FILE"
 
+# fo returns to the shell after the viewer.
+run_session fo picked "$PDF_FILE"
+[[ $(<"$CONTROL_LOG") == survived &&
+   $(<"$OPEN_LOG") == "viewer=fancy-cat arg=<$PDF_FILE>" ]] ||
+  fail "fo picker did not return to the shell: $(<"$CONTROL_LOG") $(<"$OPEN_LOG")"
+FANCY_STATUS=19 run_session fo cancelled "$PDF_FILE"
+[[ $(<"$CONTROL_LOG") == $'status=19\nsurvived' ]] ||
+  fail "fo lost the foreground viewer status"
+
 # External mocks exercise command lookup past the thunar function.
 mkdir -p "$TEST_TMP/bin" "$TEST_TMP/folder with spaces/sub dir"
+
+# fancy-cat-open: in place or a separate Ghostty window.
+cat >| "$TEST_TMP/bin/fancy-cat" <<'MOCK'
+#!/bin/sh
+if [ "${1:-}" = --tmux-supported ]; then
+  [ "$TERM_PROGRAM" = ghostty ] && [ "$TEST_PASSTHROUGH" = on ] && [ -z "$SSH_CONNECTION" ]
+  exit $?
+fi
+{
+  printf 'viewer=%s' "${0##*/}"
+  for arg in "$@"; do printf ' arg=<%s>' "$arg"; done
+  printf '\n'
+} >> "$OPEN_LOG"
+exit "${PDF_STATUS:-0}"
+MOCK
+chmod +x "$TEST_TMP/bin/fancy-cat"
+ln -s fancy-cat "$TEST_TMP/bin/ghostty"
+
+run_fancy_wrapper() {
+  : >| "$OPEN_LOG"
+  env PATH="$TEST_TMP/bin:$PATH" OPEN_LOG="$OPEN_LOG" \
+    TMUX="${TEST_TMUX:-}" DISPLAY="${TEST_DISPLAY-:test}" WAYLAND_DISPLAY= \
+    TERM_PROGRAM="${TEST_TERMINAL:-}" KITTY_WINDOW_ID="${TEST_KITTY:-}" TMUX_PANE="${TEST_PANE:-}" \
+    SSH_CONNECTION="${TEST_SSH:-}" TEST_PASSTHROUGH="${TEST_PASSTHROUGH:-off}" \
+    PDF_STATUS="${PDF_STATUS:-0}" \
+    sh "$FANCY_OPEN_FILE" "$@" >| "$SESSION_OUTPUT" 2>&1
+}
+
+TEST_TERMINAL=ghostty run_fancy_wrapper "$PDF_FILE" 12
+[[ $(<"$OPEN_LOG") == "viewer=fancy-cat arg=<$PDF_FILE> arg=<12>" ]] ||
+  fail "PDF opener lost the path or page: $(<"$OPEN_LOG")"
+TEST_KITTY=1 run_fancy_wrapper "$PDF_FILE" 12
+[[ $(<"$OPEN_LOG") == "viewer=fancy-cat arg=<$PDF_FILE> arg=<12>" ]] ||
+  fail "PDF opener did not draw in kitty: $(<"$OPEN_LOG")"
+TEST_TERMINAL=vscode run_fancy_wrapper "$PDF_FILE" 12
+[[ $(<"$OPEN_LOG") == "viewer=ghostty arg=<--gtk-single-instance=false> arg=<--quit-after-last-window-closed=true> arg=<--quit-after-last-window-closed-delay=0s> arg=<--working-directory=$PWD> arg=<--window-padding-x=1> arg=<--window-padding-y=1> arg=<-e> arg=<fancy-cat> arg=<$PDF_FILE> arg=<12>" ]] ||
+  fail "PDF opener drew in a terminal without Kitty graphics: $(<"$OPEN_LOG")"
+if TEST_TERMINAL=vscode TEST_DISPLAY= run_fancy_wrapper "$PDF_FILE"; then
+  fail "PDF opener tried a window without a display outside tmux"
+fi
+[[ ! -s $OPEN_LOG ]] || fail "PDF opener launched a viewer without a display outside tmux"
+TEST_TMUX=test-session run_fancy_wrapper "$PDF_FILE" 12
+[[ $(<"$OPEN_LOG") == "viewer=ghostty arg=<--gtk-single-instance=false> arg=<--quit-after-last-window-closed=true> arg=<--quit-after-last-window-closed-delay=0s> arg=<--working-directory=$PWD> arg=<--window-padding-x=1> arg=<--window-padding-y=1> arg=<-e> arg=<fancy-cat> arg=<$PDF_FILE> arg=<12>" ]] ||
+  fail "PDF opener did not route outside tmux: $(<"$OPEN_LOG")"
+TEST_TMUX=test-session TEST_PANE=%2 TEST_TERMINAL=ghostty TEST_PASSTHROUGH=on TEST_DISPLAY= \
+  run_fancy_wrapper "$PDF_FILE" 12
+[[ $(<"$OPEN_LOG") == "viewer=fancy-cat arg=<$PDF_FILE> arg=<12>" ]] ||
+  fail "PDF opener did not use the local Ghostty pane: $(<"$OPEN_LOG")"
+for unavailable in off ssh; do
+  if [[ $unavailable == ssh ]]; then
+    TEST_TMUX=test-session TEST_PANE=%2 TEST_TERMINAL=ghostty TEST_PASSTHROUGH=on TEST_SSH=remote \
+      run_fancy_wrapper "$PDF_FILE"
+  else
+    TEST_TMUX=test-session TEST_PANE=%2 TEST_TERMINAL=ghostty TEST_PASSTHROUGH=off \
+      run_fancy_wrapper "$PDF_FILE"
+  fi
+  [[ $(<"$OPEN_LOG") == viewer=ghostty\ * ]] ||
+    fail "PDF opener used the pane without local passthrough: $(<"$OPEN_LOG")"
+done
+if PDF_STATUS=23 TEST_TERMINAL=ghostty run_fancy_wrapper "$PDF_FILE"; then
+  fail "PDF opener swallowed the viewer failure"
+else
+  (( $? == 23 )) || fail "PDF opener lost the viewer's exit status"
+fi
+if TEST_TMUX=test-session TEST_DISPLAY= run_fancy_wrapper "$PDF_FILE"; then
+  fail "PDF opener tried opening a GUI without a display"
+fi
+[[ ! -s $OPEN_LOG ]] || fail "PDF opener launched a viewer without a display"
+
+touch -- "$TEST_TMP/-leading name.pdf"
+(
+  cd -- "$TEST_TMP"
+  TEST_TERMINAL=ghostty run_fancy_wrapper '-leading name.pdf'
+)
+[[ $(<"$OPEN_LOG") == "viewer=fancy-cat arg=<$TEST_TMP/-leading name.pdf>" ]] ||
+  fail "PDF opener did not protect a leading-dash path"
+
 sed -n '/^_close_gui_terminal() {/,/^}/p' "$ALIASES_FILE" >| "$TEST_TMP/zsh-close"
 cat >| "$TEST_TMP/bin/thunar" <<'MOCK'
 #!/bin/sh
@@ -330,4 +422,4 @@ TEST_EDITOR=missing-editor run_editor_session
 [[ $(<"$CONTROL_LOG") == $'status=127\nsurvived' && ! -s $OPEN_LOG ]] ||
   fail "editor opener closed for a missing editor: $(<"$CONTROL_LOG")"
 
-print 'PASS: GUI pickers, c/z, and thunar close only the intended shell'
+print 'PASS: terminal PDF routing and GUI picker shell lifetimes'

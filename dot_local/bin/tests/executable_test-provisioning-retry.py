@@ -160,7 +160,7 @@ printf '%s\\n' "$*" >> "$ATTEMPT_LOG"
         self.env.update(DPKG_INSTALLED=installed, APT_SOURCES_DIR=str(sources))
         self.render(script_name="run_once_before_10-install-apt-packages.sh",
                     data={"desktopProfile": "linuxmint-i3-x11", "packages": {"apt": {
-                        "ppas": ["ppa:present/one", "ppa:absent/two"], "ppas_i3_x11": [],
+                        "ppas": ["ppa:present/one", "ppa:absent/two"],
                         "common": ["a", "b"], "laptop": [], "desktop": ["c"], "i3_x11": ["d"],
                     }}})
         return sources

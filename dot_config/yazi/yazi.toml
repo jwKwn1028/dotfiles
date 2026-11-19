@@ -11,6 +11,7 @@ image_delay = 0
 
 [opener]
 pdf = [
+	{ run = 'fancy-cat-open %s1', desc = "fancy-cat", block = true, for = "linux" },
 	{ run = 'zathura %s1', desc = "Zathura", orphan = true },
 ]
 micro = [

@@ -331,7 +331,7 @@ I3_RESURRECT_REMOTE_SESSION=bogus:dev
 _hpc_restore_session >| "$TEST_TMP/output" 2>&1
 (( ${#SSH_COMMANDS} == 0 )) || fail 'restore hook acted on an unknown session kind'
 
-# Local tmux bar re-check: after hpc and typed ssh only.
+# Local tmux bar re-check after hpc and typed ssh.
 mkdir -p "$TEST_TMP/fakebin"
 print -r -- '#!/bin/sh
 printf "%s\n" "tmux $*" >> "$TMUX_LOG"' >| "$TEST_TMP/fakebin/tmux"
@@ -365,21 +365,20 @@ SSH_MODE=success
 ( PATH=$TEST_TMP/fakebin:$PATH; hpc dev; _hpc_local_bar_preexec 'ssh host'; _hpc_local_bar_precmd ) >| "$TEST_TMP/output" 2>&1
 [[ ! -s $TMUX_LOG ]] || fail "helpers outside tmux ran tmux: $(<"$TMUX_LOG")"
 
-# Ghostty tmux mode: on/off around hpc and typed attaches, only when focused.
+# Ghostty tmux mode around hpc and typed attaches.
 print -r -- '#!/bin/sh
-case $1 in
-  getactivewindow) printf "%s\n" "$FAKE_ACTIVE" ;;
-  key) printf "%s\n" "xdotool $*" >> "$TMUX_LOG" ;;
-esac' >| "$TEST_TMP/fakebin/xdotool"
+[ "$1" = getactivewindow ] && printf "%s\n" "$FAKE_ACTIVE"' >| "$TEST_TMP/fakebin/xdotool"
+print -r -- '#!/bin/sh
+printf "%s\n" "ghostty-tmux-mode $*" >> "$TMUX_LOG"' >| "$TEST_TMP/fakebin/ghostty-tmux-mode"
 print -r -- '#!/bin/sh
 if [ "$2" = "$FAKE_GHOSTTY" ]; then
   echo "WM_CLASS(STRING) = \"ghostty\", \"com.mitchellh.ghostty\""
 else
   echo "WM_CLASS(STRING) = \"org.pwmt.zathura\", \"Zathura\""
 fi' >| "$TEST_TMP/fakebin/xprop"
-chmod +x "$TEST_TMP/fakebin/xdotool" "$TEST_TMP/fakebin/xprop"
-on='xdotool key --clearmodifiers ctrl+alt+shift+m'
-off='xdotool key --clearmodifiers ctrl+alt+shift+n'
+chmod +x "$TEST_TMP/fakebin/xdotool" "$TEST_TMP/fakebin/xprop" "$TEST_TMP/fakebin/ghostty-tmux-mode"
+on='ghostty-tmux-mode on'
+off='ghostty-tmux-mode off'
 recheck_pane='tmux set-hook -R -t %9 session-window-changed'
 expect_keys() {
   local label=$1 expected=$2 code=$3

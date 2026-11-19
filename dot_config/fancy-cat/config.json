@@ -1,0 +1,41 @@
+{
+  "General": {
+    "colorize": false,
+    "white": "#faf7ef",
+    "black": "#3b352d",
+    "size": 1.0,
+    "zoom_step": 1.1,
+    "zoom_mult": 1.2,
+    "zoom_min": 0.1,
+    "scroll_step": 40.0,
+    "scroll_mult": 5.0,
+    "smooth_scroll": false,
+    "progress_bar": false,
+    "first_page_column": 2,
+    "recolor_keephue": true,
+    "recolor_reverse_video": true,
+    "remember_page": true,
+    "trim_margins": false,
+    "trim_padding": 2,
+    "incremental_search": true,
+    "wheel_step": 12,
+    "page_gap": 3
+  },
+  "StatusBar": {
+    "enabled": false,
+    "style": { "bg": "#292d3e", "fg": "#ffffff" },
+    "items": [" <path><separator>[<page>/<total_pages>] "]
+  },
+  "FileMonitor": {
+    "enabled": true,
+    "latency": 0.1,
+    "reload_indicator_duration": 0.0
+  },
+  "Maps": {
+    "T": "exec if [ -n \"$TMUX\" ]; then unset GHOSTTY_SURFACE_ID; fi; exec ghostty +new-tab --working-directory=\"$(dirname -- \"$FILE\")\""
+  },
+  "Cache": {
+    "enabled": true,
+    "memory_mb": 256
+  }
+}

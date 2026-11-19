@@ -1,0 +1,56 @@
+#!/usr/bin/python3
+"""ghostty-tmux-mode on|off: press Ctrl+Alt+Shift+M/N once no modifier is held."""
+import contextlib
+import io
+import sys
+import time
+
+from Xlib import X, XK, display
+from Xlib.ext import xtest
+
+KEYS = {"on": "m", "off": "n"}
+LOCKS = {XK.XK_Caps_Lock, XK.XK_Num_Lock, XK.XK_Shift_Lock}
+
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1] not in KEYS:
+        print("usage: ghostty-tmux-mode on|off", file=sys.stderr)
+        return 2
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):  # python-xlib's .Xauthority warnings
+            d = display.Display()
+    except Exception:
+        return 0
+    if not d.has_extension("XTEST"):
+        return 1
+    root = d.screen().root
+    net_active = d.intern_atom("_NET_ACTIVE_WINDOW")
+
+    def active():
+        prop = root.get_full_property(net_active, X.AnyPropertyType)
+        return prop.value[0] if prop is not None and len(prop.value) else 0
+
+    start = active()
+    mods = {kc for codes in d.get_modifier_mapping() for kc in codes
+            if kc and d.keycode_to_keysym(kc, 0) not in LOCKS}
+    deadline = time.monotonic() + 1.0
+    while any(d.query_keymap()[kc // 8] >> (kc % 8) & 1 for kc in mods):
+        if time.monotonic() > deadline:
+            return 1
+        time.sleep(0.01)
+    if active() != start:
+        return 1
+    codes = [d.keysym_to_keycode(XK.string_to_keysym(name))
+             for name in ("Control_L", "Alt_L", "Shift_L", KEYS[sys.argv[1]])]
+    if 0 in codes:
+        return 1
+    for kc in codes:
+        xtest.fake_input(d, X.KeyPress, kc)
+    for kc in reversed(codes):
+        xtest.fake_input(d, X.KeyRelease, kc)
+    d.sync()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

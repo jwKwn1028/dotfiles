@@ -135,21 +135,48 @@ alias rg='rg --smart-case'
 
 # --- tmux ---
 alias t='tmux new -A -s main'
-alias ta='tmux attach'
 alias tl='tmux ls'
 alias tn='tmux new -s'
 alias tk='tmux kill-session -t'
 
-# tm [NAME]: attach or create NAME, else pick one; switches when inside tmux.
+# tm [NAME]: attach, create, or pick; switches inside tmux.
 tm() {
   local s=${1-}
-  [[ -n $s ]] || s=$(tmux ls -F '#S' 2>/dev/null | fzf --height=40% --reverse --prompt='tmux> ') || return
+  [[ -n $s ]] || s=$(tmux ls -F '#S' 2>/dev/null | fzf --height=40% --reverse --preview= --prompt='tmux> ') || return
   if [[ -n ${TMUX-} ]]; then
     tmux has -t "=$s" 2>/dev/null || tmux new -d -s "$s"
     tmux switch-client -t "=$s"
   else
     _ghostty_tmux_mode on
     { tmux new -A -s "$s" } always { _ghostty_tmux_mode off }
+  fi
+}
+
+# ta [NAME]: attach or pick (j/k), restoring the last save if tmux is down.
+(( ${+aliases[ta]} )) && unalias ta
+ta() {
+  local s=${1-}
+  if ! tmux has-session 2>/dev/null; then
+    print -u2 'ta: restoring tmux sessions...'
+    tmux new-session -d -s 0 &&
+      tmux run-shell ~/.tmux/plugins/tmux-resurrect/scripts/restore.sh
+  fi
+  local -a names=(${(f)"$(tmux ls -F '#S' 2>/dev/null)"})
+  if [[ -z $s ]]; then
+    (( $#names )) || { print -u2 'ta: no tmux sessions'; return 1 }
+    if (( $#names == 1 )); then
+      s=$names[1]
+    else
+      s=$(print -rl -- $names | fzf --disabled --no-sort --reverse --height=40% --info=hidden --preview= \
+        --prompt='' --header='j/k move, Enter attach, q/Esc cancel' \
+        --bind='j:down,k:up,J:down,K:up,q:abort') || return
+    fi
+  fi
+  if [[ -n ${TMUX-} ]]; then
+    tmux switch-client -t "=$s"
+  else
+    _ghostty_tmux_mode on
+    { tmux attach -t "=$s" } always { _ghostty_tmux_mode off }
   fi
 }
 
