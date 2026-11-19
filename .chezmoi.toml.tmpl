@@ -22,6 +22,7 @@
 {{- $tailscaleExitNode := promptStringOnce . "tailscaleExitNode" "Tailscale lab exit-node IP or name (blank to disable helper)" "" -}}
 {{- /* Prompted so a local working directory stays out of the repo. */ -}}
 {{- $flameshotSavePath := promptStringOnce . "flameshotSavePath" "Screenshot directory (blank for ~/Pictures/Screenshots)" "" -}}
+{{- $githubUser := promptStringOnce . "githubUser" "GitHub account with your fancy-cat fork (blank for upstream)" "" -}}
 
 [data]
     name              = {{ $name | quote }}
@@ -36,3 +37,4 @@
     sshHpcHostName    = {{ $sshHpcHostName | quote }}
     tailscaleExitNode = {{ $tailscaleExitNode | quote }}
     flameshotSavePath = {{ $flameshotSavePath | quote }}
+    githubUser        = {{ $githubUser | quote }}

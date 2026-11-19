@@ -1,6 +1,6 @@
 # fancy-cat Manual
 
-fancy-cat is the terminal PDF viewer, built from a private fork with
+fancy-cat is the terminal PDF viewer, built from a public fork with
 Zathura-like controls. Its config is `~/.config/fancy-cat/config.json`; colors,
 zoom steps, and `Ctrl+r` recolor match `~/.config/zathura/zathurarc`.
 
@@ -73,8 +73,9 @@ Use Zathura for SyncTeX.
 ## Build
 
 `run_once_after_98` builds the `zathura` branch of `~/.local/src/fancy-cat` if
-present (`0.6.0+zathura.<commit>`; new commits rebuild on `chezmoi apply`),
-else the pinned upstream, which ignores the fork-only settings above, reads
-only key-object bindings, and always uses a separate window in tmux. It links
-system MuPDF with Zig 0.15.2 and installs missing libraries with `pkexec`, or
-`sudo` without a GUI.
+present, else the fork on GitHub under chezmoi's `githubUser` at the commit
+pinned in `packages.toml`, both as `0.6.0+zathura.<commit>`; new local commits
+rebuild on `chezmoi apply`. With neither, it builds upstream 0.6.0, which
+ignores the fork-only settings above and opens tmux PDFs in a separate window.
+It links system MuPDF with Zig 0.15.2 and installs missing libraries with
+`pkexec`, or `sudo` without a GUI.

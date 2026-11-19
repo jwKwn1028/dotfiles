@@ -76,8 +76,8 @@ Short aliases: `h` (Helix here), `v` (Vim here), `mo` (Micro), `twt`
 in the directory stack. With zoxide installed, plain `cd` also records visits.
 
 `poweroff`, in Bash and Zsh, runs `~/.local/bin/poweroff-confirm`: `y` or `yes`
-confirms; blank input, timeout, Ctrl-C, or no terminal cancels; arguments are
-rejected. Its mocked terminal checks run from the repo with
+saves tmux and confirms; blank input, timeout, Ctrl-C, or no terminal cancels;
+arguments are rejected. Its mocked terminal checks run from the repo with
 `python3 dot_local/bin/tests/executable_test-poweroff-confirm.py`.
 
 See also `~/.config/yazi/yazi_docs.md` for the Yazi wrapper and

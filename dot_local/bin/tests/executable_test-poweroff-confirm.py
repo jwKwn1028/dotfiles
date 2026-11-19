@@ -57,12 +57,16 @@ class PoweroffConfirmationTests(unittest.TestCase):
             helper = BIN_DIR / "poweroff-confirm"
         shutil.copyfile(helper, mock_bin / "poweroff-confirm")
         (mock_bin / "bash").symlink_to(shutil.which("bash"))
+        (mock_bin / "timeout").symlink_to(shutil.which("timeout"))
         (mock_bin / "hostname").write_text("#!/bin/sh\nprintf 'test-host\\n'\n")
         (mock_bin / "systemctl").write_text(
             '#!/bin/sh\nprintf "%s\\n" "$*" >>"$POWER_ACTION_LOG"\n'
             'exit "${POWER_ACTION_STATUS:-0}"\n'
         )
-        for name in ["poweroff-confirm", "hostname", "systemctl"]:
+        (mock_bin / "tmux-resurrect-autosave").write_text(
+            '#!/bin/sh\nprintf "tmux-save\\n" >>"$POWER_ACTION_LOG"\n'
+        )
+        for name in ["poweroff-confirm", "hostname", "systemctl", "tmux-resurrect-autosave"]:
             (mock_bin / name).chmod(0o755)
         self.log = directory / "actions"
         self.env = {
@@ -124,7 +128,7 @@ class PoweroffConfirmationTests(unittest.TestCase):
                 with self.subTest(shell=shell, answer=answer):
                     status, _, _ = self.run_terminal(shell, answer)
                     self.assertEqual(status, 0)
-                    self.assertEqual(self.actions(), ["poweroff"])
+                    self.assertEqual(self.actions(), ["tmux-save", "poweroff"])
 
     def test_blank_no_and_unrecognized_input_cancel(self):
         for shell in self.shells:
@@ -163,7 +167,7 @@ class PoweroffConfirmationTests(unittest.TestCase):
             with self.subTest(shell=shell):
                 status, _, _ = self.run_terminal(shell, b"yes\n", action_status=42)
                 self.assertEqual(status, 42)
-                self.assertEqual(self.actions(), ["poweroff"])
+                self.assertEqual(self.actions(), ["tmux-save", "poweroff"])
 
     def test_missing_terminal_ignores_piped_confirmation(self):
         for shell in self.shells:

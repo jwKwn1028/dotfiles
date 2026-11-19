@@ -21,6 +21,8 @@ IFS= read -r -t 10 reply <&3 || {
 }
 
 case "$reply" in
-    [yY] | [yY][eE][sS]) exec systemctl poweroff 3>&- ;;
+    [yY] | [yY][eE][sS])
+        timeout 15 tmux-resurrect-autosave >/dev/null 2>&1 3>&-
+        exec systemctl poweroff 3>&- ;;
     *) printf 'Cancelled.\n' >&3; exit 1 ;;
 esac

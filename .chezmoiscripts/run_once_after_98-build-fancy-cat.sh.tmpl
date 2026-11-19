@@ -23,13 +23,21 @@ set -euo pipefail
 
 prefix="$HOME/.local"
 version={{ $src.version | quote }}
+{{- $githubUser := "" -}}
+{{- if hasKey . "githubUser" }}{{ $githubUser = .githubUser }}{{ end }}
 {{- if $forkCommit }}
 repo="file://$HOME/"{{ $src.fork_dir | quote }}
 commit={{ $forkCommit | quote }}
-build_version="$version+zathura.${commit:0:7}"
+{{- else if $githubUser }}
+repo={{ printf "https://github.com/%s/%s.git" $githubUser $src.fork_repo | quote }}
+commit={{ $src.fork_commit | quote }}
 {{- else }}
 repo={{ $src.url | quote }}
 commit={{ $src.commit | quote }}
+{{- end }}
+{{- if or $forkCommit $githubUser }}
+build_version="$version+"{{ $src.fork_branch | quote }}".${commit:0:7}"
+{{- else }}
 build_version="$version+${commit:0:7}"
 {{- end }}
 installed=$("$prefix/bin/fancy-cat" --version 2>/dev/null || true)
@@ -100,13 +108,14 @@ for relative, before, after in edits:
         raise SystemExit(f"error: unexpected fancy-cat source in {relative}")
     path.write_text(content.replace(before, after))
 
-# Drop upstream's Linuxbrew paths.
+# Drop upstream's Linuxbrew paths (the fork has none).
 path = root / "build.zig"
 content = path.read_text()
-branch = "    } else if (target.os.tag == .linux) {"
-start = content.index(branch)
-end = content.index("        const linux_libs =", start)
-path.write_text(content[:start] + branch + "\n" + content[end:])
+if "linuxbrew" in content:
+    branch = "    } else if (target.os.tag == .linux) {"
+    start = content.index(branch)
+    end = content.index("        const linux_libs =", start)
+    path.write_text(content[:start] + branch + "\n" + content[end:])
 PY
 
 jobs=$(nproc)

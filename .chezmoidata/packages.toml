@@ -198,11 +198,14 @@ tag = "v1.4.8"
 commit = "cf1da5900b1e9eaa1c20fd7148dd812b43340b8a"
 build_deps = ["g++-14", "libdrm-dev", "lowdown"]
 
-# fancy-cat (after_98): ~/fork_dir's fork_branch if present, else the commit.
+# fancy-cat (after_98): ~/fork_dir's fork_branch if present, else
+# github.com/<githubUser>/fork_repo at fork_commit, else upstream's commit.
 [packages.source.fancy_cat]
 url = "https://github.com/freref/fancy-cat.git"
 version = "0.6.0"
 commit = "77a7ab6c953e2a43e6e02bd7c341dc157d5da4a9"
+fork_repo = "fancy-cat"
+fork_commit = "e7b70ec817c3ce4a3d31910bde12181b62c97977"
 fork_dir = ".local/src/fancy-cat"
 fork_branch = "zathura"
 build_deps = [

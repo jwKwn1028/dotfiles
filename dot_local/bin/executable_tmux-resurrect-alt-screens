@@ -1,0 +1,13 @@
+#!/bin/sh
+# Resave full-screen panes as the shell screen behind the app.
+panes=$(tmux list-panes -a -F '#{?alternate_on,#{session_name}:#{window_index}.#{pane_index},}' | grep .) || exit 0
+dir=$(tmux show -gqv @resurrect-dir)
+archive=${dir:-${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect}/pane_contents.tar.gz
+[ -f "$archive" ] || exit 0
+tmp=$(mktemp -d) || exit 1
+trap 'rm -rf "$tmp"' EXIT
+tar xzf "$archive" -C "$tmp" || exit 1
+printf '%s\n' "$panes" | while IFS= read -r p; do
+  printf '%s\n' "$(tmux capture-pane -aqepJ -t "$p")" >"$tmp/pane_contents/pane-$p"
+done
+tar czf "$archive.new" -C "$tmp" ./pane_contents && mv "$archive.new" "$archive"

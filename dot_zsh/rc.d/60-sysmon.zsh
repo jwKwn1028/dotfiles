@@ -138,7 +138,7 @@ sysmon () {
     (( clear_frame = resized, resized = 0 ))
     _sysmon_draw "$frame" "$clear_frame"
 
-    sleep "$interval" &
+    ARGV0=sysmon sleep "$interval" &                       # tmux-resurrect sees `sysmon N`
     timer_pid=$!
     while kill -0 "$timer_pid" 2>/dev/null; do
       wait "$timer_pid" 2>/dev/null
