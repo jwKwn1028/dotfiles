@@ -1,0 +1,131 @@
+#!/usr/bin/python3
+"""tmux-resurrect post-save-layout hook: rebuild pane lines from live tmux.
+
+resurrect reads panes with a tab IFS, so an empty title shifts every field, and
+it finds commands by PID prefix. Save the deepest program on the restore list
+under shells and listed programs (fancy-cat under Yazi), or @resurrect-command.
+"""
+
+import os
+import re
+import shlex
+import socket
+import subprocess
+import sys
+
+SHELLS = {"sh", "dash", "bash", "zsh", "fish", "ksh"}
+REWRITES = (
+    (re.compile(r"^ssh .*tmux attach-session -t =([A-Za-z0-9_-]+)$"), r"hpc \1"),
+    (re.compile(r"^ssh .*zmx attach ([A-Za-z0-9_-]+)$"), r"hpcz \1"),
+)
+FIELDS = ("session_name", "window_index", "pane_index", "pane_pid", "pane_active",
+          "pane_current_command", "pane_current_path", "@resurrect-command", "pane_title")
+
+
+def tmux(*args):
+    return subprocess.run(["tmux", *args], capture_output=True, text=True).stdout
+
+
+def matchers():
+    default = tmux("show", "-gqv", "@resurrect-default-processes").strip() or \
+        "vi vim view nvim emacs man less more tail top htop irssi weechat mutt"
+    found = []
+    for entry in shlex.split(default) + shlex.split(tmux("show", "-gqv", "@resurrect-processes")):
+        name = entry.split("->", 1)[0]
+        if name.startswith("~"):
+            found.append(re.compile(name[1:]).search)
+        elif name:
+            found.append(re.compile(rf"^{name}( |$)").search)
+    return found
+
+
+def processes():
+    argv, children = {}, {}
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            with open(f"/proc/{name}/stat") as stat:
+                ppid = int(stat.read().rsplit(")", 1)[1].split()[1])
+            with open(f"/proc/{name}/cmdline", "rb") as cmdline:
+                args = cmdline.read().split(b"\0")[:-1]
+        except (OSError, IndexError, ValueError):
+            continue
+        argv[int(name)] = [a.decode(errors="replace") for a in args]
+        children.setdefault(ppid, []).append(int(name))
+    return argv, children
+
+
+def command(pid, args):
+    try:
+        cwd = os.readlink(f"/proc/{pid}/cwd")
+    except OSError:
+        cwd = None
+    words = [os.path.basename(args[0])]
+    for arg in args[1:]:
+        if cwd and arg and arg[0] not in "-/" and os.path.exists(os.path.join(cwd, arg)):
+            arg = os.path.join(cwd, arg)
+        words.append(arg)
+    plain = " ".join(words)
+    for pattern, replacement in REWRITES:
+        if pattern.search(plain):
+            return pattern.sub(replacement, plain)
+    return " ".join(shlex.quote(word) for word in words)
+
+
+def choose(root, argv, children, listed):
+    best, direct = None, None
+    pending = [(child, 1) for child in sorted(children.get(root, []))]
+    while pending:
+        pid, depth = pending.pop(0)
+        args = argv.get(pid)
+        if not args:
+            continue
+        text = command(pid, args)
+        on_list = any(match(text) for match in listed)
+        if direct is None:
+            direct = text
+        if on_list and (best is None or depth > best[0]):
+            best = (depth, text)
+        if on_list or os.path.basename(args[0]).lstrip("-") in SHELLS:
+            pending += [(child, depth + 1) for child in sorted(children.get(pid, []))]
+    return best[1] if best else direct or ""
+
+
+def main():
+    path = sys.argv[1]
+    form = "\t".join(f"#{{{field}}}" for field in FIELDS)
+    live = {}
+    for line in tmux("list-panes", "-a", "-F", form).splitlines():
+        values = line.split("\t", len(FIELDS) - 1)
+        if len(values) == len(FIELDS):
+            live[tuple(values[:3])] = dict(zip(FIELDS, values))
+    argv, children = processes()
+    listed = matchers()
+    host = socket.gethostname().split(".")[0] or "tmux"
+
+    def clean(text):
+        return text.replace("\\", "\\\\").replace("\t", " ").replace("\n", " ")
+
+    lines = []
+    with open(path) as saved:
+        for line in saved:
+            fields = line.rstrip("\n").split("\t")
+            pane = live.get(tuple(fields[i] for i in (1, 2, 5))) if fields[0] == "pane" and len(fields) > 5 else None
+            if pane:
+                full = pane["@resurrect-command"] or choose(int(pane["pane_pid"]), argv, children, listed)
+                line = "\t".join([*fields[:6], clean(pane["pane_title"]) or host,
+                                  ":" + clean(pane["pane_current_path"]), pane["pane_active"],
+                                  clean(pane["pane_current_command"]) or "?", ":" + clean(full)]) + "\n"
+            lines.append(line)
+    temporary = f"{path}.tmp"
+    with open(temporary, "w") as rewritten:
+        rewritten.writelines(lines)
+    os.replace(temporary, path)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        sys.exit(1)

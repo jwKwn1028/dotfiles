@@ -35,6 +35,8 @@ MESSAGE="$PROMPT
 If you do nothing, this prompt will close in ${TIMEOUT_SECONDS} seconds and the action will be cancelled."
 
 perform_action() {
+    timeout 15 tmux-resurrect-autosave >/dev/null 2>&1
+    timeout 30 "${I3_RESURRECT_SAVE:-$HOME/.config/i3/i3-resurrect-session.py}" save >/dev/null 2>&1
     systemctl "$ACTION"
 }
 

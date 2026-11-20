@@ -131,6 +131,7 @@ sysmon () {
   tput civis 2>/dev/null                                   # hide cursor
   trap 'interrupted=1' HUP INT TERM
   trap 'resized=1' WINCH
+  [[ -z $TMUX_PANE ]] || tmux set -p -t "$TMUX_PANE" @resurrect-command "sysmon $interval" 2>/dev/null
 
   while (( ! interrupted )); do
     frame="$(_sysmon_frame "$interval")"
@@ -138,7 +139,7 @@ sysmon () {
     (( clear_frame = resized, resized = 0 ))
     _sysmon_draw "$frame" "$clear_frame"
 
-    ARGV0=sysmon sleep "$interval" &                       # tmux-resurrect sees `sysmon N`
+    sleep "$interval" &
     timer_pid=$!
     while kill -0 "$timer_pid" 2>/dev/null; do
       wait "$timer_pid" 2>/dev/null
@@ -156,4 +157,5 @@ sysmon () {
 
   tput cnorm 2>/dev/null                                   # restore cursor
   tput rmcup 2>/dev/null                                   # restore shell screen
+  [[ -z $TMUX_PANE ]] || tmux set -pu -t "$TMUX_PANE" @resurrect-command 2>/dev/null
 }

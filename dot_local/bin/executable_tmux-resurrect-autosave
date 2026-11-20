@@ -1,6 +1,8 @@
 #!/bin/sh
 # Skip until C-b C-r / C-b C-s, so a fresh server keeps the snapshot.
 tmux has-session 2>/dev/null || exit 0
+# Shutdown is already killing pane programs; keep the last good save.
+[ "$(systemctl is-system-running 2>/dev/null)" != stopping ] || exit 0
 dir=$(tmux show -gqv @resurrect-dir)
 dir=${dir:-${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect}
 if [ -e "$dir/last" ] && [ -z "$(tmux show -sqv @resurrect-armed)" ]; then

@@ -62,7 +62,7 @@ The fzf keys need fzf's installed widgets. Editor keymaps are separate: see
 | `tm [NAME]` | Attach, create, or pick a tmux session. |
 | `wtail FILE...` | Watch each file's last ten lines, refreshing every ten seconds. |
 | `zpup` | Fast-forward Git-based Zsh plugins; `sz` loads the updates. |
-| `poweroff` | Shut down after a confirmation with a ten-second timeout. |
+| `poweroff` | Shut down after a confirmation with a ten-second timeout, saving tmux and all i3 groups first. |
 
 \* In an interactive Ghostty tab or split outside tmux and SSH, `c`, `z`, and
 `thunar` without arguments close the shell, then open the window. A missing

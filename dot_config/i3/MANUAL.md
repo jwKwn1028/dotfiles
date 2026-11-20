@@ -270,7 +270,8 @@ any group.
 | C | `Super+Ctrl+C` | `Super+Ctrl+T` | `resurrect-c` / `resurrect-meta-c` |
 | All groups | `Super+Ctrl+Y` | `Super+Ctrl+P` | `resurrect-session` / `resurrect-meta-session` |
 
-All-groups save publishes only if every group succeeds; restore returns each to
+`poweroff` and the polybar power menu run the all-groups save before shutting
+down. It publishes only if every group succeeds; restore returns each to
 its group and view. Restores fill empty slots first and never move existing,
 scratchpad, or unmanaged windows. `i3-resurrect-session.py save|restore` takes
 `--check` (no desktop changes) and `restore --previous`. Profiles share a lock

@@ -123,10 +123,11 @@ Log out, pick **i3** in LightDM, and log back in.
   sqlite data `dot_taskrc` targets. Enable reminders with
   `systemctl --user daemon-reload && systemctl --user enable --now task-notify.timer`.
   See `~/.config/task/MANUAL.md`.
-- **tmux sessions:** save on detach and `poweroff`, and every 15 minutes with
+- **tmux sessions:** save on detach, `poweroff` and the polybar power menu
+  (both also save all i3 groups), and every 15 minutes with
   `systemctl --user daemon-reload && systemctl --user enable --now tmux-resurrect-save.timer`.
-  After a reboot, `C-b C-r` restores (pane text, Yazi, sysmon, hpc/ssh too) or
-  `C-b C-s` starts fresh.
+  After a reboot, `C-b C-r` restores (pane text, Yazi, fancy-cat PDFs, sysmon,
+  hpc/ssh too) or `C-b C-s` starts fresh.
 - **npm:** install NodeSource's `nodejs`, which bundles npm; apt's `npm`
   conflicts with it, so the manifest installs `nodejs` alone. `~/.npmrc` puts
   global packages in `~/.local/npm-global`.
