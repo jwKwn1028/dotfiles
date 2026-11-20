@@ -164,7 +164,18 @@ class SnapshotGroupsTests(unittest.TestCase):
                     self.assertIn("--initial-command=echo 14 /tmp/24 https://example.test/34", programs[0]["command"])
                     layout = snapshot.read_json(directory / f"workspace_{target}_layout.json")
                     self.assertEqual(layout["nodes"][0]["swallows"], [{"instance": "^never-" + launch["token"] + "$"}])
+                    self.assertNotIn("never-", json.dumps(launch["match"]))
+                    self.assertTrue(launch["match"])
                     self.assertEqual(tree, before)
+
+    def test_flatpak_launch_passes_token_into_sandbox(self):
+        command = ["flatpak", "run", "app.zen_browser.zen", "--new-window"]
+        previous = [*command[:2], "--env=I3_GROUP_LAUNCH=old", "--env=DESKTOP_STARTUP_ID=old", *command[2:]]
+        programs = [dict(command=previous, working_directory="/tmp")]
+        entry, = snapshot.launch_plan(dict(nodes=[]), programs, uuid.uuid4().hex, "A", 1)
+        token = entry["group_launch"]["token"]
+        self.assertEqual(entry["command"], [*command[:2], f"--env=I3_GROUP_LAUNCH={token}",
+                                            f"--env=DESKTOP_STARTUP_ID={token}", *command[2:]])
 
     def test_full_destination_shares_only_its_own_slots(self):
         self.make_snapshot("A")
@@ -404,6 +415,24 @@ class DisplayMemoryTests(unittest.TestCase):
         self.assertEqual(self.reselect({"eDP-1": 2, "DP-2": 4},
                                        how=lambda controller: controller.select("A", force=True)),
                          {"eDP-1": 2, "DP-2": 4})
+
+    def test_focus_in_another_group_cancels_only_outside_an_all_groups_restore(self):
+        from group_restore import Restore
+        from workspace_groups import process_identity
+        for restoring in (True, False):
+            i3 = StaticI3({"eDP-1": 1, "DP-2": 3})
+            with tempfile.TemporaryDirectory() as directory, self.subTest(restoring=restoring):
+                controller = Controller(i3, directory)
+                controller.restore = Restore(controller)
+                controller.state["selected"] = "B"
+                if restoring:
+                    controller.state["session_restore"] = dict(
+                        token=uuid.uuid4().hex, owner=[os.getpid(), process_identity(os.getpid())],
+                        groups=["A", "B", "C"], cancelled=False)
+                with mock.patch.object(controller, "select") as select:
+                    controller.on_event("workspace", "focus")
+                self.assertEqual(select.call_args,
+                                 mock.call("B", force=True) if restoring else mock.call("A", 1, external=True))
 
     def test_reselect_reuses_the_tree_it_read(self):
         i3 = StaticI3({"eDP-1": 1, "DP-2": 3})

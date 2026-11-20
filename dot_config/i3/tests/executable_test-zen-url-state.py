@@ -13,10 +13,12 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "zen-url-state.py"
@@ -412,6 +414,17 @@ class LiveKeyTests(unittest.TestCase):
         self.assertEqual(self.capture(active=("7", "7", "9")), ("https://live.test", ["ctrl+l", "ctrl+c"]))
 
 
+    def test_clipboard_restore_does_not_pipe_the_background_process_output(self):
+        with patch.object(ZEN.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess([], 0)
+            ZEN.restore_clipboard("saved text")
+        run.assert_called_once_with(
+            ["xclip", "-selection", "clipboard", "-in"],
+            input="saved text", text=True, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, timeout=2.0, check=False,
+        )
+
+
 class MainTests(unittest.TestCase):
     def mock_capture(self, live, pages):
         self.addCleanup(setattr, ZEN, "live_page_state", ZEN.live_page_state)
@@ -461,6 +474,12 @@ class MainTests(unittest.TestCase):
     def test_unreadable_input_prints_an_empty_list(self) -> None:
         self.addCleanup(setattr, ZEN, "live_page_state", ZEN.live_page_state)
         self.assertEqual(self.run_main("not json"), "[]")
+
+    def test_no_browser_windows_skip_clipboard_and_session_store_work(self):
+        with patch.object(ZEN, "live_page_state") as live_state, patch.object(ZEN, "active_pages") as pages:
+            self.assertEqual(self.run_main(self.tree()), "[]")
+        live_state.assert_not_called()
+        pages.assert_not_called()
 
     def test_a_live_url_wins_over_the_session_store(self) -> None:
         real_live, real_pages = ZEN.live_page_state, ZEN.active_pages

@@ -1,10 +1,5 @@
 #!/usr/bin/python3
-"""tmux-resurrect post-save-layout hook: rebuild pane lines from live tmux.
-
-resurrect reads panes with a tab IFS, so an empty title shifts every field, and
-it finds commands by PID prefix. Save the deepest program on the restore list
-under shells and listed programs (fancy-cat under Yazi), or @resurrect-command.
-"""
+"""Rebuild saved pane records with nonempty titles and live commands."""
 
 import os
 import re
@@ -62,6 +57,8 @@ def command(pid, args):
     except OSError:
         cwd = None
     words = [os.path.basename(args[0])]
+    if words[0] == "fancy-cat":
+        words[0] = "fancy-cat-open"
     for arg in args[1:]:
         if cwd and arg and arg[0] not in "-/" and os.path.exists(os.path.join(cwd, arg)):
             arg = os.path.join(cwd, arg)

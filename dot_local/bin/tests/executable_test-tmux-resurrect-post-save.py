@@ -13,7 +13,7 @@ BIN_DIR = Path(__file__).resolve().parent.parent
 SCRIPT = BIN_DIR / "executable_tmux-resurrect-post-save"
 if not SCRIPT.exists():
     SCRIPT = BIN_DIR / "tmux-resurrect-post-save"
-PROCESSES = 'btop hx hpc hpcz micro fancy-cat sysmon "yazi->y" "~^ssh [-A-Za-z0-9_.@:=/ ]+$"'
+PROCESSES = 'btop hx hpc hpcz micro fancy-cat fancy-cat-open sysmon "yazi->y" "~^ssh [-A-Za-z0-9_.@:=/ ]+$"'
 
 if not shutil.which("tmux") or not shutil.which("zsh"):
     print("SKIP: tmux and zsh are required")
@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix="resurrect-post-save-") as directory:
         "3": "ARGV0=ssh python3 -c 'import time; time.sleep(300)' host 'tmux attach-session -t =work'",
     }
     expected = {
-        "0": f"fancy-cat -f {docs}/doc.pdf",
+        "0": f"fancy-cat-open -f {docs}/doc.pdf",
         "1": "sysmon 2",
         "2": "claude -fc 'tail -f /dev/null; :'",
         "3": "hpc work",

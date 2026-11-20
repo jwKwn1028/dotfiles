@@ -2,27 +2,10 @@
 {{- if hasKey . "birthdayMonthDay" -}}
 {{-   $birthdayMonthDay = .birthdayMonthDay -}}
 {{- end -}}
-# Startup banner: a centered, bold greeting drawn through the first live prompt.
-#
-# Optional configuration, set before this file is sourced:
-#   ZSH_BANNER_DISABLE=1  # skip the banner and task list
-#   ZSH_BANNER_SPECIAL_MESSAGES=("Message one" "Message two")
-#   ZSH_BANNER_SPECIAL_COLORS=("#FFAF00")
-#   ZSH_BANNER_SPECIAL_CHANCE=1/100  # ratio, or an integer percentage
-# Colors correspond to the messages; a shorter color list is cycled.
-#
-# Rendered through PROMPT, not written directly, so leading spaces stay out of
-# scrollback and ZLE re-expands the padding after a resize. Consequences: width
-# is measured in cells, so wide and combining characters still center; literal
-# percent signs must be doubled; a zero-width escape preserves the blank line
-# before Starship; ANSI colors must be marked as zero-width for ZLE.
-#
-# Selection: birthday beats normal and rare. The task list shows on the first
-# top-level terminal of the day from 06:00, tracked by a state file, and covers
-# tasks due or scheduled within 7 days. CHANCE takes odds or
-# a legacy percentage, falling back to 1/100; two RANDOM values are combined so
-# denominators above 32767 still work. Special messages are drawn without
-# replacement, tracked by a state file, and repeat only after a full cycle.
+# Startup banner. Inside tmux it's printed once, so redraws can't copy it.
+# Set ZSH_BANNER_DISABLE=1 to skip it and the daily task list.
+# Special banners use ZSH_BANNER_SPECIAL_MESSAGES, ZSH_BANNER_SPECIAL_COLORS,
+# and ZSH_BANNER_SPECIAL_CHANCE (odds such as 1/100 or a percentage).
 
 [[ ${ZSH_BANNER_DISABLE:-0} == 1 ]] && return 0
 
@@ -96,6 +79,12 @@ _zsh_banner_finish() {
 _zsh_banner_install() {
   emulate -L zsh
   (( ${ZSH_BANNER_ACTIVE:-0} && ! ${ZSH_BANNER_INSTALLED:-0} )) || return 0
+
+  if [[ -n ${TMUX-} ]]; then
+    print -nrP -- "$(_zsh_banner_prompt)"
+    ZSH_BANNER_ACTIVE=0
+    return
+  fi
 
   PROMPT='$(_zsh_banner_prompt)'"${PROMPT}"
   typeset -gi ZSH_BANNER_INSTALLED=1

@@ -123,11 +123,10 @@ Log out, pick **i3** in LightDM, and log back in.
   sqlite data `dot_taskrc` targets. Enable reminders with
   `systemctl --user daemon-reload && systemctl --user enable --now task-notify.timer`.
   See `~/.config/task/MANUAL.md`.
-- **tmux sessions:** save on detach, `poweroff` and the polybar power menu
-  (both also save all i3 groups), and every 15 minutes with
-  `systemctl --user daemon-reload && systemctl --user enable --now tmux-resurrect-save.timer`.
-  After a reboot, `C-b C-r` restores (pane text, Yazi, fancy-cat PDFs, sysmon,
-  hpc/ssh too) or `C-b C-s` starts fresh.
+- **Session recovery.** `Super+Ctrl+P` restores i3 and reattaches Ghostty.
+  `C-b C-r` restores tmux alone, and `C-b C-s` saves tmux.
+  Enable 15-minute saves with `systemctl --user daemon-reload && systemctl --user enable --now tmux-resurrect-save.timer i3-resurrect-save.timer`.
+  See the [i3 manual](dot_config/i3/MANUAL.md#i3-resurrect-save-and-restore).
 - **npm:** install NodeSource's `nodejs`, which bundles npm; apt's `npm`
   conflicts with it, so the manifest installs `nodejs` alone. `~/.npmrc` puts
   global packages in `~/.local/npm-global`.

@@ -54,7 +54,8 @@ class SessionTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         environment = patch.dict(os.environ, I3_RESURRECT_STATE_DIR=str(self.root / "state"),
-                                 I3_RESURRECT_META_DIR=str(self.root / "meta"), XDG_RUNTIME_DIR=str(self.root / "runtime"))
+                                 I3_RESURRECT_META_DIR=str(self.root / "meta"), XDG_RUNTIME_DIR=str(self.root / "runtime"),
+                                 I3SOCK=str(self.root / "i3.sock"))
         environment.start()
         self.addCleanup(environment.stop)
         self.session = module.Session()
@@ -65,6 +66,7 @@ class SessionTests(unittest.TestCase):
         self.fail = None
         self.placements = {group: {str(slot): slot} for group, slot in SLOTS.items()}
         self.cancelled = False
+        self.missing = [[]]
         self.session.rpc = self.rpc
         self.session.child = self.child
 
@@ -76,6 +78,10 @@ class SessionTests(unittest.TestCase):
             return self.view
         if action == "restore-session-status" and self.cancelled:
             raise GroupError("All-groups restore was cancelled")
+        if action == "restore-session-missing":
+            return self.missing.pop(0) if len(self.missing) > 1 else list(self.missing[0])
+        if action == "restore-session-ready" and self.missing[-1]:
+            raise GroupError("A launched window is missing, ambiguous, or moved by the user")
         return True
 
     def child(self, action, state, meta, group, check=False, **values):
@@ -85,9 +91,10 @@ class SessionTests(unittest.TestCase):
         if action == "save" and not check:
             child_snapshot(state, meta, group)
         if action == "restore" and not check:
-            snapshot.atomic_json(values["report"] / "last-restore.json", dict(mapping=[
-                dict(source_workspace=source, workspace=str(self.session.groups[group] * 10 + target))
-                for source, target in self.placements[group].items()]))
+            mapping = [dict(source_workspace=source, workspace=str(self.session.groups[group] * 10 + target))
+                       for source, target in self.placements[group].items()]
+            snapshot.atomic_json(values["report"] / "last-restore.json", dict(
+                mapping=mapping, workspaces=[dict(entry, status="launched", detail="") for entry in mapping]))
         return f"Group {group} plan"
 
     def publish(self):
@@ -162,6 +169,56 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(actions["restore-session-views"]["mappings"], self.placements)
         self.assertIn("restore-session-ready", actions)
         self.assertIn("restore-session-end", actions)
+
+    def reports(self):
+        token = next(path for path in (self.session.meta / "reports").iterdir())
+        return {group: snapshot.read_json(token / group / "last-restore.json")["workspaces"][0]["status"]
+                for group in SLOTS}
+
+    def test_late_window_is_ready_after_one_wait_for_all_groups(self):
+        self.publish()
+        self.missing = [["16"], ["16"], []]
+        self.session.restore()
+        self.assertEqual(self.reports(), dict(A="ready", B="ready", C="ready"))
+
+    def test_window_that_never_appears_fails_only_its_workspace(self):
+        self.publish()
+        self.session.armed_path().unlink()
+        self.missing = [["16"]]
+        with patch.dict(os.environ, I3_RESURRECT_SESSION_WAIT="0.3"):
+            with self.assertRaisesRegex(GroupError, "missing"):
+                self.session.restore()
+        self.assertEqual(self.reports(), dict(A="ready", B="failed", C="ready"))
+        self.assertFalse(self.session.may_autosave())
+
+    def test_automatic_save_waits_for_a_restore_or_manual_save(self):
+        self.assertTrue(self.session.may_autosave())
+        self.publish()
+        self.assertTrue(self.session.may_autosave())
+        with patch.dict(os.environ, I3SOCK=str(self.root / "next-login.sock")):
+            self.assertFalse(self.session.may_autosave())
+            self.session.restore()
+            self.assertTrue(self.session.may_autosave())
+
+    def test_save_check_keeps_last_automatic_save_error(self):
+        self.session.meta.mkdir()
+        failure = self.session.meta / "auto-save-failed.txt"
+        failure.write_text("Previous automatic save failed\n")
+        with patch.object(module, "Session", return_value=self.session), \
+                patch.object(module.signal, "signal"), \
+                patch.object(sys, "argv", ["i3-resurrect-session.py", "save", "--check"]), patch("builtins.print"):
+            self.assertEqual(module.main(), 0)
+        self.assertEqual(failure.read_text(), "Previous automatic save failed\n")
+
+    def test_failed_restore_says_automatic_saves_stay_off(self):
+        self.publish()
+        with patch.dict(os.environ, I3SOCK=str(self.root / "next-login.sock")), \
+                patch.object(module, "Session", return_value=self.session), \
+                patch.object(self.session, "restore", side_effect=GroupError("Restore failed")), \
+                patch.object(module, "notify") as notify, patch.object(module.signal, "signal"), \
+                patch.object(sys, "argv", ["i3-resurrect-session.py", "restore"]), patch("builtins.print"):
+            self.assertEqual(module.main(), 1)
+        notify.assert_called_once_with("Restore failed\nAutomatic saves stay off until Super+Ctrl+Y saves.")
 
     def test_failed_restore_group_reports_failure_and_continues(self):
         self.publish()
@@ -308,6 +365,59 @@ class ControllerSessionTests(unittest.TestCase):
                                                           owner=None, created=0)
         self.restore.maintain()
         self.assertIn("launch", self.controller.state["launches"])
+
+    def test_session_keeps_group_placeholders_until_it_ends(self):
+        operation = uuid.uuid4().hex
+        self.controller.state["leases"][operation] = dict(group="A", owner=self.owner, placeholders={"123": 5},
+                                                          session=self.token, before=[])
+        cleaned = []
+        self.restore.cleanup_placeholders = lambda op, placeholders=None: cleaned.append((op, placeholders))
+        self.restore.release(operation)
+        self.assertEqual(cleaned, [])
+        self.restore.session_end(self.token)
+        self.assertEqual(cleaned, [(operation, {"123": 5})])
+
+    def test_window_without_launch_identity_takes_the_oldest_launch_saved_like_it(self):
+        self.restore.property = lambda window, name: None
+        self.restore.x11_client_pid = lambda window: None
+        zen = SimpleNamespace(window=7, window_instance="Navigator", window_class="zen", window_role="browser",
+                              pid=None)
+        rules = [{"class": "^zen$", "instance": "^Navigator$", "title": "^Inbox"}]
+        self.controller.state["launches"].update(
+            newer=dict(done=False, before=[], created=2, match=rules),
+            older=dict(done=False, before=[], created=1, match=rules),
+            other=dict(done=False, before=[], created=0, match=[{"class": "^helium$"}]))
+        self.assertEqual(self.restore.window_token(zen), "older")
+        dialog = SimpleNamespace(window=8, window_instance="Toolkit", window_class="zen", pid=None)
+        self.assertIsNone(self.restore.window_token(dialog))
+
+    def test_flatpak_window_uses_x11_host_pid_for_launch_token(self):
+        self.restore.property = lambda window, name: None
+        self.restore.display = SimpleNamespace(has_extension=lambda name: True,
+                                               res_query_client_ids=lambda specs: SimpleNamespace(
+                                                   ids=[SimpleNamespace(value=[12345])]))
+        zen = SimpleNamespace(window=7, window_instance="Navigator", pid=2)
+        self.controller.state["launches"]["one"] = dict(done=False, before=[])
+        with patch.object(Path, "read_bytes", autospec=True, return_value=b"I3_GROUP_LAUNCH=one\x00") as read:
+            self.assertEqual(self.restore.window_token(zen), "one")
+        read.assert_called_once_with(Path("/proc/12345/environ"))
+
+    def test_window_startup_id_takes_precedence_over_shared_browser_process(self):
+        self.restore.property = lambda window, name: "second" if name == "_NET_STARTUP_ID" else None
+        self.restore.x11_client_pid = lambda window: 12345
+        window = SimpleNamespace(window=7, window_instance="Navigator", pid=2)
+        self.controller.state["launches"].update(first=dict(done=False, before=[]),
+                                                 second=dict(done=False, before=[]))
+        with patch.object(Path, "read_bytes", return_value=b"I3_GROUP_LAUNCH=first\x00"):
+            self.assertEqual(self.restore.window_token(window), "second")
+
+    def test_missing_windows_are_named_by_workspace(self):
+        self.controller.tree = lambda: SimpleNamespace(find_by_id=lambda con_id: None)
+        self.controller.state["launches"]["launch"] = dict(session=self.token, operation="child", done=False,
+                                                          workspace="16", group="B", slot=6)
+        self.assertEqual(self.restore.dispatch("session-missing", token=self.token), ["16"])
+        with self.assertRaisesRegex(GroupError, "workspace 16"):
+            self.restore.dispatch("session-ready", token=self.token)
 
     def test_owner_death_releases_session_reservations(self):
         self.controller.state["session_restore"]["owner"] = [99999999, "0"]

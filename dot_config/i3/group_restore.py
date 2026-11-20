@@ -14,6 +14,16 @@ from workspace_groups import (GroupError, exact, identity, number, owner_alive,
                               process_identity, quote, validate_view, walk)
 
 
+def rule_matches(con, rule):
+    fields = dict(zip(("class", "instance", "window_role"), (
+        getattr(con, "window_class", None), getattr(con, "window_instance", None), getattr(con, "window_role", None))))
+    keys = [key for key in fields if key in rule]
+    try:
+        return bool(keys) and all(re.search(rule[key], fields[key] or "") for key in keys)
+    except (re.error, TypeError):
+        return False
+
+
 class Restore:
     def __init__(self, controller):
         self.controller = controller
@@ -42,6 +52,19 @@ class Restore:
             return data.decode(errors="replace").rstrip("\0") if isinstance(data, bytes) else list(data)
         except Exception:
             return None
+
+    def x11_client_pid(self, window):
+        from Xlib.error import XError
+        from Xlib.ext import res
+
+        display = self.xdisplay()
+        if not display.has_extension(res.extname):
+            return None
+        try:
+            ids = display.res_query_client_ids([{"client": window, "mask": res.LocalClientPIDMask}]).ids
+        except XError:
+            return None
+        return next((entry.value[0] for entry in ids if entry.value and entry.value[0] > 0), None)
 
     def tag_placeholder(self, window, token):
         from Xlib import Xatom
@@ -96,6 +119,8 @@ class Restore:
         session["cancelled"] = True
         for operation in list(self.state["leases"]):
             self.release(operation, cancelled=True)
+        for operation, placeholders in session.get("placeholders", {}).items():
+            self.cleanup_placeholders(operation, placeholders)
         self.state.pop("session_restore", None)
         self.controller.save()
         self.controller.resume_workers()
@@ -131,16 +156,17 @@ class Restore:
             raise GroupError("Restore was cancelled or its owner exited")
         return lease
 
-    def cleanup_placeholders(self, operation):
+    def cleanup_placeholders(self, operation, placeholders=None):
         lease = self.state["leases"].get(operation, {})
+        placeholders = lease.get("placeholders", {}) if placeholders is None else placeholders
         for node in walk(self.controller.tree().ipc_data):
             if (node.get("swallows") and node.get("window") and
                     any(mark.startswith("_group_" + operation + "_") for mark in node.get("marks", []))):
                 window = node["window"]
-                if str(window) not in lease.get("placeholders", {}):
+                if str(window) not in placeholders:
                     self.tag_placeholder(window, operation)
                 self.remove_placeholder(window, operation)
-        for window in lease.get("placeholders", {}):
+        for window in placeholders:
             self.remove_placeholder(int(window), operation)
         lease["placeholders"] = {}
 
@@ -150,7 +176,13 @@ class Restore:
             return
         lease["cancelled"] = bool(cancelled or lease.get("cancelled"))
         self.controller.save()
-        self.cleanup_placeholders(operation)
+        session = self.state.get("session_restore", {})
+        if not lease["cancelled"] and lease.get("session") and self.session_active() and \
+                session.get("token") == lease["session"]:
+            # Keep placeholders for late arrivals.
+            session.setdefault("placeholders", {})[operation] = lease["placeholders"]
+        else:
+            self.cleanup_placeholders(operation)
         self.state["leases"].pop(operation, None)
         self.controller.save()
         self.controller.resume_workers()
@@ -257,9 +289,17 @@ class Restore:
         return launch_id
 
     def window_token(self, con):
+        pending = {token for token, launch in self.state["launches"].items()
+                   if not launch.get("done") and con.window not in launch["before"]}
+        if not pending:
+            return None
         instance = con.window_instance or ""
         startup = self.property(con.window, "_NET_STARTUP_ID")
-        pid = con.pid
+        matches = {token for token in pending if token in (instance, startup)}
+        if matches:
+            return next(iter(matches)) if len(matches) == 1 else None
+        # XRes returns the host PID for sandboxed clients.
+        pid = self.x11_client_pid(con.window) or con.pid
         if not pid:
             property_pid = self.property(con.window, "_NET_WM_PID")
             pid = property_pid[0] if property_pid else None
@@ -269,14 +309,13 @@ class Restore:
                 environment = Path(f"/proc/{int(pid)}/environ").read_bytes().split(b"\0")
             except (OSError, ValueError):
                 pass
-        matches = []
-        for token, launch in self.state["launches"].items():
-            if launch.get("done") or con.window in launch["before"]:
-                continue
-            if (instance == token or startup == token or
-                    ("I3_GROUP_LAUNCH=" + token).encode() in environment):
-                matches.append(token)
-        return matches[0] if len(matches) == 1 else None
+        matches.update(token for token in pending if ("I3_GROUP_LAUNCH=" + token).encode() in environment)
+        if not matches:
+            # A browser's later windows carry its first launch's token; take the oldest launch saved like them.
+            launches = self.state["launches"]
+            fits = [token for token in pending if any(rule_matches(con, rule) for rule in launches[token].get("match", []))]
+            return min(fits, key=lambda token: launches[token].get("created", 0), default=None)
+        return next(iter(matches)) if len(matches) == 1 else None
 
     def route(self, con):
         if not con.window:
@@ -337,14 +376,22 @@ class Restore:
                 self.state["launches"].pop(token, None)
         self.controller.save()
 
-    def ready_launches(self, launches):
+    def missing_launches(self, launches):
         tree = self.controller.tree()
+        missing = []
         for launch in launches:
             con = tree.find_by_id(launch.get("window")) if launch.get("window") else None
             if (not launch.get("done") or launch.get("error") or launch.get("transferred") or
                     not con or not con.workspace() or
                     con.workspace().num != number(launch["group"], launch["slot"])):
-                raise GroupError("A launched window is missing, ambiguous, or moved by the user")
+                missing.append(launch["workspace"])
+        return sorted(set(missing))
+
+    def ready_launches(self, launches):
+        missing = self.missing_launches(launches)
+        if missing:
+            raise GroupError("A launched window is missing, ambiguous, or moved by the user "
+                             f"(workspace {', '.join(missing)})")
         return True
 
     def dispatch(self, action, **values):
@@ -355,10 +402,11 @@ class Restore:
             return True
         if action == "session-views":
             return self.session_views(**values)
-        if action == "session-ready":
+        if action in ("session-ready", "session-missing"):
             self.session_lease(values["token"])
-            return self.ready_launches([launch for launch in self.state["launches"].values()
-                                       if launch.get("session") == values["token"]])
+            launches = [launch for launch in self.state["launches"].values()
+                        if launch.get("session") == values["token"]]
+            return self.ready_launches(launches) if action == "session-ready" else self.missing_launches(launches)
         if action == "session-end":
             self.session_end(values["token"])
             return True

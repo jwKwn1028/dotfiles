@@ -115,6 +115,12 @@ cat >"$MOCK_BIN/notify-send" <<'EOF'
 printf '%s\n' "$2" >>"$TEST_NOTIFY"
 EOF
 
+cat >"$MOCK_BIN/tmux" <<'EOF'
+#!/bin/sh
+[ "$1" = -L ] && [ "$2" = default ] && [ "$3" = list-clients ] || exit 1
+printf '222\twork desk\n999\tunrelated\n'
+EOF
+
 printf '#!/bin/sh\nexit 0\n' >"$MOCK_BIN/xdotool"
 chmod +x "$MOCK_BIN"/*
 
@@ -172,6 +178,7 @@ add_proc 210 200 zsh /work/d 201 zsh
 add_proc 211 210 ssh /work/d 201 ssh -t remote.invalid "$(hpc_attach logs)"
 add_proc 220 200 sh "$HOME" 202 /bin/sh -c /usr/bin/zsh
 add_proc 221 220 zsh /work/f 202 /usr/bin/zsh
+add_proc 222 221 'tmux: client' /work/f 202 tmux attach
 add_proc 520 100 sh "$HOME" 502 /bin/sh -c /usr/bin/zsh
 add_proc 521 520 zsh '/work/$odd"dir' 502 /usr/bin/zsh
 add_proc 610 100 sh "$HOME" 601 /bin/sh -c /usr/bin/zsh
@@ -271,7 +278,7 @@ printf '%s\n' '[
   "sessions":[{"kind":"tmux","name":"dev"},{"kind":"zmx","name":"shell"}]},
  {"workspace":"3","window_id":"102","cwd":"/work/e","sessions":[{"kind":"tmux","name":"build"}]},
  {"workspace":"4","window_id":"201","cwd":"/work/d","sessions":[{"kind":"tmux","name":"logs"}]},
- {"workspace":"4","window_id":"202","cwd":"/work/f","sessions":[]},
+ {"workspace":"4","window_id":"202","cwd":"/work/f","sessions":[{"kind":"local-tmux","name":"work desk"}]},
  {"workspace":"5","window_id":"501","cwd":null,"sessions":[]},
  {"workspace":"5","window_id":"502","cwd":"/work/$odd\"dir","sessions":[]},
  {"workspace":"6","window_id":"601","cwd":"/work/h","sessions":[{"kind":"tmux","name":"solo"}]},
@@ -311,7 +318,8 @@ assert_json 'workspace 3 other placeholder' '.nodes[0].nodes[1].swallows' \
 assert_json 'workspace 4 programs' . "$STATE_DIR/workspace_4_programs.json" '[
  {"command":["ghostty","--working-directory=/work/d","--x11-instance-name=ghostty-ws4-1",
    "--initial-command=env I3_RESURRECT_REMOTE_SESSION=tmux:logs zsh"],"working_directory":"/work/d"},
- {"command":["ghostty","--working-directory=/work/f","--x11-instance-name=ghostty-ws4-2"],
+ {"command":["ghostty","--working-directory=/work/f","--x11-instance-name=ghostty-ws4-2",
+   "--initial-command=env I3_RESURRECT_LOCAL_TMUX=d29yayBkZXNr zsh"],
   "working_directory":"/work/f"}]'
 assert_json 'workspace 4 placeholders' '[.nodes[].swallows[0].instance]' \
     "$STATE_DIR/workspace_4_layout.json" '["^ghostty-ws4-1$","^ghostty-ws4-2$"]'
@@ -341,6 +349,8 @@ grep -Fqx 'Restore complete.' "$TEST_NOTIFY" ||
     fail "the restore did not report success: $(cat "$TEST_NOTIFY")"
 grep -Fqx 'Reattach by hand: hpc solo, hpcz shell' "$TEST_NOTIFY" ||
     fail "the restore listed the wrong sessions to reattach: $(cat "$TEST_NOTIFY")"
+grep -Fqx "Local tmux attach requested (unverified): ta 'work desk'" "$TEST_NOTIFY" ||
+    fail "the restore did not request the saved local session: $(cat "$TEST_NOTIFY")"
 grep -Fqx 'Opened without the saved layout: 4' "$TEST_NOTIFY" ||
     fail "a workspace with unpaired placeholders kept its layout: $(cat "$TEST_NOTIFY")"
 

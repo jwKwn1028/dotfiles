@@ -24,6 +24,15 @@ esac
 
 # Needs Kitty graphics: tmux passthrough (fork check), Ghostty, or kitty.
 if [ -n "${TMUX:-}" ]; then
+    # Restored panes can start before a client attaches.
+    tries=0 visible_tries=0
+    until fancy-cat --tmux-supported >/dev/null 2>&1 || [ -n "${SSH_CONNECTION:-}" ]; do
+        client=$(tmux display -p -t "${TMUX_PANE:-}" '#{client_termname}' 2>/dev/null) || break
+        tries=$((tries + 1))
+        [ -z "$client" ] || visible_tries=$((visible_tries + 1))
+        [ "$tries" -lt 40 ] && [ "$visible_tries" -lt 4 ] || break
+        sleep 0.25
+    done
     fancy-cat --tmux-supported >/dev/null 2>&1 && exec fancy-cat "$file" "$@"
 elif [ "${TERM_PROGRAM:-}" = ghostty ] || [ -n "${KITTY_WINDOW_ID:-}" ]; then
     exec fancy-cat "$file" "$@"

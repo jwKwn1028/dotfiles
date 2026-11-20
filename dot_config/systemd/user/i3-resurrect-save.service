@@ -1,0 +1,9 @@
+[Unit]
+Description=Save all i3 groups without driving the browser
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=ZEN_LIVE_URL_CAPTURE=0
+ExecStart=%h/.config/i3/i3-resurrect-session.py save --auto
+Nice=10

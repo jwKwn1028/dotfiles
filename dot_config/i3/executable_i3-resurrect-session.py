@@ -16,10 +16,11 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 
 from workspace_groups import (GroupError, definitions, filtered_tree, identity, process_identity,
-                              request, source_path, validate_view, walk)
+                              request, session_dir, source_path, validate_view, walk)
 
 spec = importlib.util.spec_from_file_location("session_snapshot", source_path("i3-resurrect-state.py"))
 snapshot = importlib.util.module_from_spec(spec)
@@ -60,12 +61,34 @@ class Session:
                     result[node["num"]] = sorted(windows, key=lambda value: value[0])
         return result
 
-    @contextmanager
-    def lock(self):
+    def runtime_path(self, suffix):
         runtime = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
         runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
         key = hashlib.sha256(os.environ.get("DISPLAY", "default").encode()).hexdigest()[:16]
-        path = (runtime / f"i3-resurrect-{key}.lock").resolve()
+        return (runtime / f"i3-resurrect-{key}.{suffix}").resolve()
+
+    def armed_path(self):
+        return session_dir() / "resurrect.armed"
+
+    def arm(self):
+        path = self.armed_path()
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path.touch()
+
+    def may_autosave(self):
+        return not (self.meta / "snapshot.json").exists() or self.armed_path().exists()
+
+    def wait_for_windows(self, token):
+        deadline = time.monotonic() + float(os.environ.get("I3_RESURRECT_SESSION_WAIT", "45"))
+        while True:
+            missing = self.rpc("restore-session-missing", token=token)
+            if not missing or time.monotonic() >= deadline:
+                return missing
+            time.sleep(0.25)
+
+    @contextmanager
+    def lock(self):
+        path = self.runtime_path("lock")
         fd = os.open(path, os.O_CREAT | os.O_WRONLY, 0o600)
         try:
             try:
@@ -143,6 +166,7 @@ class Session:
                     raise GroupError("Windows or groups changed during save; retry when the desktop settles")
                 (meta / "session.json").write_text(json.dumps(dict(version=1, groups=self.groups, saved=saved, view=view)) + "\n")
                 snapshot.publish(self.state, self.meta, staging.name)
+                self.arm()
             finally:
                 pointer = self.meta / "snapshot.json"
                 published = snapshot.read_json(pointer).get("current") if pointer.exists() else None
@@ -190,6 +214,9 @@ class Session:
                                        identity(snapshot.workspace_order(entry["workspace"])[0], self.groups)[1]
                                        for entry in snapshot.read_json(placement)["mapping"]}
                 self.rpc("restore-session-status", token=token)
+            missing = self.wait_for_windows(token)
+            for group in data["saved"]:
+                settle_report(self.meta / "reports" / token / group / "last-restore.json", missing)
             try:
                 self.rpc("restore-session-ready", token=token)
             except GroupError as error:
@@ -207,7 +234,19 @@ class Session:
         failures = [result["detail"] for result in results if result["status"] != "ready"]
         if failures:
             raise GroupError("All-groups restore finished with errors:\n" + "\n".join(failures))
+        self.arm()
         return "Restored all groups: " + ", ".join(data["saved"]) + "."
+
+
+def settle_report(path, missing):
+    if not path.exists():
+        return
+    report = snapshot.read_json(path)
+    for entry in report.get("workspaces", []):
+        if entry.get("status") == "launched":
+            late = entry["workspace"] in missing
+            entry.update(status="failed" if late else "ready", detail="window did not appear in time" if late else "")
+    snapshot.atomic_json(path, report)
 
 
 def notify(message):
@@ -224,24 +263,47 @@ def main():
     parser.add_argument("action", choices=("save", "restore"))
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--previous", action="store_true")
+    parser.add_argument("--auto", action="store_true",
+                        help="save quietly, only once this login has restored or saved")
     args = parser.parse_args()
     if args.action == "save" and args.previous:
         parser.error("--previous is only valid for restore")
+    if args.auto and (args.action != "save" or args.check):
+        parser.error("--auto is only valid for save")
     os.umask(0o077)
     for signum in (signal.SIGINT, signal.SIGTERM):
         signal.signal(signum, interrupted)
+    failure = None
     try:
         session = Session()
-        result = session.save(args.check) if args.action == "save" else session.restore(args.check, args.previous)
+        failure = session.meta / "auto-save-failed.txt"
+        if args.auto and not session.may_autosave():
+            print("Skipped: no restore or manual save since login")
+            return 0
+        if args.action == "save":
+            result = session.save(args.check)
+            if not args.check:
+                failure.unlink(missing_ok=True)
+        else:
+            result = session.restore(args.check, args.previous)
         print(result)
-        if not args.check:
+        if not args.check and not args.auto:
             notify(result)
         return 0
     except (OSError, ValueError, TypeError, KeyError, GroupError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
-        if not args.check:
-            notify(str(error))
+        if args.auto and failure:
+            failure.parent.mkdir(parents=True, exist_ok=True)
+            failure.write_text(time.strftime("%Y-%m-%d %H:%M ") + str(error) + "\n")
+        elif not args.check:
+            paused = args.action == "restore" and failure and not session.may_autosave()
+            notify(str(error) + ("\nAutomatic saves stay off until Super+Ctrl+Y saves." if paused else ""))
         return 1
+    finally:
+        if args.action == "restore" and not args.check and failure and failure.exists():
+            notify("Last automatic save failed " + failure.read_text().strip() +
+                   "; this restore used the snapshot before it.")
+            failure.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

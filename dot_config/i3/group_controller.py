@@ -578,7 +578,10 @@ class Controller:
             ws = focused.workspace() if focused else None
             current = identity(ws.num, self.groups) if ws else None
             if current and current[0] != self.selected():
-                self.select(current[0], current[1], external=True)
+                if self.restore and self.restore.session_active():
+                    self.select(self.selected(), force=True)
+                else:
+                    self.select(current[0], current[1], external=True)
             elif current:
                 self.remember(tree)
         if kind == "workspace" and change in ("move", "rename", "init", "empty"):

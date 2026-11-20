@@ -361,10 +361,16 @@ remember_ghostty_sessions_for_workspace() {
 
         def session_args($state):
             [($state.sessions // [])[] |
-                select((.kind == "tmux" or .kind == "zmx") and
-                    ((.name // "") | tostring | test("^[A-Za-z0-9_-]+$")))][0] as $session |
+                select(if .kind == "local-tmux" then
+                    (.name | type == "string" and length > 0)
+                else
+                    (.kind == "tmux" or .kind == "zmx") and
+                    ((.name // "") | tostring | test("^[A-Za-z0-9_-]+$"))
+                end)][0] as $session |
             if $session == null then
                 []
+            elif $session.kind == "local-tmux" then
+                ["--initial-command=env I3_RESURRECT_LOCAL_TMUX=\($session.name | @base64) zsh"]
             else
                 ["--initial-command=env I3_RESURRECT_REMOTE_SESSION=\($session.kind):\($session.name) zsh"]
             end;

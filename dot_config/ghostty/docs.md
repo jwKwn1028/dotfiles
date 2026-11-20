@@ -46,15 +46,15 @@ Per split, these keys drive tmux; new splits start with it off.
 | Keys in tmux mode | Sends | tmux action |
 | --- | --- | --- |
 | `Ctrl+Shift+O` / `Ctrl+Shift+E` | `C-b %` / `C-b "` | Split right / below. |
-| `Ctrl+Shift+T` | `C-b c` | New window. |
+| `Ctrl+Shift+T` | `C-b c` | Insert a window after the current one in the active pane's directory. |
 | `Ctrl+Shift+H` / `J` / `K` / `L` | `C-b C-h` / `C-j` / `C-k` / `C-l` | Focus pane. |
 | `Alt+Shift+H` / `Alt+Shift+L` | `C-b p` / `C-b n` | Previous / next window. |
 | `Ctrl+Alt+Shift+H` / `L` | `M-H` / `M-L` | Previous / next window (outermost tmux). |
 | `Alt+1` … `Alt+9`, `Alt+0` | the same keys | Window 1–9, 10 (outermost tmux). |
 
-Zsh turns it on around `hpc` and tmux attaches (X11, focused window only). A
-config reload clears it; a local tmux restores it on focus and after
-`Alt+Shift+T`. Otherwise use `Ctrl+Shift+M`.
+On X11, Zsh enables it for `hpc` and tmux attaches. Local tmux enables it on
+focus, including after restore. `Alt+Shift+T` reapplies it after reloading
+Ghostty. Toggle it manually with `Ctrl+Shift+M`.
 
 ## i3 shortcuts affecting Ghostty
 

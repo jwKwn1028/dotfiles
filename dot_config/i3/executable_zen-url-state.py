@@ -289,13 +289,13 @@ def command_available(name):
     return shutil.which(name) is not None
 
 
-def run_command(args, input_text=None, timeout=1.5):
+def run_command(args, input_text=None, timeout=1.5, *, stdout=subprocess.PIPE):
     try:
         completed = subprocess.run(
             args,
             input=input_text,
             text=True,
-            stdout=subprocess.PIPE,
+            stdout=stdout,
             stderr=subprocess.DEVNULL,
             timeout=timeout,
             check=False,
@@ -317,10 +317,12 @@ def clipboard_text():
 def restore_clipboard(text):
     if text is None:
         return
+    # The clipboard owner keeps stdout open.
     run_command(
         ["xclip", "-selection", "clipboard", "-in"],
         input_text=text,
         timeout=2.0,
+        stdout=subprocess.DEVNULL,
     )
 
 
@@ -399,6 +401,9 @@ def main():
         return
 
     windows = list(walk_i3(tree))
+    if not windows:
+        print("[]")
+        return
     live_matches = live_page_state(windows)
     pages = active_pages()
     by_id = {match["window_id"]: match for match in match_pages(windows, pages)}

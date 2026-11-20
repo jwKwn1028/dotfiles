@@ -63,16 +63,12 @@ class PoweroffConfirmationTests(unittest.TestCase):
             '#!/bin/sh\nprintf "%s\\n" "$*" >>"$POWER_ACTION_LOG"\n'
             'exit "${POWER_ACTION_STATUS:-0}"\n'
         )
-        (mock_bin / "tmux-resurrect-autosave").write_text(
-            '#!/bin/sh\nprintf "tmux-save\\n" >>"$POWER_ACTION_LOG"\n'
-        )
-        (mock_bin / "i3-save").write_text('#!/bin/sh\nprintf "i3-save\\n" >>"$POWER_ACTION_LOG"\n')
-        for name in ["poweroff-confirm", "hostname", "systemctl", "tmux-resurrect-autosave", "i3-save"]:
+        (mock_bin / "session-save").write_text('#!/bin/sh\nprintf "session-save\\n" >>"$POWER_ACTION_LOG"\n')
+        for name in ["poweroff-confirm", "hostname", "systemctl", "session-save"]:
             (mock_bin / name).chmod(0o755)
         self.log = directory / "actions"
         self.env = {
             **os.environ, "PATH": str(mock_bin), "POWER_ACTION_LOG": str(self.log),
-            "I3_RESURRECT_SAVE": str(mock_bin / "i3-save"),
             "POWER_ACTION_STATUS": "0",
         }
         # Prevent inherited shell injection from bypassing the mock backend.
@@ -130,7 +126,7 @@ class PoweroffConfirmationTests(unittest.TestCase):
                 with self.subTest(shell=shell, answer=answer):
                     status, _, _ = self.run_terminal(shell, answer)
                     self.assertEqual(status, 0)
-                    self.assertEqual(self.actions(), ["tmux-save", "i3-save", "poweroff"])
+                    self.assertEqual(self.actions(), ["session-save", "poweroff"])
 
     def test_blank_no_and_unrecognized_input_cancel(self):
         for shell in self.shells:
@@ -169,7 +165,7 @@ class PoweroffConfirmationTests(unittest.TestCase):
             with self.subTest(shell=shell):
                 status, _, _ = self.run_terminal(shell, b"yes\n", action_status=42)
                 self.assertEqual(status, 42)
-                self.assertEqual(self.actions(), ["tmux-save", "i3-save", "poweroff"])
+                self.assertEqual(self.actions(), ["session-save", "poweroff"])
 
     def test_missing_terminal_ignores_piped_confirmation(self):
         for shell in self.shells:

@@ -32,17 +32,12 @@ shift
 exec "$@"
 EOF
 
-    cat >"$bin/tmux-resurrect-autosave" <<'EOF'
+    cat >"$bin/session-save" <<'EOF'
 #!/bin/bash
-printf 'tmux-save\n' >>"$POWER_ACTION_LOG"
+printf 'session-save\n' >>"$POWER_ACTION_LOG"
 EOF
 
-    cat >"$bin/i3-save" <<'EOF'
-#!/bin/bash
-printf 'i3-save\n' >>"$POWER_ACTION_LOG"
-EOF
-
-    chmod +x "$bin/systemctl" "$bin/timeout" "$bin/tmux-resurrect-autosave" "$bin/i3-save"
+    chmod +x "$bin/systemctl" "$bin/timeout" "$bin/session-save"
 }
 
 ZENITY_BIN="$TEST_TMP/zenity-bin"
@@ -89,7 +84,6 @@ run_prompt() {
     : >"$ACTION_LOG"
     env \
         PATH="$bin" \
-        I3_RESURRECT_SAVE="$bin/i3-save" \
         POWER_ACTION_LOG="$ACTION_LOG" \
         POWER_DIALOG_STATUS="$status" \
         POWER_DIALOG_CHOICE="$choice" \
@@ -99,8 +93,8 @@ run_prompt() {
 
 assert_action() {
     local expected="$1"
-    [ "$(cat "$ACTION_LOG")" = "$(printf 'tmux-save\ni3-save\n%s' "$expected")" ] || {
-        printf 'FAIL: expected both saves, then systemctl %s, got:\n' "$expected" >&2
+    [ "$(cat "$ACTION_LOG")" = "$(printf 'session-save\n%s' "$expected")" ] || {
+        printf 'FAIL: expected session-save, then systemctl %s, got:\n' "$expected" >&2
         cat "$ACTION_LOG" >&2
         exit 1
     }
@@ -143,7 +137,6 @@ assert_cancelled
 status=0
 env \
     PATH="$NO_DIALOG_BIN" \
-    I3_RESURRECT_SAVE="$NO_DIALOG_BIN/i3-save" \
     POWER_ACTION_LOG="$ACTION_LOG" \
     POWER_NOTIFY_LOG="$NOTIFY_LOG" \
     /usr/bin/bash "$SCRIPT" poweroff 1 || status="$?"

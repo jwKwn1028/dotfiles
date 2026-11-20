@@ -173,7 +173,8 @@ mkdir -p "$TEST_TMP/bin" "$TEST_TMP/folder with spaces/sub dir"
 cat >| "$TEST_TMP/bin/fancy-cat" <<'MOCK'
 #!/bin/sh
 if [ "${1:-}" = --tmux-supported ]; then
-  [ "$TERM_PROGRAM" = ghostty ] && [ "$TEST_PASSTHROUGH" = on ] && [ -z "$SSH_CONNECTION" ]
+  [ "$TERM_PROGRAM" = ghostty ] && [ "$TEST_PASSTHROUGH" = on ] && [ -z "$SSH_CONNECTION" ] &&
+    { [ -z "$TEST_CLIENT_AFTER" ] || [ -e "$TEST_ATTACHED" ]; }
   exit $?
 fi
 {
@@ -185,15 +186,29 @@ exit "${PDF_STATUS:-0}"
 MOCK
 chmod +x "$TEST_TMP/bin/fancy-cat"
 ln -s fancy-cat "$TEST_TMP/bin/ghostty"
+# tmux reporting no client for the first TEST_CLIENT_AFTER queries.
+mkdir -p "$TEST_TMP/tmux-bin"
+cat >| "$TEST_TMP/tmux-bin/tmux" <<'MOCK'
+#!/bin/sh
+n=$(( $(cat "$TEST_ATTACHED.n" 2>/dev/null || echo 0) + 1 ))
+echo "$n" > "$TEST_ATTACHED.n"
+[ "$n" -gt "$TEST_CLIENT_AFTER" ] || { echo; exit 0; }
+: > "$TEST_ATTACHED"
+echo xterm-256color
+MOCK
+chmod +x "$TEST_TMP/tmux-bin/tmux"
+printf '#!/bin/sh\nexit 0\n' >| "$TEST_TMP/tmux-bin/sleep"
+chmod +x "$TEST_TMP/tmux-bin/sleep"
 
 run_fancy_wrapper() {
   : >| "$OPEN_LOG"
-  env PATH="$TEST_TMP/bin:$PATH" OPEN_LOG="$OPEN_LOG" \
+  env PATH="${TEST_PATH_PREFIX:-}$TEST_TMP/bin:$PATH" OPEN_LOG="$OPEN_LOG" \
+    TEST_CLIENT_AFTER="${TEST_CLIENT_AFTER:-}" TEST_ATTACHED="$TEST_TMP/attached" \
     TMUX="${TEST_TMUX:-}" DISPLAY="${TEST_DISPLAY-:test}" WAYLAND_DISPLAY= \
     TERM_PROGRAM="${TEST_TERMINAL:-}" KITTY_WINDOW_ID="${TEST_KITTY:-}" TMUX_PANE="${TEST_PANE:-}" \
     SSH_CONNECTION="${TEST_SSH:-}" TEST_PASSTHROUGH="${TEST_PASSTHROUGH:-off}" \
     PDF_STATUS="${PDF_STATUS:-0}" \
-    sh "$FANCY_OPEN_FILE" "$@" >| "$SESSION_OUTPUT" 2>&1
+    timeout 3 sh "$FANCY_OPEN_FILE" "$@" >| "$SESSION_OUTPUT" 2>&1
 }
 
 TEST_TERMINAL=ghostty run_fancy_wrapper "$PDF_FILE" 12
@@ -216,6 +231,16 @@ TEST_TMUX=test-session TEST_PANE=%2 TEST_TERMINAL=ghostty TEST_PASSTHROUGH=on TE
   run_fancy_wrapper "$PDF_FILE" 12
 [[ $(<"$OPEN_LOG") == "viewer=fancy-cat arg=<$PDF_FILE> arg=<12>" ]] ||
   fail "PDF opener did not use the local Ghostty pane: $(<"$OPEN_LOG")"
+rm -f "$TEST_TMP/attached" "$TEST_TMP/attached.n"
+TEST_PATH_PREFIX="$TEST_TMP/tmux-bin:" TEST_CLIENT_AFTER=2 TEST_TMUX=test-session TEST_PANE=%2 \
+  TEST_TERMINAL=ghostty TEST_PASSTHROUGH=on TEST_DISPLAY= run_fancy_wrapper "$PDF_FILE"
+[[ $(<"$OPEN_LOG") == "viewer=fancy-cat arg=<$PDF_FILE>" ]] ||
+  fail "PDF opener did not wait for a tmux client, as after a restore: $(<"$OPEN_LOG")"
+rm -f "$TEST_TMP/attached" "$TEST_TMP/attached.n"
+TEST_PATH_PREFIX="$TEST_TMP/tmux-bin:" TEST_CLIENT_AFTER=100 TEST_TMUX=test-session TEST_PANE=%2 \
+  TEST_TERMINAL=ghostty TEST_PASSTHROUGH=on run_fancy_wrapper "$PDF_FILE"
+[[ $(<"$OPEN_LOG") == viewer=ghostty\ * ]] ||
+  fail "PDF opener did not fall back from detached tmux: $(<"$OPEN_LOG")"
 for unavailable in off ssh; do
   if [[ $unavailable == ssh ]]; then
     TEST_TMUX=test-session TEST_PANE=%2 TEST_TERMINAL=ghostty TEST_PASSTHROUGH=on TEST_SSH=remote \
@@ -421,5 +446,53 @@ TEST_TMUX=test-session EDITOR_STATUS=5 run_editor_session
 TEST_EDITOR=missing-editor run_editor_session
 [[ $(<"$CONTROL_LOG") == $'status=127\nsurvived' && ! -s $OPEN_LOG ]] ||
   fail "editor opener closed for a missing editor: $(<"$CONTROL_LOG")"
+
+mkdir -p "$TEST_TMP/local-tmux/bin"
+cat >| "$TEST_TMP/local-tmux/bin/tmux" <<'MOCK'
+#!/bin/sh
+case "$1" in
+  has-session)
+    case "${2:-}" in
+      -t) test -e "$XDG_RUNTIME_DIR/ready" && test "${3:-}" != '=missing' ;;
+      *) test -e "$XDG_RUNTIME_DIR/server" ;;
+    esac ;;
+  new-session)
+    [ -z "${I3_RESURRECT_TMUX_CLIENT:-}" ] || exit 1
+    printf 'start\n' >>"$XDG_RUNTIME_DIR/actions"
+    touch "$XDG_RUNTIME_DIR/server" ;;
+  run-shell)
+    sleep 0.5
+    printf 'restore\n' >>"$XDG_RUNTIME_DIR/actions"
+    touch "$XDG_RUNTIME_DIR/ready"
+    exit 1 ;;
+  attach)
+    [ -e "$XDG_RUNTIME_DIR/ready" ] || exit 1
+    [ "${I3_RESURRECT_TMUX_CLIENT:-}" = 1 ] || exit 1
+    printf 'attach %s\n' "$3" >>"$XDG_RUNTIME_DIR/actions" ;;
+  *) exit 1 ;;
+esac
+MOCK
+chmod +x "$TEST_TMP/local-tmux/bin/tmux"
+
+restore_ghostty_tmux() {
+  env PATH="$TEST_TMP/local-tmux/bin:$PATH" XDG_RUNTIME_DIR="$TEST_TMP/local-tmux" \
+    TMUX= TEST_ALIASES="$ALIASES_FILE" I3_RESURRECT_LOCAL_TMUX="$1" zsh -fic '
+      setopt NO_CLOBBER
+      _have() { return 1; }
+      _ghostty_tmux_mode() { :; }
+      source "$TEST_ALIASES"
+      _i3_restore_local_tmux
+      [[ -z ${I3_RESURRECT_LOCAL_TMUX-}${I3_RESURRECT_TMUX_CLIENT-} &&
+        ${precmd_functions[(I)_i3_restore_local_tmux]} -eq 0 ]]
+    ' </dev/null
+}
+
+restore_ghostty_tmux d29yayBkZXNr >| "$TEST_TMP/restore-work" 2>&1 &
+work_restore=$!
+restore_ghostty_tmux YnVpbGQ= >| "$TEST_TMP/restore-build" 2>&1 &
+build_restore=$!
+wait "$work_restore" "$build_restore" || fail 'i3 tmux startup hook did not finish'
+[[ $(LC_ALL=C sort "$TEST_TMP/local-tmux/actions") == $'attach =build\nattach =work desk\nrestore\nstart' ]] ||
+  fail 'Ghostty startup did not share one tmux restore and attach to both exact names'
 
 print 'PASS: terminal PDF routing and GUI picker shell lifetimes'

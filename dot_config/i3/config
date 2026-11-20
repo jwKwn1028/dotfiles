@@ -107,7 +107,7 @@ bindsym $mod+r exec --no-startup-id ~/.config/i3/window-mode.sh open, mode "$mod
 # i3 control
 bindsym $mod+Shift+c reload
 bindsym $mod+Shift+i exec --no-startup-id ~/.config/i3/i3-restart.sh
-bindsym $mod+Shift+e exec --no-startup-id "i3-nagbar -t warning -m 'Exit i3?' -B 'Yes' 'i3-msg exit'"
+bindsym $mod+Shift+e exec --no-startup-id "i3-nagbar -t warning -m 'Exit i3?' -B 'Yes' 'session-save; i3-msg exit'"
 
 # i3-resurrect session save/restore
 bindsym --release Control+$mod+a exec --no-startup-id ~/.config/i3/i3-resurrect-save-all.sh

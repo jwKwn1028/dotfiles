@@ -1,21 +1,61 @@
 #!/usr/bin/python3
-"""ghostty-tmux-mode on|off: press Ctrl+Alt+Shift+M/N once no modifier is held."""
+"""Send the Ghostty key-table binding to the focused X11 window."""
+import argparse
 import contextlib
 import io
-import sys
+import os
+from pathlib import Path
+import select
 import time
 
 from Xlib import X, XK, display
+from Xlib.error import XError
 from Xlib.ext import xtest
 
 KEYS = {"on": "m", "off": "n"}
 LOCKS = {XK.XK_Caps_Lock, XK.XK_Num_Lock, XK.XK_Shift_Lock}
+GHOSTTY_CLASS = "com.mitchellh.ghostty"
+
+
+def client_window(pid):
+    try:
+        entries = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+        env = dict(entry.split(b"=", 1) for entry in entries if b"=" in entry)
+        return int(env.get(b"WINDOWID", b"0")), env.get(b"I3_RESURRECT_TMUX_CLIENT") == b"1"
+    except (OSError, ValueError):
+        pass
+    return 0, False
+
+
+def wait_for_focus(d, root, active, window, pid, timeout=60):
+    try:
+        fd = os.pidfd_open(pid)
+    except OSError:
+        return False
+    deadline = time.monotonic() + timeout  # Later focus goes through tmux's client-focus-in hook.
+    try:
+        root.change_attributes(event_mask=X.PropertyChangeMask)
+        while active() != window:
+            if not d.pending_events():
+                ready, _, _ = select.select([d.fileno(), fd], [], [], max(0, deadline - time.monotonic()))
+                if not ready or fd in ready:
+                    return False
+            d.next_event()
+        return True
+    finally:
+        os.close(fd)
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in KEYS:
-        print("usage: ghostty-tmux-mode on|off", file=sys.stderr)
-        return 2
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mode", choices=KEYS)
+    parser.add_argument("--tmux-client", type=int)
+    parser.add_argument("--on-attach", action="store_true")
+    args = parser.parse_args()
+    if args.tmux_client is not None:
+        window, restored = client_window(args.tmux_client)
+        if not 0 < window < 2**32:
+            return 0
     try:
         with contextlib.redirect_stderr(io.StringIO()):  # python-xlib's .Xauthority warnings
             d = display.Display()
@@ -31,6 +71,16 @@ def main():
         return prop.value[0] if prop is not None and len(prop.value) else 0
 
     start = active()
+    if args.tmux_client is not None:
+        try:
+            classes = d.create_resource_object("window", window).get_wm_class() or ()
+        except XError:
+            return 0
+        if not any(name == GHOSTTY_CLASS or name.startswith(GHOSTTY_CLASS + ".") for name in classes):
+            return 0
+        if start != window and not (args.on_attach and restored and wait_for_focus(d, root, active, window, args.tmux_client)):
+            return 0
+        start = window
     mods = {kc for codes in d.get_modifier_mapping() for kc in codes
             if kc and d.keycode_to_keysym(kc, 0) not in LOCKS}
     deadline = time.monotonic() + 1.0
@@ -41,7 +91,7 @@ def main():
     if active() != start:
         return 1
     codes = [d.keysym_to_keycode(XK.string_to_keysym(name))
-             for name in ("Control_L", "Alt_L", "Shift_L", KEYS[sys.argv[1]])]
+             for name in ("Control_L", "Alt_L", "Shift_L", KEYS[args.mode])]
     if 0 in codes:
         return 1
     for kc in codes:
@@ -53,4 +103,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

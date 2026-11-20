@@ -9,7 +9,7 @@ DIR="$(dirname "$(readlink -f "$0")")"
 STATE_DIR="${I3_RESURRECT_STATE_DIR:-$HOME/.config/i3/resurrect}"
 META_DIR="${I3_RESURRECT_META_DIR:-$HOME/.config/i3/resurrect-meta}"
 LAYOUT_DELAY="${I3_RESURRECT_LAYOUT_DELAY:-0.25}"
-PLACEHOLDER_WAIT_ATTEMPTS="${I3_RESURRECT_WAIT_ATTEMPTS:-48}"
+PLACEHOLDER_WAIT_ATTEMPTS="${I3_RESURRECT_WAIT_ATTEMPTS:-120}"
 PLACEHOLDER_POLL_INTERVAL="${I3_RESURRECT_POLL_INTERVAL:-0.25}"
 resurrect_paths
 REMOTE_HELPERS="${I3_RESURRECT_REMOTE_HELPERS:-$HOME/.zsh/rc.d/50-remote.zsh}"
@@ -68,24 +68,39 @@ restore_active() {
     jq -n --arg token "$RESTORE_OPERATION" '{action:"restore-status",token:$token}' | resurrect_group >/dev/null 2>&1
 }
 
-wait_for_workspace() {
-    local workspace="$1"
-    local attempts="$PLACEHOLDER_WAIT_ATTEMPTS"
-    local reason="workspace was not checked"
+workspace_ready() {
+    local tree="$1" workspace="$2"
+    detail="$(resurrect_state ready "$RESTORE_STATE_DIR" "$META_DIR" "$workspace" <<< "$tree" 2>&1)" &&
+        detail="$(jq -n --arg token "$RESTORE_OPERATION" --arg workspace "$workspace" \
+            '{action:"restore-ready",token:$token,workspace:$workspace}' | resurrect_group 2>&1)"
+}
 
-    while [ "$attempts" -gt 0 ]; do
-        restore_active || { printf "Restore cancelled.\n"; return 1; }
-        if reason="$(i3-msg -t get_tree | resurrect_state ready "$RESTORE_STATE_DIR" "$META_DIR" "$workspace" 2>&1)"; then
-            if reason="$(jq -n --arg token "$RESTORE_OPERATION" --arg workspace "$workspace" \
-                '{action:"restore-ready",token:$token,workspace:$workspace}' | resurrect_group 2>&1)"; then
-                return 0
-            fi
+wait_for_launched() {
+    local attempts="$PLACEHOLDER_WAIT_ATTEMPTS" tree workspace
+    local -a waiting
+    while [ "${#launched[@]}" -gt 0 ]; do
+        if ! restore_active; then
+            for workspace in "${launched[@]}"; do outcome["$workspace"]=failed; reason["$workspace"]='restore cancelled'; done
+            return
         fi
-        sleep "$PLACEHOLDER_POLL_INTERVAL"
+        tree="$(i3-msg -t get_tree)" || tree=""
+        waiting=()
+        for workspace in "${launched[@]}"; do
+            if workspace_ready "$tree" "$workspace"; then
+                outcome["$workspace"]=ready
+            else
+                reason["$workspace"]="$detail"
+                waiting+=("$workspace")
+            fi
+        done
+        launched=("${waiting[@]}")
         attempts=$((attempts - 1))
+        if [ "${#launched[@]}" -gt 0 ] && [ "$attempts" -le 0 ]; then
+            for workspace in "${launched[@]}"; do outcome["$workspace"]=failed; done
+            return
+        fi
+        [ "${#launched[@]}" -eq 0 ] || sleep "$PLACEHOLDER_POLL_INTERVAL"
     done
-    printf 'Workspace "%s": %s\n' "$workspace" "$reason"
-    return 1
 }
 
 restore_labroute() {
@@ -195,34 +210,41 @@ record_result() {
     results="$(jq --arg workspace "$workspace" --arg status "$status" --arg detail "$detail" \
         --arg source "$source_workspace" \
         '. + [{source_workspace: $source, workspace: $workspace, status: $status, detail: $detail}]' <<< "$results")"
-    if [ "$status" != ready ]; then
+    if [ "$status" != ready ] && [ "$status" != launched ]; then
         failed=1
         printf 'Workspace "%s": %s\n' "$workspace" "$detail" >&2
     fi
 }
 
+declare -A outcome=() reason=()
+planned=()
+launched=()
 while IFS= read -r workspace || [ -n "$workspace" ]; do
     if ! restore_active; then
-        record_result "$workspace" failed 'restore cancelled'
+        planned+=("$workspace")
+        outcome["$workspace"]=failed
+        reason["$workspace"]='restore cancelled'
         break
     fi
+    planned+=("$workspace")
+    outcome["$workspace"]=failed
     merging="$(jq -r --arg workspace "$workspace" '.[] | select(.workspace == $workspace) | .merging' <<< "$RESTORE_PLAN")"
     if [ "$merging" = false ] && ! i3-msg -t get_tree | jq -e --arg workspace "$workspace" '
         [.. | objects | select(.type? == "workspace" and .name == $workspace)
          | .. | objects | select(.window? != null)] | length == 0
     ' >/dev/null; then
-        record_result "$workspace" failed 'destination became occupied or i3 is unavailable'
+        reason["$workspace"]='destination became occupied or i3 is unavailable'
         continue
     fi
     layout="$RESTORE_STATE_DIR/workspace_$(workspace_file_id "$workspace")_layout.json"
     programs="$RESTORE_STATE_DIR/workspace_$(workspace_file_id "$workspace")_programs.json"
     if ! jq -e 'length > 0' "$programs" >/dev/null; then
-        record_result "$workspace" failed 'no launchable programs were saved'
+        reason["$workspace"]='no launchable programs were saved'
         continue
     fi
     if ! detail="$(jq -n --arg token "$RESTORE_OPERATION" --arg workspace "$workspace" --arg path "$layout" \
         '{action:"restore-layout",token:$token,workspace:$workspace,path:$path}' | resurrect_group 2>&1)"; then
-        record_result "$workspace" failed "layout restore failed: $detail"
+        reason["$workspace"]="layout restore failed: $detail"
         continue
     fi
     sleep "$LAYOUT_DELAY"
@@ -234,15 +256,17 @@ while IFS= read -r workspace || [ -n "$workspace" ]; do
         fi
     done < <(jq -c '.[]' "$programs")
     if [ -n "$launch_error" ]; then
-        record_result "$workspace" failed "$launch_error"
+        reason["$workspace"]="$launch_error"
         continue
     fi
-    if detail="$(wait_for_workspace "$workspace")"; then
-        record_result "$workspace" ready
-    else
-        record_result "$workspace" failed "$detail"
-    fi
+    outcome["$workspace"]=launched
+    launched+=("$workspace")
 done < <(jq -r '.[].workspace' <<< "$RESTORE_PLAN")
+# The parent waits for all groups.
+[ -n "${I3_RESURRECT_SESSION_TOKEN:-}" ] || wait_for_launched
+for workspace in "${planned[@]}"; do
+    record_result "$workspace" "${outcome[$workspace]}" "${reason[$workspace]:-}"
+done
 
 while IFS= read -r workspace || [ -n "$workspace" ]; do
     if ! detail="$(i3-msg -t get_tree | resurrect_state ready "$RESTORE_STATE_DIR" "$META_DIR" "$workspace" 2>&1)" ||
@@ -267,7 +291,7 @@ fi
 if [ "$failed" -eq 0 ]; then
     summary='Restore complete.'
 else
-    summary='Restore finished with errors.'$'\n'"$(jq -r '.[] | select(.status != "ready") | "Workspace \(.workspace): \(.detail)"' <<< "$results")"
+    summary='Restore finished with errors.'$'\n'"$(jq -r '.[] | select(.status != "ready" and .status != "launched") | "Workspace \(.workspace): \(.detail)"' <<< "$results")"
 fi
 placement="$(jq -r 'map("\(.source_workspace)→\(.workspace)") | join(", ")' <<< "$RESTORE_PLAN")"
 if [ -n "$placement" ]; then
@@ -279,7 +303,7 @@ fi
 if [ "$UNLAID_WORKSPACES" != '[]' ]; then
     summary="$summary"$'\n'"Opened without the saved layout: $(jq -r 'join(", ")' <<< "$UNLAID_WORKSPACES")"
 fi
-completed="$(jq '[.[] | select(.status == "ready") | .source_workspace]' <<< "$results")"
+completed="$(jq '[.[] | select(.status == "ready" or .status == "launched") | .source_workspace]' <<< "$results")"
 reattach="$(resurrect_state sessions "$STATE_DIR" "$META_DIR" "$completed")"
 if [ -n "$reattach" ]; then
     summary="$summary"$'\n'"$reattach"

@@ -2,6 +2,7 @@
 """Validate, publish, and inspect local i3 session snapshots. No desktop writes."""
 
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -124,10 +125,14 @@ def validate(state, meta):
                         "invalid Ghostty directory")
                 require(isinstance(entry.get("sessions"), list), "invalid Ghostty sessions")
                 for session in entry["sessions"]:
-                    require(isinstance(session, dict) and session.get("kind") in ("tmux", "zmx")
-                            and isinstance(session.get("name"), str)
-                            and re.fullmatch(r"[A-Za-z0-9_-]+", session["name"]),
-                            "invalid remote session")
+                    require(isinstance(session, dict) and isinstance(session.get("name"), str),
+                            "invalid Ghostty session")
+                    kind, name = session.get("kind"), session["name"]
+                    if kind == "local-tmux":
+                        require(name and not re.search(r"[\x00-\x1f\x7f]", name), "invalid local tmux name")
+                    else:
+                        require(kind in ("tmux", "zmx") and re.fullmatch(r"[A-Za-z0-9_-]+", name),
+                                "invalid remote session")
     return workspaces
 
 
@@ -391,7 +396,7 @@ def session_report(state, meta, completed):
     path = meta / "ghostty-sessions.json"
     if not path.exists():
         return
-    attempted, manual = set(), set()
+    local, remote, manual = set(), set(), set()
     workspaces = set((meta / "workspaces.txt").read_text().splitlines())
     for entry in read_json(path):
         workspace = entry["workspace"]
@@ -400,16 +405,25 @@ def session_report(state, meta, completed):
         programs = read_json(state / f"workspace_{file_id(workspace)}_programs.json")
         for session in entry["sessions"]:
             kind, name = session["kind"], session["name"]
-            command = ("hpc " if kind == "tmux" else "hpcz ") + name
-            arg = f"--initial-command=env I3_RESURRECT_REMOTE_SESSION={kind}:{name} zsh"
+            if kind == "local-tmux":
+                command = "ta " + shlex.quote(name)
+                encoded = base64.b64encode(name.encode()).decode("ascii")
+                arg = f"--initial-command=env I3_RESURRECT_LOCAL_TMUX={encoded} zsh"
+                attempted = local
+            else:
+                command = ("hpc " if kind == "tmux" else "hpcz ") + name
+                arg = f"--initial-command=env I3_RESURRECT_REMOTE_SESSION={kind}:{name} zsh"
+                attempted = remote
             if workspace in completed and any(isinstance(p["command"], list) and arg in p["command"] for p in programs):
                 attempted.add(command)
             else:
                 manual.add(command)
-    if attempted:
-        print("Remote attach requested (unverified): " + ", ".join(sorted(attempted)))
-    if manual - attempted:
-        print("Reattach by hand: " + ", ".join(sorted(manual - attempted)))
+    if local:
+        print("Local tmux attach requested (unverified): " + ", ".join(sorted(local)))
+    if remote:
+        print("Remote attach requested (unverified): " + ", ".join(sorted(remote)))
+    if manual - local - remote:
+        print("Reattach by hand: " + ", ".join(sorted(manual - local - remote)))
 
 
 def capture_group(meta, tree, group):
@@ -535,13 +549,18 @@ def launch_plan(layout, programs, operation, group, slot):
                 at = command.index("-name")
                 del command[at:at + 2]
             command[1:1] = ["-name", token]
-        mark = None
+        elif executable == "flatpak" and command[1:2] == ["run"]:
+            identity_options = ("--env=I3_GROUP_LAUNCH=", "--env=DESKTOP_STARTUP_ID=")
+            command = [arg for arg in command if not arg.startswith(identity_options)]
+            command[2:2] = [option + token for option in identity_options]
+        mark, match = None, []
         if node is not None:
+            match = [rule for rule in node["swallows"] if isinstance(rule, dict)]
             mark = f"_group_{operation}_{slot}_{index}"
             node["swallows"] = [{"instance": "^never-" + token + "$"}]
             node["marks"] = [mark]
         entry["command"] = command
-        entry["group_launch"] = dict(operation=operation, token=token, group=group, slot=slot, mark=mark)
+        entry["group_launch"] = dict(operation=operation, token=token, group=group, slot=slot, mark=mark, match=match)
     return programs
 
 

@@ -1,9 +1,10 @@
 #!/usr/bin/python3
-"""Map i3's Ghostty windows to their shell directory and hpc/hpcz sessions."""
+"""Map Ghostty windows to their shell directory and attached sessions."""
 
 import json
 import os
 import re
+import subprocess
 import sys
 
 PROC_ROOT = os.environ.get("I3_RESURRECT_PROC_ROOT", "/proc")
@@ -72,14 +73,35 @@ def shell_pid(table, pid):
     return pid
 
 
-def attached_session(table, root):
+def tmux_clients():
+    try:
+        result = subprocess.run(
+            ["tmux", "-L", "default", "list-clients", "-F", "#{client_pid}\t#{client_session}"],
+            capture_output=True, text=True, errors="replace", timeout=1,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    if result.returncode:
+        return {}
+    clients = {}
+    for row in result.stdout.split("\n"):
+        pid, _, name = row.partition("\t")
+        if pid.isdecimal() and name and not re.search(r"[\x00-\x1f\x7f]", name):
+            clients[int(pid)] = name
+    return clients
+
+
+def attached_session(table, root, clients):
     pending, subtree = [root], []
     while pending:
         pid = pending.pop()
         subtree.append(pid)
         pending.extend(table[pid]["children"])
     for pid in sorted(subtree):
-        if table[pid]["comm"] != "ssh":
+        comm = table[pid]["comm"]
+        if comm.startswith("tmux") and pid in clients:
+            return {"kind": "local-tmux", "name": clients[pid]}
+        if comm != "ssh":
             continue
         command = " ".join(
             arg.decode("utf-8", "replace")
@@ -104,10 +126,10 @@ def surfaces_by_window(table):
     return windows
 
 
-def window_state(table, roots):
+def window_state(table, roots, clients):
     directory, sessions = None, []
     for root in roots:
-        session = attached_session(table, root)
+        session = attached_session(table, root, clients)
         if session is None or session in sessions:
             continue
         if not sessions:
@@ -135,11 +157,16 @@ def main():
         print("[]")
         return
 
+    windows = list(ghostty_windows(tree))
+    if not windows:
+        print("[]")
+        return
     table = process_table()
     surfaces = surfaces_by_window(table)
+    clients = tmux_clients()
     states = []
-    for workspace, window in ghostty_windows(tree):
-        directory, sessions = window_state(table, surfaces.get(window, []))
+    for workspace, window in windows:
+        directory, sessions = window_state(table, surfaces.get(window, []), clients)
         states.append(
             {
                 "workspace": workspace,

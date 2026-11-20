@@ -260,8 +260,7 @@ return to tiling.
 
 ## i3-Resurrect Save and Restore
 
-Profiles store one group (the selected one, or `--group=B`) and restore into
-any group.
+Single-group profiles save and restore the selected group. Override it with `--group=B`.
 
 | Profile | Save (release) | Restore | State / metadata |
 | --- | --- | --- | --- |
@@ -270,49 +269,31 @@ any group.
 | C | `Super+Ctrl+C` | `Super+Ctrl+T` | `resurrect-c` / `resurrect-meta-c` |
 | All groups | `Super+Ctrl+Y` | `Super+Ctrl+P` | `resurrect-session` / `resurrect-meta-session` |
 
-`poweroff` and the polybar power menu run the all-groups save before shutting
-down. It publishes only if every group succeeds; restore returns each to
-its group and view. Restores fill empty slots first and never move existing,
-scratchpad, or unmanaged windows. `i3-resurrect-session.py save|restore` takes
-`--check` (no desktop changes) and `restore --previous`. Profiles share a lock
-per display. Snapshots hold local paths, URLs, and session names, so
-`resurrect*` stays gitignored.
+**Autosave.** Poweroff, `Super+Shift+E`, and the 15-minute timer use `save --auto`
+with browser automation disabled. An existing snapshot is protected until a
+successful save or restore in this login. Restore reports the last autosave failure
+and, if it fails itself, that autosaves stay off.
 
-**Saving** (`i3-resurrect-save-all.sh`) captures the group without moving
-windows and normalizes it to slots 1–10. Empty groups or failures keep the old
-snapshot; `snapshot.json` is validated, flushed, and published atomically, and
-`group-format.json` versions the slot format.
+**Snapshots.** Saves publish atomically after all groups succeed. Profiles share
+a lock per display. Keep `resurrect*` local because it contains paths, URLs, and
+session names. Use `--check` to validate and `restore --previous` for the prior snapshot.
 
 | Application | State and limits |
 | --- | --- |
-| Zathura | File and page; unreadable state launches plain. |
-| Zen/Helium | Address-bar URL (clipboard and focus restored), else Zen/Firefox session files; ambiguous windows launch plain. |
-| Helium | Transient paths resolve via `helium.desktop`, then the newest AppImage. |
-| Ghostty | Working directory and first `hpc`/`hpcz` session per window; tabs and splits are not rebuilt. |
+| Zathura | File and page when readable. |
+| Zen/Helium | Address-bar URL or browser session file. Ambiguous windows launch plain. |
+| Ghostty | Directory and first attached tmux, `hpc`, or `hpcz` session per window. Missing local tmux state is restored before attach. |
 
-Set `ZEN_LIVE_URL_CAPTURE=0` to skip live capture; `ZEN_PROFILE_ROOTS` and
-`I3_RESURRECT_PROC_ROOT` override lookup roots. Remote attaches are requested,
-not verified; failures say `Reattach by hand`.
+Set `ZEN_LIVE_URL_CAPTURE=0` to skip browser automation. Override lookup roots
+with `ZEN_PROFILE_ROOTS` and `I3_RESURRECT_PROC_ROOT`.
 
-**Restoring** (`i3-resurrect-restore-all.sh [--check] [--previous]`, also via
-the B/C wrappers) validates temporary copies before touching the desktop:
+**Placement.** Restore uses empty slots first and moves only windows it can
+attribute to its launches. It restores `labroute on` if saved and aborts if that
+fails. All groups launch before the shared wait (`I3_RESURRECT_SESSION_WAIT`,
+45 s). Switching groups cancels pending launches. Check `last-restore.json`
+for placement and manual reattach details.
 
-1. Plan the lowest empty slots, then occupied ones.
-2. Build launch tokens and placeholders, rejecting shell-string, `gtk-launch`,
-   `xdg-open`, and `dbus-send` launches; mismatched layouts restore programs
-   only.
-3. Restore `labroute on` if recorded; failure aborts first. It is never turned off.
-4. Reserve placement, select the group, pause tiling and snap workers, hide
-   bars, and route only provably owned windows.
-5. Verify windows, restore focus, clear empty placeholders, resume workers,
-   restore bars, and write `last-restore.json`.
-
-Switching groups cancels further launches; issued ones keep their destination
-for at least two minutes or while the launcher lives. Ambiguous arrivals are
-reported, not moved. Example: live A slots `1,4` plus saved `1–5` restore into
-`2,3,5,6,7`; into an empty B they use `11–15`.
-
-Defaults: `I3_RESURRECT_LAYOUT_DELAY=0.25`, `I3_RESURRECT_WAIT_ATTEMPTS=48`,
+Defaults: `I3_RESURRECT_LAYOUT_DELAY=0.25`, `I3_RESURRECT_WAIT_ATTEMPTS=120`,
 `I3_RESURRECT_POLL_INTERVAL=0.25`, `I3_RESURRECT_LABROUTE_TIMEOUT=45`,
 `I3_RESURRECT_REMOTE_HELPERS=~/.zsh/rc.d/50-remote.zsh`; `I3_RESURRECT_STATE_DIR`
 and `I3_RESURRECT_META_DIR` override profile paths.

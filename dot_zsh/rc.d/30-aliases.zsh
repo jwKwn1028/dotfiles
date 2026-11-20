@@ -152,17 +152,34 @@ tm() {
   fi
 }
 
-# ta [NAME]: attach or pick (j/k), restoring the last save if tmux is down.
+# ta [NAME]: attach, restoring tmux if needed.
+_tmux_restore_if_empty() (
+  local session=${1-}
+  local lock=${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}/tmux-resurrect.lock
+  mkdir -p -- "${lock:h}" || return
+  # Allow lock creation under NO_CLOBBER.
+  : >>| "$lock" || return
+  zmodload zsh/system || return
+  zsystem flock -t 30 "$lock" || { print -u2 'ta: a tmux restore is still running'; return 1 }
+  if ! tmux has-session 2>/dev/null; then
+    print -u2 'ta: restoring tmux sessions...'
+    tmux new-session -d -s 0 || return
+    if ! tmux run-shell ~/.tmux/plugins/tmux-resurrect/scripts/restore.sh; then
+      if [[ -n $session ]]; then
+        tmux has-session -t "=$session"
+      else
+        tmux has-session
+      fi
+    fi
+  fi
+)
+
 (( ${+aliases[ta]} )) && unalias ta
 ta() {
   local s=${1-}
-  if ! tmux has-session 2>/dev/null; then
-    print -u2 'ta: restoring tmux sessions...'
-    tmux new-session -d -s 0 &&
-      tmux run-shell ~/.tmux/plugins/tmux-resurrect/scripts/restore.sh
-  fi
-  local -a names=(${(f)"$(tmux ls -F '#S' 2>/dev/null)"})
+  _tmux_restore_if_empty "$s" || return
   if [[ -z $s ]]; then
+    local -a names=(${(f)"$(tmux ls -F '#S' 2>/dev/null)"})
     (( $#names )) || { print -u2 'ta: no tmux sessions'; return 1 }
     if (( $#names == 1 )); then
       s=$names[1]
@@ -176,9 +193,23 @@ ta() {
     tmux switch-client -t "=$s"
   else
     _ghostty_tmux_mode on
-    { tmux attach -t "=$s" } always { _ghostty_tmux_mode off }
+    { I3_RESURRECT_TMUX_CLIENT="${_i3_resurrect_tmux_client-}" tmux attach -t "=$s" } always { _ghostty_tmux_mode off }
   fi
 }
+
+if [[ -o interactive && -n ${I3_RESURRECT_LOCAL_TMUX-} ]]; then
+  _i3_restore_local_tmux() {
+    add-zsh-hook -d precmd _i3_restore_local_tmux
+    local encoded=$I3_RESURRECT_LOCAL_TMUX session
+    unset I3_RESURRECT_LOCAL_TMUX
+    session=$(print -rn -- "$encoded" | base64 --decode) || return 0
+    local _i3_resurrect_tmux_client=1
+    [[ -n $session ]] && ta "$session"
+    return 0
+  }
+  autoload -Uz add-zsh-hook
+  add-zsh-hook precmd _i3_restore_local_tmux
+fi
 
 # --- Taskwarrior quick-add by weekday ---
 #   t<W><D><d|s>[hml][HH:MM][r<offsets>]   W = weeks ahead 0-4, D = ISO weekday
