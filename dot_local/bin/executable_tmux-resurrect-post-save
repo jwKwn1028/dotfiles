@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 """Rebuild saved pane records with nonempty titles and live commands."""
 
+import json
 import os
+from pathlib import Path
 import re
 import shlex
 import socket
@@ -9,6 +11,9 @@ import subprocess
 import sys
 
 SHELLS = {"sh", "dash", "bash", "zsh", "fish", "ksh"}
+CLAUDE = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+CODEX = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 REWRITES = (
     (re.compile(r"^ssh .*tmux attach-session -t =([A-Za-z0-9_-]+)$"), r"hpc \1"),
     (re.compile(r"^ssh .*zmx attach ([A-Za-z0-9_-]+)$"), r"hpcz \1"),
@@ -70,7 +75,29 @@ def command(pid, args):
     return " ".join(shlex.quote(word) for word in words)
 
 
-def choose(root, argv, children, listed):
+def agent(name, pid, title):
+    """Resume an interactive agent's chat; "" restores nothing, so no prompt reruns."""
+    if name == "codex":
+        # The zsh codex wrapper puts the chat ID in the pane title.
+        found = UUID.search(title)
+        if found and any(CODEX.glob(f"sessions/*/*/*/rollout-*-{found[0]}.jsonl")):
+            return "codex resume " + found[0]
+        return ""
+    try:
+        record = json.loads((CLAUDE / "sessions" / f"{pid}.json").read_text())
+        with open(f"/proc/{pid}/stat") as stat:
+            started = stat.read().rsplit(")", 1)[1].split()[19]
+    except (OSError, ValueError, IndexError):
+        return ""
+    if record.get("kind") != "interactive" or str(record.get("procStart")) != started:
+        return ""
+    session = str(record.get("sessionId", ""))
+    if UUID.fullmatch(session) and any(CLAUDE.glob(f"projects/*/{session}.jsonl")):
+        return "claude --resume " + session
+    return "claude"
+
+
+def choose(root, argv, children, listed, title=""):
     best, direct = None, None
     pending = [(child, 1) for child in sorted(children.get(root, []))]
     while pending:
@@ -78,6 +105,8 @@ def choose(root, argv, children, listed):
         args = argv.get(pid)
         if not args:
             continue
+        if os.path.basename(args[0]) in ("claude", "codex"):
+            return agent(os.path.basename(args[0]), pid, title)
         text = command(pid, args)
         on_list = any(match(text) for match in listed)
         if direct is None:
@@ -110,7 +139,8 @@ def main():
             fields = line.rstrip("\n").split("\t")
             pane = live.get(tuple(fields[i] for i in (1, 2, 5))) if fields[0] == "pane" and len(fields) > 5 else None
             if pane:
-                full = pane["@resurrect-command"] or choose(int(pane["pane_pid"]), argv, children, listed)
+                full = pane["@resurrect-command"] or choose(int(pane["pane_pid"]), argv, children, listed,
+                                                            pane["pane_title"])
                 line = "\t".join([*fields[:6], clean(pane["pane_title"]) or host,
                                   ":" + clean(pane["pane_current_path"]), pane["pane_active"],
                                   clean(pane["pane_current_command"]) or "?", ":" + clean(full)]) + "\n"

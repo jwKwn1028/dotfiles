@@ -211,6 +211,12 @@ if [[ -o interactive && -n ${I3_RESURRECT_LOCAL_TMUX-} ]]; then
   add-zsh-hook precmd _i3_restore_local_tmux
 fi
 
+# In tmux, title the pane with Codex's chat ID so tmux saves can resume it.
+_have codex && codex() {
+  [[ -z ${TMUX-} ]] || set -- -c 'tui.terminal_title=["thread-id"]' "$@"
+  command codex "$@"
+}
+
 # --- Taskwarrior quick-add by weekday ---
 #   t<W><D><d|s>[hml][HH:MM][r<offsets>]   W = weeks ahead 0-4, D = ISO weekday
 #   d = due, s = scheduled, h/m/l = priority, r = reminder offsets (bare = hours)

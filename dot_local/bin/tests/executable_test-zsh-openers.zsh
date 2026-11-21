@@ -495,4 +495,18 @@ wait "$work_restore" "$build_restore" || fail 'i3 tmux startup hook did not fini
 [[ $(LC_ALL=C sort "$TEST_TMP/local-tmux/actions") == $'attach =build\nattach =work desk\nrestore\nstart' ]] ||
   fail 'Ghostty startup did not share one tmux restore and attach to both exact names'
 
+mkdir -p "$TEST_TMP/codex-bin"
+print -r -- $'#!/bin/sh\nprintf "%s\\n" "$@"' >| "$TEST_TMP/codex-bin/codex"
+chmod +x "$TEST_TMP/codex-bin/codex"
+codex_args() {
+  env PATH="$TEST_TMP/codex-bin:$PATH" TMUX="$1" TEST_ALIASES="$ALIASES_FILE" zsh -fic '
+    _have() { [[ $1 == codex ]]; }
+    _ghostty_tmux_mode() { :; }
+    source "$TEST_ALIASES"
+    codex resume x' </dev/null 2>/dev/null
+}
+[[ $(codex_args /tmp/sock,1,0) == $'-c\ntui.terminal_title=["thread-id"]\nresume\nx' ]] ||
+  fail 'codex in tmux did not title its pane with the chat ID'
+[[ $(codex_args '') == $'resume\nx' ]] || fail 'codex outside tmux changed its arguments'
+
 print 'PASS: terminal PDF routing and GUI picker shell lifetimes'

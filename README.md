@@ -14,6 +14,7 @@ chezmoi update # git pull + apply
 - [docs.md](docs.md) — daily commands, full desktop recovery, macOS boundary
 - [MACOS_PORTING_GUIDE.md](MACOS_PORTING_GUIDE.md) — macOS port contract
 - [X2W.md](X2W.md) — Wayland plan
+- [HARDWARE.md](HARDWARE.md) — device names to change on other hardware
 - [AGENTS.md](AGENTS.md) — working rules for agents and contributors
 
 ## License

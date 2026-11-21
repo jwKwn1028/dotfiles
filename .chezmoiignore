@@ -21,6 +21,7 @@ run-tests.sh
 docs.md
 X2W.md
 MACOS_PORTING_GUIDE.md
+HARDWARE.md
 CHEZMOI_UPDATE_WORKFLOW.md
 IDEA.md
 AGENTS.md

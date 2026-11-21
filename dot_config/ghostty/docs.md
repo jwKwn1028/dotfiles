@@ -51,6 +51,7 @@ Per split, these keys drive tmux; new splits start with it off.
 | `Alt+Shift+H` / `Alt+Shift+L` | `C-b p` / `C-b n` | Previous / next window. |
 | `Ctrl+Alt+Shift+H` / `L` | `M-H` / `M-L` | Previous / next window (outermost tmux). |
 | `Alt+1` … `Alt+9`, `Alt+0` | the same keys | Window 1–9, 10 (outermost tmux). |
+| `Alt+Tab` | the same key | Last window (outermost tmux). |
 
 On X11, Zsh enables it for `hpc` and tmux attaches. Local tmux enables it on
 focus, including after restore. `Alt+Shift+T` reapplies it after reloading

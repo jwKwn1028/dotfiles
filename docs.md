@@ -37,6 +37,8 @@ and session state are removed.
 
 For `class = desktop` and `desktopProfile = linuxmint-i3-x11` on x86_64. Steps
 1–5 restore managed state; 6–10 restore what is deliberately kept out of Git.
+On hardware other than the machine this targets, check
+[HARDWARE.md](HARDWARE.md) after step 4.
 
 ### 1. Install the base system
 
@@ -124,7 +126,8 @@ Log out, pick **i3** in LightDM, and log back in.
   `systemctl --user daemon-reload && systemctl --user enable --now task-notify.timer`.
   See `~/.config/task/MANUAL.md`.
 - **Session recovery.** `Super+Ctrl+P` restores i3 and reattaches Ghostty.
-  `C-b C-r` restores tmux alone, and `C-b C-s` saves tmux.
+  `C-b C-r` restores tmux alone, and `C-b C-s` saves tmux. Restored tmux panes
+  resume their interactive Claude Code and Codex chats.
   Enable 15-minute saves with `systemctl --user daemon-reload && systemctl --user enable --now tmux-resurrect-save.timer i3-resurrect-save.timer`.
   See the [i3 manual](dot_config/i3/MANUAL.md#i3-resurrect-save-and-restore).
 - **npm:** install NodeSource's `nodejs`, which bundles npm; apt's `npm`
