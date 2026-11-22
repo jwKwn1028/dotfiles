@@ -1,0 +1,16 @@
+#!/bin/sh
+: {{ include "dot_config/bat/themes/tokyonight_storm.tmTheme" | sha256sum }}
+: {{ if or (lookPath "batcat") (lookPath "bat") }}present{{ else }}missing{{ end }}
+set -eu
+
+if command -v batcat >/dev/null 2>&1; then
+    bat=batcat
+elif command -v bat >/dev/null 2>&1; then
+    bat=bat
+else
+    echo "bat not installed; skipping bat cache."
+    exit 0
+fi
+
+echo "==> bat cache"
+"$bat" cache --build

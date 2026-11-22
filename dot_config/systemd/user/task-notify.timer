@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll Taskwarrior for imminent scheduled times
+
+[Timer]
+OnCalendar=minutely
+# A missed run must not be caught up: a reminder for a past time is what
+# task-notify exists to suppress. See ~/.config/task/MANUAL.md.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

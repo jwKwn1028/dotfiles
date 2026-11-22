@@ -1,0 +1,44 @@
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" -}}{{- $class = .class -}}{{- end -}}
+{{- $desktopProfile := "none" -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{-     $desktopProfile = "linuxmint-i3-x11" -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey . "desktopProfile" -}}
+{{-   $desktopProfile = .desktopProfile -}}
+{{- end -}}
+{{- if and (eq .chezmoi.os "linux") (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
+#!/bin/sh
+set -eu
+
+# Sort ~/Downloads newest first. Folders without their own Thunar metadata keep
+# the global default, but with per-folder settings on, sort and view changes
+# made in Thunar are saved to that folder only.
+
+if ! command -v Thunar >/dev/null 2>&1; then
+    echo "Thunar not installed; skipping Downloads sort order."
+    exit 0
+fi
+
+downloads="$HOME/Downloads"
+mkdir -p "$downloads"
+
+if [ "$(xfconf-query -c thunar -p /misc-directory-specific-settings 2>/dev/null || true)" != true ]; then
+    echo "==> Enabling Thunar per-folder view settings"
+    xfconf-query -c thunar -p /misc-directory-specific-settings -n -t bool -s true
+fi
+
+set_folder_metadata() {
+    key="metadata::thunar-$1"
+    current=$(gio info -a "$key" "$downloads" | sed -n "s/^ *$key: //p")
+    if [ "$current" != "$2" ]; then
+        echo "==> Setting Thunar $1 for $downloads to $2"
+        gio set "$downloads" "$key" "$2"
+    fi
+}
+
+set_folder_metadata sort-column THUNAR_COLUMN_DATE_MODIFIED
+set_folder_metadata sort-order GTK_SORT_DESCENDING
+{{- end }}

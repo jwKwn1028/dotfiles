@@ -1,0 +1,52 @@
+# Keep agent state local; only AGENTS.md and CLAUDE.md are tracked.
+.AGENTS.md
+dot_config/private_restic/password
+.claude
+.codex
+claude.md
+# Only stable agent settings belong in chezmoi.
+private_dot_claude/*
+!private_dot_claude/modify_private_settings.json
+private_dot_codex/*
+!private_dot_codex/modify_private_config.toml
+dot_claude.json*
+private_dot_claude.json*
+dot_config/**/dot_git/
+dot_config/**/dot_codex/
+dot_config/**/dot_agents/
+dot_config/i3/resurrect*
+dot_config/i3/MANUAL.pdf
+
+# Local docs; also excluded by .chezmoiignore.
+/CHEZMOI_UPDATE_WORKFLOW.md
+/IDEA.md
+
+# Local NixOS bootstrap module; copied manually to /etc/nixos when testing.
+/desktop.nix
+
+# Browser profiles stay local.
+dot_config/private_net.imput.helium/
+dot_var/app/app.zen_browser.zen/
+
+# Allow only the SSH config template.
+private_dot_ssh/*
+!private_dot_ssh/private_config.tmpl
+
+# Credential stores; .githooks/pre-commit blocks them too.
+*dot_gnupg/
+*dot_password-store/
+*dot_aws/
+*dot_docker/
+*dot_kube/
+*dot_netrc*
+*dot_git-credentials*
+*dot_pypirc*
+**/gh/*hosts.yml*
+*rclone.conf*
+
+__pycache__/
+*.py[cod]
+.ruff_cache/
+
+prospect.md
+commitmsg.txt

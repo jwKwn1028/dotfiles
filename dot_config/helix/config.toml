@@ -1,0 +1,108 @@
+theme = "tokyonight_storm"
+
+[editor]
+cursorline= true
+color-modes = true
+popup-border = "menu"
+text-width = 100
+trim-trailing-whitespace = true
+trim-final-newlines=true
+line-number = "relative"
+mouse = true
+bufferline = "multiple"
+
+[editor.gutters.line-numbers]
+min-width = 2
+
+[editor.statusline]
+left = ["mode", "spinner", "file-name", "read-only-indicator", "file-modification-indicator"]
+center = []
+right = ["diagnostics", "selections", "register", "position", "position-percentage", "file-type"]
+separator = "│"
+diagnostics = ["error", "warning"]
+mode.normal = "N"
+mode.insert = "I"
+mode.select = "S"
+
+[editor.cursor-shape]
+insert = "bar"
+normal = "block"
+select = "underline"
+
+[editor.inline-diagnostics]
+cursor-line = "warning"
+other-lines = "disable"
+
+# Wrap code at the viewport; prose uses text-width.
+[editor.soft-wrap]
+enable = true
+max-wrap = 25
+max-indent-retain = 0
+wrap-indicator = "↪ "
+
+[editor.lsp]
+display-progress-messages = true
+display-inlay-hints = true
+
+
+[editor.file-picker]
+hidden = false
+parents = true
+
+[keys.normal]
+F8 = ":open %sh{hxp-first-error}"
+"ret" = ["open_below", "normal_mode"]
+# "C" = ":clipboard-yank"
+"V" = ":clipboard-paste-before"
+# Forward search: SyncTeX for TeX/Markdown; raise-only for Typst.
+"C-l" = ":sh ~/.local/bin/hxp-fwd '%{buffer_name}' %{cursor_line} %{cursor_column}"
+"C-y" = [
+  ':insert-output HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi run "%{buffer_name}"',
+  ':sh printf "\x1b[?1049h\x1b[?2004h\x1b[2 q" > /dev/tty',
+  ':cd %sh{HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi cwd "%{buffer_name}"}',
+  ':open %sh{HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi choice "%{buffer_name}"}',
+  ':sh HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi cleanup',
+  ':redraw',
+  ':echo " "',
+]
+
+# Clipboard paste: lowercase before, uppercase after.
+[keys.normal.space]
+p = "paste_clipboard_before"
+P = "paste_clipboard_after"
+
+# Alt-d drives the debugpy DAP adapter in languages.toml.
+[keys.normal.A-d]
+t = "dap_toggle_breakpoint"
+d = "dap_launch"          # start a session (prompts you to pick a template)
+c = "dap_continue"
+n = "dap_next"            # step over
+i = "dap_step_in"
+o = "dap_step_out"
+v = "dap_variables"       # inspect variables (popup)
+r = "dap_restart"
+k = "dap_terminate"       # kill the session
+
+[keys.insert]
+A-h = "move_char_left"
+A-j = "move_line_down"
+A-k = "move_line_up"
+A-l = "move_char_right"
+A-q = "goto_line_start"
+A-e = "goto_line_end_newline"
+j = { k = "normal_mode" }
+
+[keys.select]
+# "C" = ":clipboard-yank"
+"V" = ":clipboard-paste-replace"
+tab = "indent"
+S-tab = "unindent"
+
+[keys.select.space]
+p = "paste_clipboard_before"
+P = "paste_clipboard_after"
+
+[editor.indent-guides]
+render = true
+character = "|"
+skip-levels = 0

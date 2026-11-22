@@ -1,0 +1,58 @@
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" -}}{{- $class = .class -}}{{- end -}}
+{{- if and (eq .chezmoi.os "linux") (eq $class "desktop") -}}
+{{- $githubUser := "" -}}
+{{- if hasKey . "githubUser" }}{{ $githubUser = .githubUser }}{{ end -}}
+#!/usr/bin/env bash
+# Install missing pinned projects; leave existing checkouts untouched.
+set -uo pipefail
+
+failed=()
+
+project() {  # NAME URL COMMIT DIR [INSTALL...]
+    local name=$1 url=$2 commit=$3 dir=$4 partial current
+    shift 4
+    if [[ -e "$dir/.git" ]]; then
+        current=$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)
+        [[ "$current" == "$commit" ]] ||
+            echo "  $name: keeping your checkout at ${current:0:7} (pinned ${commit:0:7})"
+    elif [[ -e "$dir" ]]; then
+        echo "error: $name: $dir exists but is not a git checkout; leaving it alone" >&2
+        failed+=("$name")
+        return
+    elif [[ -z "$url" ]]; then
+        echo "  $name: set githubUser in ~/.config/chezmoi/chezmoi.toml to clone it; skipping"
+        return
+    else
+        echo "==> cloning $name at ${commit:0:7} into $dir"
+        # Clone beside the target, so a failed checkout never passes for yours.
+        partial="$dir.partial.$$"
+        if ! mkdir -p -- "$(dirname -- "$dir")" ||
+            ! git clone --quiet -- "$url" "$partial" ||
+            ! git -C "$partial" checkout --quiet --detach "$commit" ||
+            [[ "$(git -C "$partial" rev-parse HEAD)" != "$commit" ]] ||
+            ! mv -- "$partial" "$dir"; then
+            echo "error: $name: could not check out $commit from $url" >&2
+            rm -rf -- "$partial"
+            failed+=("$name")
+            return
+        fi
+    fi
+    if (( $# )) && ! (cd -- "$dir" && "$@"); then
+        echo "error: $name: '$*' failed in $dir" >&2
+        failed+=("$name")
+    fi
+}
+
+{{ range $name, $p := .packages.git -}}
+{{- $url := "" -}}
+{{- if hasKey $p "url" -}}{{- $url = $p.url -}}
+{{- else if $githubUser -}}{{- $url = printf "https://github.com/%s/%s.git" $githubUser $p.repo -}}{{- end -}}
+project {{ $name | quote }} {{ $url | quote }} {{ $p.commit | quote }} "$HOME/"{{ $p.dir | quote }}{{ range $p.install }} {{ . | quote }}{{ end }}
+{{ end -}}
+
+if (( ${#failed[@]} )); then
+    echo "error: not provisioned: ${failed[*]}; fix it and rerun chezmoi apply" >&2
+    exit 1
+fi
+{{- end }}

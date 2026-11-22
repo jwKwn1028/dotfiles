@@ -1,0 +1,5 @@
+/* Hide the tmux-mode badge; the margin unblocks clicks. */
+.key-state-overlay {
+  opacity: 0;
+  margin: 0 0 -200px 0;
+}

@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+{{ $class := "desktop" -}}
+{{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
+# Installs the fonts the desktop configs name by family: JuliaMono (the UI face
+# everywhere -- ghostty, polybar, rofi, editors, XSETTINGS, Thunar's GTK theme),
+# NanumGothicCoding (Korean monospace fallback in ghostty), and JetBrainsMono
+# Nerd Font (icon glyphs for polybar and starship). Installed to
+# ~/.local/share/fonts from upstream archives. Supplemental document fonts in
+# packages.fonts.archives include New Computer Modern Sans and Math for Pandoc.
+set -euo pipefail
+
+{{ if ne $class "desktop" -}}
+echo "Non-desktop class; skipping fonts."
+exit 0
+{{- else -}}
+fontdir="$HOME/.local/share/fonts"
+failed=0
+mkdir -p "$fontdir"
+
+# Test the family name recorded inside the file, never the filename: the
+# codeface build of NanumGothicCoding registers as "NanumGothic_Coding".
+#
+# `grep -ix ... >/dev/null`, not `grep -qix`: -q exits at the first match,
+# SIGPIPEs fc-list, and under `set -o pipefail` turns the pipeline non-zero --
+# reporting "missing" exactly when the font IS installed.
+have_family() {
+    fc-list : family 2>/dev/null | tr ',' '\n' | grep -ix -- "$1" >/dev/null
+}
+
+# install_zip URL DESTDIR FAMILY=GLOB [FAMILY=GLOB ...] -- fetches a zip once
+# and copies each GLOB into DESTDIR, skipping the download when every named
+# family already resolves.
+install_zip() {
+    local url="$1" dest="$2"
+    shift 2
+    local spec names="" missing=0 tmp
+
+    for spec in "$@"; do
+        names="${names:+$names, }${spec%%=*}"
+        have_family "${spec%%=*}" || missing=1
+    done
+
+    if [ "$missing" -eq 0 ]; then
+        echo "  $names already present"
+        return 0
+    fi
+
+    echo "==> installing $names"
+    tmp="$(mktemp -d)"
+    if ! curl -fsSL -o "$tmp/font.zip" "$url"; then
+        echo "WARN: could not download $names from $url"
+        rm -rf "$tmp"
+        return 1
+    fi
+    if ! unzip -qo "$tmp/font.zip" -d "$tmp/extracted"; then
+        echo "WARN: could not unpack the $names archive"
+        rm -rf "$tmp"
+        return 1
+    fi
+    mkdir -p "$dest"
+    # Naver's archive carries macOS resource forks (._*): they match *.ttf but
+    # are not fonts, and fontconfig reports each as a broken font file.
+    for spec in "$@"; do
+        find "$tmp/extracted" -type f -name "${spec#*=}" ! -name '._*' \
+            -exec cp {} "$dest/" \;
+    done
+    rm -rf "$tmp"
+}
+
+# --- JuliaMono ---
+# No apt package on Mint 22.3. All weights, because the configs use the real
+# italic rather than a synthetic slant.
+install_zip \
+    "https://github.com/cormullion/juliamono/releases/latest/download/JuliaMono-ttf.zip" \
+    "$fontdir/JuliaMono" \
+    'JuliaMono=JuliaMono-*.ttf' || failed=1
+
+# --- NanumGothicCoding ---
+# Naver's own GitHub release. Not the AUR package or the older mirrors:
+# ttf-nanumgothic_coding still points at the retired dev.naver.com.
+install_zip \
+    "https://github.com/naver/nanumfont/releases/download/VER2.5/NanumGothicCoding-2.5.zip" \
+    "$fontdir/NanumGothicCoding" \
+    'NanumGothicCoding=*.ttf' || failed=1
+
+# --- JetBrainsMono Nerd Font ---
+install_zip \
+    "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip" \
+    "$fontdir/JetBrainsMonoNerd" \
+    'JetBrainsMono Nerd Font=*.ttf' || failed=1
+
+# --- Document fonts ---
+{{ range .packages.fonts.archives -}}
+install_zip {{ .url | quote }} "$fontdir"/{{ .directory | quote }}{{ range .fonts }} {{ . | quote }}{{ end }} || failed=1
+{{ end }}
+
+fc-cache -f "$fontdir" >/dev/null
+
+# Surface anything the desktop configs still cannot resolve, rather than leaving
+# it to be discovered as tofu in the terminal later.
+for family in "JuliaMono" "NanumGothicCoding" "JetBrainsMono Nerd Font"{{ range .packages.fonts.archives }}{{ range .fonts }} {{ index (splitList "=" .) 0 | quote }}{{ end }}{{ end }}; do
+    if ! have_family "$family"; then
+        echo "WARN: $family is still unresolved." >&2
+        failed=1
+    fi
+done
+if [ "$failed" -ne 0 ]; then
+    echo "Font provisioning incomplete; rerun chezmoi apply." >&2
+    exit 1
+fi
+echo "==> fonts done."
+{{- end }}

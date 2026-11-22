@@ -1,0 +1,5 @@
+#!/bin/sh
+# Shared launcher; theme and icons follow XSettings.
+
+# Capitalization preserves WM_CLASS.
+exec /usr/bin/Thunar "$@"

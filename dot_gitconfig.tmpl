@@ -1,0 +1,41 @@
+{{- $credentialHelper := "cache" -}}
+{{- range list "/usr/share/doc/git/contrib/credential/libsecret/git-credential-libsecret" "/usr/lib/git-core/git-credential-libsecret" -}}
+{{-   if stat . -}}{{- $credentialHelper = . -}}{{- end -}}
+{{- end -}}
+[user]
+	email = {{ .email | quote }}
+	name = {{ .name | quote }}
+[init]
+	defaultBranch = main
+[fetch]
+	prune = true
+[merge]
+	conflictStyle = zdiff3
+[rerere]
+	enabled = true
+[diff]
+	algorithm = histogram
+	colorMoved = default
+[commit]
+	verbose = true
+[url "https://github.com/"]
+	insteadOf = git://github.com/
+[credential]
+	helper = {{ $credentialHelper }}
+[filter "lfs"]
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+	clean = git-lfs clean -- %f
+[push]
+	autoSetupRemote = true
+{{- /* As `gh auth setup-git` writes it: GitHub over HTTPS signs in through gh. */}}
+{{- $gh := lookPath "gh" }}
+{{- if $gh }}
+[credential "https://github.com"]
+	helper =
+	helper = !{{ $gh }} auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !{{ $gh }} auth git-credential
+{{- end }}

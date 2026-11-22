@@ -1,0 +1,45 @@
+# Shared by all Zsh invocations; interactive setup lives in ~/.zsh/rc.d/.
+export MICRO_TRUECOLOR=1
+export BAT_THEME="tokyonight_storm"
+export TYPST_INSTALL="$HOME/.typst"
+
+typeset -U path PATH
+path=(
+  "$HOME/.pixi/bin"
+  "/usr/local/go/bin"
+  "$HOME/.local/bin"
+  "$HOME/.local/npm-global/bin"
+  "$TYPST_INSTALL/bin"
+  "$HOME/Applications/FullProf_Suite"
+  "$HOME/Applications/VESTA-gtk3"
+  "$HOME/.juliaup/bin"
+  "$HOME/Applications/qe-7.5/bin"
+  "$HOME/Applications/task-calendar"
+  "$HOME/Applications/pomodoro"
+  "$HOME/.cargo/bin"
+  "${path[@]}"
+)
+export PATH
+
+# Platform compatibility loads before ~/.zshrc and its rc.d modules.
+[[ -r "$HOME/.zsh/macos/compat.zsh" ]] &&
+  source "$HOME/.zsh/macos/compat.zsh"
+
+for EDITOR in hx vim vi nano; do whence -p $EDITOR >/dev/null && break; done
+export EDITOR VISUAL=$EDITOR ZK_EDITOR=$EDITOR
+
+# Minimal conda access for non-interactive shells.
+if [[ -x "$HOME/miniconda3/bin/conda" ]] && ! whence conda >/dev/null 2>&1; then
+  conda() {
+    emulate -L zsh
+    setopt localoptions no_aliases
+
+    local conda_root="$HOME/miniconda3"
+
+    unalias conda 2>/dev/null || true
+    unfunction conda 2>/dev/null || true
+
+    eval "$("$conda_root/bin/conda" shell.zsh hook 2>/dev/null)" || return 127
+    conda "$@"
+  }
+fi

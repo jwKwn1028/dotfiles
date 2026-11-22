@@ -1,0 +1,534 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+DIR="$(dirname "$(readlink -f "$0")")"
+. "$DIR/_resurrect-common.sh"
+
+STATE_DIR="${I3_RESURRECT_STATE_DIR:-$HOME/.config/i3/resurrect}"
+META_DIR="${I3_RESURRECT_META_DIR:-$HOME/.config/i3/resurrect-meta}"
+SWALLOW="${I3_RESURRECT_SWALLOW:-class,instance,title}"
+SYSTEM_PYTHON="${I3_SYSTEM_PYTHON:-/usr/bin/python3}"
+resurrect_paths
+ZEN_URL_STATE_HELPER="${I3_RESURRECT_ZEN_HELPER:-$DIR/zen-url-state.py}"
+[ -r "$ZEN_URL_STATE_HELPER" ] || ZEN_URL_STATE_HELPER="$DIR/executable_zen-url-state.py"
+GHOSTTY_SESSION_HELPER="${I3_RESURRECT_GHOSTTY_HELPER:-$DIR/ghostty-session-state.py}"
+[ -r "$GHOSTTY_SESSION_HELPER" ] || GHOSTTY_SESSION_HELPER="$DIR/executable_ghostty-session-state.py"
+HELIUM_DESKTOP_FILE="${HELIUM_DESKTOP_FILE:-$HOME/.local/share/applications/helium.desktop}"
+LABROUTE_MODE_FILE="${TAILSCALE_REMOTE_MODE_FILE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/tailscale-remote-proxy-required}"
+
+notify() {
+    [ "${I3_RESURRECT_QUIET:-0}" != 1 ] || return 0
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send "i3-resurrect" "$1" || true
+    fi
+}
+
+find_i3_resurrect() {
+    if [ -n "${I3_RESURRECT:-}" ]; then
+        command -v "$I3_RESURRECT"
+    elif command -v i3-resurrect >/dev/null 2>&1; then
+        command -v i3-resurrect
+    elif [ -x "$HOME/.local/bin/i3-resurrect" ]; then
+        printf '%s\n' "$HOME/.local/bin/i3-resurrect"
+    else
+        return 1
+    fi
+}
+
+ensure_zen_browser_programs() {
+    local workspace="$1"
+    local workspace_id
+    local layout_file
+    local programs_file
+    local zen_windows
+    local zen_programs
+    local tmp
+
+    workspace_id="$(workspace_file_id "$workspace")"
+    layout_file="$STATE_DIR/workspace_${workspace_id}_layout.json"
+    programs_file="$STATE_DIR/workspace_${workspace_id}_programs.json"
+
+    [ -s "$layout_file" ] || return 0
+    [ -s "$programs_file" ] || return 0
+
+    zen_windows="$(
+        jq '[.. | objects | select(.swallows? | type == "array") |
+            .swallows[]? | select((.class // "") == "^zen$")] | length' "$layout_file"
+    )"
+    [ "$zen_windows" -gt 0 ] || return 0
+
+    zen_programs="$(
+        jq '[.[] | select((.command | if type == "array" then join(" ") else . end) |
+            contains("app.zen_browser.zen"))] | length' "$programs_file"
+    )"
+    if [ "$zen_programs" -ge "$zen_windows" ]; then
+        return 0
+    fi
+
+    tmp="$programs_file.tmp"
+    jq --arg wd "$HOME" --argjson missing "$((zen_windows - zen_programs))" '
+        . + [range(0; $missing) |
+            {"command": ["flatpak", "run", "app.zen_browser.zen"], "working_directory": $wd}]
+    ' "$programs_file" > "$tmp"
+    mv "$tmp" "$programs_file"
+}
+
+helium_launch_command() {
+    local exec_line=""
+    local cand=""
+
+    if [ -r "$HELIUM_DESKTOP_FILE" ]; then
+        exec_line="$(awk -F= '/^Exec=/{sub(/^Exec=/, ""); print; exit}' "$HELIUM_DESKTOP_FILE")"
+    fi
+    exec_line="$(printf '%s' "$exec_line" | sed -E 's/[[:space:]]*%[A-Za-z]//g; s/[[:space:]]+$//')"
+
+    if [ -z "$exec_line" ]; then
+        cand="$(ls -1t "$HOME"/Applications/helium*.AppImage 2>/dev/null | head -n 1)"
+        exec_line="$cand"
+    fi
+
+    [ -n "$exec_line" ] || return 1
+    printf '%s' "$exec_line" | jq -R 'split(" ") | map(select(length > 0))'
+}
+
+ensure_helium_browser_programs() {
+    local workspace="$1"
+    local workspace_id
+    local layout_file
+    local programs_file
+    local helium_windows
+    local helium_cmd
+    local tmp
+
+    workspace_id="$(workspace_file_id "$workspace")"
+    layout_file="$STATE_DIR/workspace_${workspace_id}_layout.json"
+    programs_file="$STATE_DIR/workspace_${workspace_id}_programs.json"
+
+    [ -s "$layout_file" ] || return 0
+    [ -s "$programs_file" ] || return 0
+
+    helium_windows="$(
+        jq '[.. | objects | select(.swallows? | type == "array") |
+            .swallows[]? | select((.class // "") | test("helium"; "i"))] | length' "$layout_file"
+    )"
+    [ "$helium_windows" -gt 0 ] || return 0
+
+    helium_cmd="$(helium_launch_command)" || return 0
+    [ -n "$helium_cmd" ] || return 0
+
+    tmp="$programs_file.tmp"
+    jq --argjson count "$helium_windows" --argjson cmd "$helium_cmd" --arg wd "$HOME" '
+        def is_helium_command($c):
+            (($c | type) == "array") and
+            (($c | map(select(type == "string")) | join(" ")) | test("helium"; "i"));
+        (map(select(is_helium_command(.command // []) | not))) +
+        [range(0; $count) | {"command": $cmd, "working_directory": $wd}]
+    ' "$programs_file" > "$tmp"
+    mv "$tmp" "$programs_file"
+}
+
+capture_zathura_page_state() {
+    if ! command -v busctl >/dev/null 2>&1 || ! command -v xprop >/dev/null 2>&1; then
+        printf '[]\n'
+        return 0
+    fi
+
+    local tree
+    tree="$(cat "$META_DIR/tree.json")" || {
+        printf '[]\n'
+        return 0
+    }
+
+    {
+        printf '%s\n' "$tree" | jq -r '
+            [.. | objects | select(.type? == "workspace") |
+                .name as $workspace |
+                .. | objects |
+                select(
+                    (.window? // null) != null and
+                    ((.window_properties.instance? // "") == "org.pwmt.zathura" or
+                     (.window_properties.class? // "") == "Zathura")
+                ) |
+                [$workspace, .window] | @tsv
+            ] | .[]
+        ' | while IFS=$'\t' read -r workspace window_id; do
+            local pid filename page_zero page_one
+
+            [ -n "$workspace" ] || continue
+            [ -n "$window_id" ] || continue
+
+            pid="$(
+                xprop -id "$window_id" _NET_WM_PID 2>/dev/null |
+                    awk -F'= ' '/_NET_WM_PID/ {print $2; exit}'
+            )" || true
+            [[ "$pid" =~ ^[0-9]+$ ]] || continue
+
+            filename="$(
+                busctl --user --json=short get-property \
+                    "org.pwmt.zathura.PID-$pid" \
+                    /org/pwmt/zathura \
+                    org.pwmt.zathura \
+                    filename 2>/dev/null |
+                    jq -r '.data // empty'
+            )" || true
+            [ -n "$filename" ] || continue
+
+            page_zero="$(
+                busctl --user --json=short get-property \
+                    "org.pwmt.zathura.PID-$pid" \
+                    /org/pwmt/zathura \
+                    org.pwmt.zathura \
+                    pagenumber 2>/dev/null |
+                    jq -r '.data // empty'
+            )" || true
+            [[ "$page_zero" =~ ^[0-9]+$ ]] || continue
+
+            page_one=$((page_zero + 1))
+            jq -cn \
+                --arg workspace "$workspace" \
+                --arg window_id "$window_id" \
+                --arg pid "$pid" \
+                --arg filename "$filename" \
+                --argjson page "$page_one" \
+                '{workspace: $workspace, window_id: $window_id, pid: $pid, filename: $filename, page: $page}'
+        done
+    } | jq -s '.'
+}
+
+capture_zen_page_state() {
+    if [ ! -x "$SYSTEM_PYTHON" ] || [ ! -r "$ZEN_URL_STATE_HELPER" ]; then
+        printf '[]\n'
+        return 0
+    fi
+
+    local tree
+    tree="$(cat "$META_DIR/tree.json")" || {
+        printf '[]\n'
+        return 0
+    }
+
+    ZEN_PROFILE_ROOTS="${ZEN_PROFILE_ROOTS:-$HOME/.var/app/app.zen_browser.zen/.zen:$HOME/.zen}" \
+        "$SYSTEM_PYTHON" "$ZEN_URL_STATE_HELPER" <<< "$tree" || printf '[]\n'
+}
+
+capture_ghostty_session_state() {
+    if [ ! -x "$SYSTEM_PYTHON" ] || [ ! -r "$GHOSTTY_SESSION_HELPER" ]; then
+        printf '[]\n'
+        return 0
+    fi
+
+    local tree
+    tree="$(cat "$META_DIR/tree.json")" || {
+        printf '[]\n'
+        return 0
+    }
+
+    "$SYSTEM_PYTHON" "$GHOSTTY_SESSION_HELPER" <<< "$tree" || printf '[]\n'
+}
+
+capture_labroute_state() {
+    if [ -f "$LABROUTE_MODE_FILE" ]; then
+        printf 'on\n'
+    else
+        printf 'off\n'
+    fi
+}
+
+remember_zathura_pages_for_workspace() {
+    local workspace="$1"
+    local workspace_id
+    local programs_file
+    local tmp
+
+    workspace_id="$(workspace_file_id "$workspace")"
+    programs_file="$STATE_DIR/workspace_${workspace_id}_programs.json"
+
+    [ -s "$programs_file" ] || return 0
+    [ -s "$ZATHURA_PAGES_FILE" ] || return 0
+
+    tmp="$programs_file.tmp"
+    jq --arg workspace "$workspace" --slurpfile zathura_pages "$ZATHURA_PAGES_FILE" '
+        def is_zathura_command($cmd):
+            (($cmd | type) == "array") and
+            (($cmd | length) > 0) and
+            ((($cmd[0] // "") | split("/") | last) == "zathura");
+
+        def strip_zathura_page_args($cmd):
+            if ($cmd | length) == 0 then
+                []
+            elif ($cmd[0] == "-P" or $cmd[0] == "--page") then
+                strip_zathura_page_args($cmd[2:])
+            elif (($cmd[0] | type) == "string" and ($cmd[0] | startswith("--page="))) then
+                strip_zathura_page_args($cmd[1:])
+            else
+                [$cmd[0]] + strip_zathura_page_args($cmd[1:])
+            end;
+
+        def zathura_filename($cmd):
+            (strip_zathura_page_args($cmd)[1:] |
+                map(select((type == "string") and (startswith("-") | not))) |
+                last // null);
+
+        def command_with_zathura_page($cmd; $page):
+            (strip_zathura_page_args($cmd)) as $clean |
+            [$clean[0], "--page=\($page)"] + ($clean[1:] // []);
+
+        ($zathura_pages[0] // []) as $states |
+        . as $programs |
+        [
+            range(0; length) as $i |
+            .[$i] as $entry |
+            ($entry.command // []) as $cmd |
+            if is_zathura_command($cmd) then
+                (zathura_filename($cmd)) as $filename |
+                if $filename == null then
+                    $entry
+                else
+                    ([
+                        range(0; $i) |
+                        $programs[.] |
+                        select(is_zathura_command(.command // [])) |
+                        select(zathura_filename(.command) == $filename)
+                    ] | length) as $occurrence |
+                    ([
+                        $states[] |
+                        select(.workspace == $workspace and .filename == $filename)
+                    ]) as $matches |
+                    ($matches[$occurrence] // $matches[0] // null) as $state |
+                    if $state == null then
+                        $entry
+                    else
+                        $entry | .command = command_with_zathura_page($cmd; $state.page)
+                    end
+                end
+            else
+                $entry
+            end
+        ]
+    ' "$programs_file" > "$tmp"
+    mv "$tmp" "$programs_file"
+}
+
+remember_ghostty_sessions_for_workspace() {
+    local workspace="$1"
+    local workspace_id
+    local layout_file
+    local programs_file
+    local tag
+    local paired
+
+    workspace_id="$(workspace_file_id "$workspace")"
+    layout_file="$STATE_DIR/workspace_${workspace_id}_layout.json"
+    programs_file="$STATE_DIR/workspace_${workspace_id}_programs.json"
+    tag="$(printf '%s' "$workspace" | tr -c 'A-Za-z0-9_-' '_')"
+    paired="$programs_file.ghostty"
+
+    [ -s "$layout_file" ] || return 0
+    [ -s "$programs_file" ] || return 0
+    [ -s "$GHOSTTY_SESSIONS_FILE" ] || return 0
+
+    jq --arg workspace "$workspace" --arg tag "$tag" --arg home "$HOME" \
+        --slurpfile layout "$layout_file" \
+        --slurpfile sessions "$GHOSTTY_SESSIONS_FILE" '
+        def is_ghostty_command($cmd):
+            (($cmd | type) == "array") and
+            (($cmd | length) > 0) and
+            ((($cmd[0] // "") | tostring | split("/") | last) == "ghostty");
+
+        def is_ghostty_swallow:
+            (.class // "") | test("ghostty"; "i");
+
+        def ghostty_paths:
+            def visit($path):
+                getpath($path) as $node |
+                (if any(($node.swallows // [])[]; is_ghostty_swallow) then $path else empty end),
+                (range(0; ($node.nodes // []) | length) as $i |
+                    visit($path + ["nodes", $i])),
+                (range(0; ($node.floating_nodes // []) | length) as $i |
+                    visit($path + ["floating_nodes", $i]));
+            visit([]);
+
+        def usable_dir:
+            if type == "string" then
+                startswith("/") and (test("[\"\\\\$`\n]") | not)
+            else
+                false
+            end;
+
+        def instance_name($n):
+            "ghostty-ws\($tag)-\($n + 1)";
+
+        def session_args($state):
+            [($state.sessions // [])[] |
+                select(if .kind == "local-tmux" then
+                    (.name | type == "string" and length > 0)
+                else
+                    (.kind == "tmux" or .kind == "zmx") and
+                    ((.name // "") | tostring | test("^[A-Za-z0-9_-]+$"))
+                end)][0] as $session |
+            if $session == null then
+                []
+            elif $session.kind == "local-tmux" then
+                ["--initial-command=env I3_RESURRECT_LOCAL_TMUX=\($session.name | @base64) zsh"]
+            else
+                ["--initial-command=env I3_RESURRECT_REMOTE_SESSION=\($session.kind):\($session.name) zsh"]
+            end;
+
+        . as $programs |
+        [range(0; length) | select(is_ghostty_command($programs[.].command // []))] as $slots |
+        [$layout[0] | ghostty_paths] as $paths |
+        [$sessions[0][] | select(.workspace == $workspace)] as $states |
+        if ($slots | length) == 0 or
+            ($slots | length) != ($paths | length) or
+            ($slots | length) != ($states | length) then
+            {paired: false}
+        else
+            {
+                paired: true,
+                programs: (reduce range(0; $slots | length) as $n ($programs;
+                    $states[$n] as $state |
+                    (([$state.cwd, $programs[$slots[$n]].working_directory] |
+                        map(select(usable_dir)) | first) // $home) as $dir |
+                    .[$slots[$n]] |= (
+                        .working_directory = $dir |
+                        .command = [
+                            "ghostty",
+                            "--working-directory=\($dir)",
+                            "--x11-instance-name=\(instance_name($n))"
+                        ] + session_args($state)
+                    )
+                )),
+                layout: (reduce range(0; $paths | length) as $n ($layout[0];
+                    setpath($paths[$n] + ["swallows"];
+                        getpath($paths[$n] + ["swallows"]) | map(
+                            if is_ghostty_swallow then
+                                .instance = "^\(instance_name($n))$"
+                            else
+                                .
+                            end
+                        )
+                    )
+                ))
+            }
+        end
+    ' "$programs_file" > "$paired" || {
+        rm -f "$paired"
+        return 0
+    }
+
+    if jq -e '.paired' "$paired" >/dev/null; then
+        jq '.programs' "$paired" > "$programs_file.tmp"
+        mv "$programs_file.tmp" "$programs_file"
+        jq '.layout' "$paired" > "$layout_file.tmp"
+        mv "$layout_file.tmp" "$layout_file"
+    fi
+    rm -f "$paired"
+}
+
+normalize_layout_after_save() {
+    local workspace="$1"
+    local workspace_id
+    local layout_file
+    local tmp
+
+    workspace_id="$(workspace_file_id "$workspace")"
+    layout_file="$STATE_DIR/workspace_${workspace_id}_layout.json"
+
+    [ -s "$layout_file" ] || return 0
+
+    tmp="$layout_file.tmp"
+    jq '
+        walk(
+            if type == "object" and ((.swallows? // null) | type == "array") then
+                .swallows |= map(
+                    if ((.class // "") | test("ghostty"; "i")) then
+                        del(.title, .instance)
+                    elif ((.class // "") | test("zen|helium"; "i")) then
+                        del(.title)
+                    else
+                        .
+                    end
+                )
+            else
+                .
+            end
+        )
+    ' "$layout_file" > "$tmp"
+    mv "$tmp" "$layout_file"
+}
+
+CHECK=0
+for argument in "$@"; do
+    case "$argument" in
+        --check) CHECK=1 ;;
+        --group=*) I3_RESURRECT_GROUP="${argument#--group=}" ;;
+        *) printf 'Usage: %s [--check] [--group=A]\n' "$0" >&2; exit 2 ;;
+    esac
+done
+missing="$(resurrect_dependencies)" || resurrect_fail "Save unavailable: $missing not found."
+I3_RESURRECT="$(find_i3_resurrect)" || resurrect_fail 'Save unavailable: i3-resurrect not found.'
+[ "$CHECK" = 0 ] || exit 0
+SOURCE_GROUP="$(resurrect_selected_group)" || resurrect_fail "Cannot determine the source group."
+
+umask 077
+resurrect_lock || exit 1
+ERROR_LOG="$(mktemp "${TMPDIR:-/tmp}/i3-resurrect-save.XXXXXXXX")"
+exec 7>&2 2>"$ERROR_LOG"
+PROFILE_STATE_DIR="$STATE_DIR"
+PROFILE_META_DIR="$META_DIR"
+STAGING=""
+cleanup_save() {
+    local status=$?
+    local reason
+    if [ -n "$STAGING" ]; then
+        if [ "$(jq -r '.current // empty' "$PROFILE_META_DIR/snapshot.json" 2>/dev/null)" != "${STAGING##*/}" ]; then
+            rm -rf -- "$STAGING"
+        fi
+    fi
+    if [ "$status" -ne 0 ]; then
+        case "$status" in
+            130|143) reason='Interrupted.' ;;
+            *) reason="$(sed '/^[[:space:]]*$/d' "$ERROR_LOG" | tail -n 1)" ;;
+        esac
+        notify "Save failed; the previous snapshot is still available.${reason:+$'\n'$reason}"
+    fi
+    cat "$ERROR_LOG" >&7
+    rm -f -- "$ERROR_LOG"
+}
+trap cleanup_save EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+mkdir -p "$STATE_DIR/snapshots" "$META_DIR"
+resurrect_state resolve "$STATE_DIR" "$META_DIR" >/dev/null
+STAGING="$(mktemp -d "$STATE_DIR/snapshots/generation.XXXXXXXXXX")"
+STATE_DIR="$STAGING/state"
+META_DIR="$STAGING/meta"
+mkdir -p "$STATE_DIR" "$META_DIR"
+resurrect_paths
+
+i3-msg -t get_tree | resurrect_state capture-group "$STATE_DIR" "$META_DIR" --group "$SOURCE_GROUP"
+capture_zathura_page_state > "$ZATHURA_PAGES_FILE"
+capture_zen_page_state > "$ZEN_PAGES_FILE"
+capture_ghostty_session_state > "$GHOSTTY_SESSIONS_FILE"
+capture_labroute_state > "$LABROUTE_FILE"
+
+saved=0
+while IFS= read -r workspace || [ -n "$workspace" ]; do
+    [ -n "$workspace" ] || continue
+    "$I3_RESURRECT" save -w "$workspace" -d "$STATE_DIR" --swallow="$SWALLOW" 9>&-
+    i3-msg -t get_tree | resurrect_state stable "$STATE_DIR" "$META_DIR" "$workspace"
+    resurrect_state clean-save "$STATE_DIR" "$META_DIR" "$workspace"
+    normalize_layout_after_save "$workspace"
+    ensure_zen_browser_programs "$workspace"
+    ensure_helium_browser_programs "$workspace"
+    resurrect_state browsers "$STATE_DIR" "$META_DIR" "$workspace"
+    remember_zathura_pages_for_workspace "$workspace"
+    remember_ghostty_sessions_for_workspace "$workspace"
+    saved=$((saved + 1))
+done < "$WORKSPACES_FILE"
+
+resurrect_state normalize-group "$STATE_DIR" "$META_DIR" --group "$SOURCE_GROUP"
+resurrect_state publish "$PROFILE_STATE_DIR" "$PROFILE_META_DIR" "${STAGING##*/}"
+STAGING=""
+notify "Saved group $SOURCE_GROUP: $saved workspace(s)."

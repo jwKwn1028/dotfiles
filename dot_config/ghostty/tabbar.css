@@ -1,0 +1,73 @@
+tabbar, tabbox, tabbar box, tabbar revealer, tabbar scrolledwindow, tabbar viewport {
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: #292d3e;
+}
+
+tab {
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  background: #292d3e;
+  transition: none;
+}
+
+tab:selected {
+  background: #363d5c;
+}
+
+tabbar * {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+toolbarview.undershoot-top scrolledwindow > undershoot.top {
+  background: none;
+  box-shadow: none;
+}
+
+tabbar undershoot, tabbar overshoot {
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+}
+
+tab:hover, tab:active, tab:focus, tab:backdrop {
+  background: #292d3e;
+  box-shadow: none;
+}
+
+tab:selected, tab:selected:hover, tab:selected:backdrop {
+  background: #363d5c;
+  box-shadow: none;
+}
+
+tabbar separator {
+  background: #292d3e;
+  min-width: 0;
+}
+
+tabbar label {
+  font-size: 10px;
+  color: #c0caf5;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+tabbar button, tabbar image {
+  opacity: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: -8px 0;
+  -gtk-icon-size: 1px;
+}

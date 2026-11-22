@@ -1,0 +1,129 @@
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" -}}{{- $class = .class -}}{{- end -}}
+{{- $desktopProfile := "none" -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{-     $desktopProfile = "linuxmint-i3-x11" -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey . "desktopProfile" -}}{{- $desktopProfile = .desktopProfile -}}{{- end -}}
+{{- if and (eq .chezmoi.os "linux") (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
+{{- $src := .packages.source.fancy_cat -}}
+{{- if hasKey $src.zig .chezmoi.arch -}}
+{{- $zig := index $src.zig .chezmoi.arch -}}
+{{- /* The fork's tip makes new commits rerun this. */ -}}
+{{- $forkDir := joinPath .chezmoi.homeDir $src.fork_dir -}}
+{{- $forkCommit := "" -}}
+{{- if stat (joinPath $forkDir ".git") -}}
+{{-   $forkCommit = output "sh" "-c" "git -C \"$1\" rev-parse --verify --quiet \"refs/heads/$2^{commit}\" || true" "sh" $forkDir $src.fork_branch | trim -}}
+{{- end -}}
+#!/usr/bin/env bash
+# Build fancy-cat against distro MuPDF.
+set -euo pipefail
+
+prefix="$HOME/.local"
+version={{ $src.version | quote }}
+{{- $githubUser := "" -}}
+{{- if hasKey . "githubUser" }}{{ $githubUser = .githubUser }}{{ end }}
+{{- if $forkCommit }}
+repo="file://$HOME/"{{ $src.fork_dir | quote }}
+commit={{ $forkCommit | quote }}
+{{- else if $githubUser }}
+repo={{ printf "https://github.com/%s/%s.git" $githubUser $src.fork_repo | quote }}
+commit={{ $src.fork_commit | quote }}
+{{- else }}
+repo={{ $src.url | quote }}
+commit={{ $src.commit | quote }}
+{{- end }}
+{{- if or $forkCommit $githubUser }}
+build_version="$version+"{{ $src.fork_branch | quote }}".${commit:0:7}"
+{{- else }}
+build_version="$version+${commit:0:7}"
+{{- end }}
+installed=$("$prefix/bin/fancy-cat" --version 2>/dev/null || true)
+if [[ "$installed" == "fancy-cat version $build_version" ]]; then
+    echo "  fancy-cat $build_version already installed; skipping"
+    exit 0
+fi
+
+deps=(
+{{- range $src.build_deps }}
+    {{ . | quote }}
+{{- end }}
+)
+missing=()
+for dep in "${deps[@]}"; do
+    if [[ $(dpkg-query -W -f='${Status}' "$dep" 2>/dev/null || true) != "install ok installed" ]]; then
+        missing+=("$dep")
+    fi
+done
+if (( ${#missing[@]} )); then
+    echo "==> installing fancy-cat build dependencies (authentication may be required)"
+    if command -v pkexec >/dev/null 2>&1 && [[ -n "${DISPLAY:-}" ]]; then
+        pkexec apt-get install -y --no-install-recommends "${missing[@]}"
+    else
+        sudo apt-get install -y --no-install-recommends "${missing[@]}"
+    fi
+fi
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+git init --quiet "$work/src"
+git -C "$work/src" remote add origin "$repo"
+git -C "$work/src" fetch --quiet --depth 1 origin "$commit"
+git -C "$work/src" checkout --quiet --detach FETCH_HEAD
+actual=$(git -C "$work/src" rev-parse HEAD)
+if [[ "$actual" != "$commit" ]]; then
+    echo "error: fancy-cat source is $actual, not the pinned $commit" >&2
+    exit 1
+fi
+
+zig_version={{ $src.zig_version | quote }}
+zig_arch={{ $zig.arch | quote }}
+zig_dir="zig-$zig_arch-linux-$zig_version"
+if [[ "$(zig version 2>/dev/null || true)" == "$zig_version" ]]; then
+    zig=$(command -v zig)
+else
+    curl --fail --location --silent --show-error --retry 3 \
+        "https://ziglang.org/download/$zig_version/$zig_dir.tar.xz" -o "$work/zig.tar.xz"
+    printf '%s  %s\n' {{ $zig.sha256 | quote }} "$work/zig.tar.xz" | sha256sum --check
+    tar -xJf "$work/zig.tar.xz" -C "$work"
+    zig="$work/$zig_dir/zig"
+fi
+
+# Stamp the version so a new build reinstalls.
+python3 - "$work/src" "$version" "$build_version" <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+edits = (
+    ("build.zig.zon", f'.version = "{sys.argv[2]}"', f'.version = "{sys.argv[3]}"'),
+)
+for relative, before, after in edits:
+    path = root / relative
+    content = path.read_text()
+    if content.count(before) != 1:
+        raise SystemExit(f"error: unexpected fancy-cat source in {relative}")
+    path.write_text(content.replace(before, after))
+
+# Drop upstream's Linuxbrew paths (the fork has none).
+path = root / "build.zig"
+content = path.read_text()
+if "linuxbrew" in content:
+    branch = "    } else if (target.os.tag == .linux) {"
+    start = content.index(branch)
+    end = content.index("        const linux_libs =", start)
+    path.write_text(content[:start] + branch + "\n" + content[end:])
+PY
+
+jobs=$(nproc)
+if (( jobs > 4 )); then jobs=4; fi
+cd "$work/src"
+"$zig" build -Doptimize=ReleaseFast -Dcpu=baseline -j"$jobs"
+./zig-out/bin/fancy-cat --version
+install -Dm0755 zig-out/bin/fancy-cat "$prefix/bin/fancy-cat"
+echo "==> fancy-cat $build_version installed to $prefix/bin/fancy-cat"
+{{- end }}
+{{- end }}

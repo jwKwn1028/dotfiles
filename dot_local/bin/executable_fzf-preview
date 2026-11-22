@@ -1,0 +1,33 @@
+#!/bin/sh
+
+file=$1
+
+[ -n "$file" ] || exit 0
+
+if [ -d "$file" ]; then
+  if command -v eza >/dev/null 2>&1; then
+    exec eza --tree --level=2 --color=always --icons --group-directories-first -- "$file"
+  fi
+  exec ls -la -- "$file"
+fi
+
+case $(printf '%s' "$file" | tr '[:upper:]' '[:lower:]') in
+  *.csv|*.tsv|*.json|*.jsonl|*.ndjson|*.xls|*.xlsx|*.sqlite|*.sqlite3|*.db|*.db3|*.parquet)
+    if command -v vd >/dev/null 2>&1; then
+      vd --batch -o - -- "$file" 2>/dev/null | sed -n '1,200p'
+      exit 0
+    fi
+    ;;
+  *.pdf)
+    pdftotext -f 1 -l 10 -- "$file" - 2>/dev/null | sed -n '1,200p'
+    exit 0
+    ;;
+esac
+
+if command -v bat >/dev/null 2>&1; then
+  exec bat --color=always --style=numbers --line-range=:500 -- "$file"
+elif command -v batcat >/dev/null 2>&1; then
+  exec batcat --color=always --style=numbers --line-range=:500 -- "$file"
+else
+  sed -n '1,500p' -- "$file"
+fi

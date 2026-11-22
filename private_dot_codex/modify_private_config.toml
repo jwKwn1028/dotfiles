@@ -1,0 +1,43 @@
+#!/usr/bin/python3
+"""Merge the two stable Codex settings while preserving the TOML document."""
+
+import sys
+
+raw = sys.stdin.buffer.read()
+
+managed = {
+    "model": "gpt-6.2-sol",
+    "model_reasoning_effort": "xhigh",
+}
+
+try:
+    import tomllib
+    current = tomllib.loads(raw.decode("utf-8"))
+except (ImportError, ValueError):
+    current = None
+
+if current is not None and all(current.get(key) == value for key, value in managed.items()):
+    sys.stdout.buffer.write(raw)
+    raise SystemExit(0)
+
+try:
+    import tomlkit
+    from tomlkit.exceptions import ParseError
+except ImportError:
+    print("Codex settings merge skipped: python3-tomlkit is not installed.", file=sys.stderr)
+    sys.stdout.buffer.write(raw)
+    raise SystemExit(0)
+
+try:
+    config = tomlkit.parse(raw.decode("utf-8"))
+except (UnicodeDecodeError, ParseError):
+    print("Codex settings are invalid TOML; leaving them unchanged.", file=sys.stderr)
+    sys.stdout.buffer.write(raw)
+    raise SystemExit(0)
+
+if all(config.get(key) == value for key, value in managed.items()):
+    sys.stdout.buffer.write(raw)
+else:
+    for key, value in managed.items():
+        config[key] = value
+    sys.stdout.buffer.write(tomlkit.dumps(config).encode("utf-8"))

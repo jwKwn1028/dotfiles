@@ -1,0 +1,52 @@
+{{- if eq .chezmoi.os "linux" -}}
+{{- $distro := .chezmoi.osRelease.id -}}
+{{- if or (eq $distro "linuxmint") (eq $distro "ubuntu") (eq $distro "debian") -}}
+{{- $src := .packages.source.btop -}}
+#!/usr/bin/env bash
+set -euo pipefail
+
+prefix="$HOME/.local"
+tag={{ $src.tag | quote }}
+commit={{ $src.commit | quote }}
+
+installed=$("$prefix/bin/btop" -v 2>/dev/null || true)
+if [[ "$installed" == *"${tag#v}+${commit:0:7}"* ]]; then
+    echo "  btop $tag already installed; skipping"
+    exit 0
+fi
+
+deps=(
+{{- range $src.build_deps }}
+    {{ . | quote }}
+{{- end }}
+)
+missing=()
+for dep in "${deps[@]}"; do
+    if [[ $(dpkg-query -W -f='${Status}' "$dep" 2>/dev/null || true) != "install ok installed" ]]; then
+        missing+=("$dep")
+    fi
+done
+if (( ${#missing[@]} )); then
+    echo "==> installing btop build dependencies (sudo may prompt for your password)"
+    sudo apt-get update -qq
+    sudo apt-get install -y --no-install-recommends "${missing[@]}"
+fi
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+git clone --quiet --depth 1 --branch "$tag" {{ $src.url | quote }} "$work/src"
+actual=$(git -C "$work/src" rev-parse HEAD)
+if [[ "$actual" != "$commit" ]]; then
+    echo "error: btop $tag resolves to $actual, not the pinned $commit" >&2
+    exit 1
+fi
+
+jobs=$(nproc)
+if (( jobs > 4 )); then jobs=4; fi
+make -C "$work/src" CXX=g++-14 GPU_SUPPORT=true INTEL_GPU_SUPPORT=true THREADS="$jobs"
+make -C "$work/src" PREFIX="$prefix" install
+
+echo "==> btop $tag installed to $prefix/bin/btop"
+{{- end }}
+{{- end }}

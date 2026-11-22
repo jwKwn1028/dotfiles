@@ -1,0 +1,35 @@
+from: markdown+tex_math_single_backslash
+standalone: true
+pdf-engine: xelatex
+citeproc: true
+include-in-header:
+  - ${.}/../pdf-header.tex
+variables:
+  documentclass: article
+  fontsize: 11pt
+  papersize: a4
+  geometry:
+    - margin=0.75in
+  mainfont: NewComputerModernSans10
+  mainfontoptions:
+    - UprightFont=NewCMSans10-Regular
+    - BoldFont=NewCMSans10-Bold
+    - ItalicFont=NewCMSans10-Oblique
+    - BoldItalicFont=NewCMSans10-BoldOblique
+  sansfont: NewComputerModernSans10
+  sansfontoptions:
+    - UprightFont=NewCMSans10-Regular
+    - BoldFont=NewCMSans10-Bold
+    - ItalicFont=NewCMSans10-Oblique
+    - BoldItalicFont=NewCMSans10-BoldOblique
+  monofont: JuliaMono
+  mathfont: NewCMMath-Regular
+  CJKmainfont: Noto Sans CJK KR
+  CJKsansfont: Noto Sans CJK KR
+  CJKmonofont: NanumGothicCoding
+  CJKoptions:
+    - AutoFakeSlant=0.2
+  colorlinks: true
+  linkcolor: blue
+  citecolor: blue
+  urlcolor: teal

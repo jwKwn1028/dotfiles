@@ -1,0 +1,8 @@
+[package]
+name = "docstyle"
+version = "0.1.0"
+entrypoint = "lib.typ"
+authors = ["Dotfiles contributors"]
+license = "MIT"
+description = "Shared typography for scientific notes and slides"
+compiler = "0.15.0"

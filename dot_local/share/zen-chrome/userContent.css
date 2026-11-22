@@ -1,0 +1,12 @@
+@-moz-document url("about:newtab"), url("about:home") {
+  html,
+  body {
+    background: url("zen-newtab-wallpaper.png") center center / cover no-repeat fixed !important;
+  }
+
+  body,
+  #root,
+  .outer-wrapper {
+    background-color: transparent !important;
+  }
+}

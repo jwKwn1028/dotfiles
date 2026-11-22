@@ -1,0 +1,136 @@
+font-family = JuliaMono
+font-family = NanumGothicCoding
+font-family = Noto Sans CJK KR
+# Icon glyph fallback only; text stays in JuliaMono.
+font-family = Hack Nerd Font Mono
+font-style = Regular
+font-size = 10
+font-feature = -calt, -liga, -dlig
+
+# Delta, not a scale factor. Lands the cell at ~1.35em.
+adjust-cell-height = 15%
+
+# Matches xfce default-geometry 120x36
+window-width = 120
+window-height = 36
+window-inherit-font-size = true
+window-padding-x = 8
+window-padding-y = 8
+window-padding-balance = true
+
+theme = TokyoNight Storm
+# Match Helix's exact background (theme default is #24283b)
+background = #292d3e
+palette = 8=#414868
+
+cursor-style = block
+cursor-color = #86be43
+cursor-text = #1d202f
+cursor-style-blink = false
+
+# tmux enables RGB for this TERM (terminal-features).
+term = xterm-256color
+
+shell-integration = zsh
+# Helix mode owns the cursor; Ghostty's vi-keymap detection misses hxnor/hxins.
+shell-integration-features = no-cursor,sudo,title,ssh-terminfo
+
+quit-after-last-window-closed = true
+quit-after-last-window-closed-delay = 5m
+
+# Matches xfce font-allow-bold = false
+font-style-bold = false
+# No synthesized slant on the fallbacks; JuliaMono's real italic stays.
+font-synthetic-style = no-italic
+
+# No GTK header bar and no XFWM titlebar.
+window-decoration = none
+gtk-titlebar = false
+
+# Show the tab bar with 2+ tabs.
+window-show-tab-bar = auto
+# Alt+Shift+T toggles this local-only include via SIGUSR2.
+config-file = ?tabbar-state.conf
+# Equal-width tabs give fixed positions, matching the Alt+N goto_tab binds.
+gtk-wide-tabs = true
+gtk-toolbar-style = flat
+# Thin title strip; see tabbar.css. Relative to this file's directory.
+gtk-custom-css = tabbar.css
+# Focused split outline uses TokyoNight cyan.
+gtk-custom-css = split-focus.css
+# Hide the tmux-mode badge.
+gtk-custom-css = key-state.css
+
+keybind = ctrl+enter=unbind
+keybind = ctrl+0=reset_font_size
+keybind = ctrl+shift+plus=increase_font_size:5
+keybind = ctrl+shift+minus=decrease_font_size:5
+
+# Split navigation. Ctrl+Shift+J replaces Ghostty's write-screen-file default.
+keybind = ctrl+shift+h=goto_split:left
+keybind = ctrl+shift+j=goto_split:down
+keybind = ctrl+shift+k=goto_split:up
+keybind = ctrl+shift+l=goto_split:right
+# Replaces Ghostty's default Ctrl+Tab next-tab.
+keybind = ctrl+tab=goto_split:next
+
+# Alt for tabs; Ctrl+Shift for splits. Keep Zsh Alt+h/l and i3 Super+h/l free.
+keybind = alt+shift+h=previous_tab
+keybind = alt+shift+l=next_tab
+
+# tmux mode; chain=ignore keeps GTK accelerators off these keys.
+keybind = ctrl+shift+o=new_split:right
+keybind = chain=ignore
+keybind = ctrl+shift+e=new_split:down
+keybind = chain=ignore
+keybind = ctrl+shift+t=new_tab
+keybind = chain=ignore
+keybind = ctrl+shift+m=activate_key_table:tmux
+keybind = ctrl+alt+shift+m=activate_key_table:tmux
+keybind = ctrl+alt+shift+n=deactivate_all_key_tables
+keybind = tmux/ctrl+shift+m=deactivate_key_table
+keybind = tmux/ctrl+shift+o=text:\x02%
+keybind = tmux/ctrl+shift+e=text:\x02"
+keybind = tmux/ctrl+shift+t=text:\x02c
+keybind = tmux/ctrl+shift+h=text:\x02\x08
+keybind = tmux/ctrl+shift+j=text:\x02\x0a
+keybind = tmux/ctrl+shift+k=text:\x02\x0b
+keybind = tmux/ctrl+shift+l=text:\x02\x0c
+keybind = tmux/alt+shift+h=text:\x02p
+keybind = tmux/alt+shift+l=text:\x02n
+keybind = tmux/ctrl+alt+shift+h=esc:H
+keybind = tmux/ctrl+alt+shift+l=esc:L
+keybind = tmux/alt+digit_1=esc:1
+keybind = tmux/alt+digit_2=esc:2
+keybind = tmux/alt+digit_3=esc:3
+keybind = tmux/alt+digit_4=esc:4
+keybind = tmux/alt+digit_5=esc:5
+keybind = tmux/alt+digit_6=esc:6
+keybind = tmux/alt+digit_7=esc:7
+keybind = tmux/alt+digit_8=esc:8
+keybind = tmux/alt+digit_9=esc:9
+keybind = tmux/alt+digit_0=esc:0
+
+keybind = ctrl+alt+k=scroll_page_lines:-5
+keybind = ctrl+alt+j=scroll_page_lines:5
+
+scrollbar = never
+# No "120x36" popup on every i3 resize
+resize-overlay = never
+
+mouse-hide-while-typing = true
+clipboard-trim-trailing-spaces = true
+confirm-close-surface = false
+copy-on-select = both
+# Default discrete:3 felt slow vs Firefox/xfce4-terminal
+mouse-scroll-multiplier = precision:3,discrete:5
+
+# Silence everything, including terminal-triggered desktop notifications (OSC 9).
+app-notifications = no-clipboard-copy,no-config-reload
+bell-features = no-system,no-audio,no-attention,no-title,no-border
+notify-on-command-finish = never
+progress-style = false
+desktop-notifications = false
+
+unfocused-split-opacity = 1
+focus-follows-mouse = true

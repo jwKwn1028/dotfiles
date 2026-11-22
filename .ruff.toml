@@ -1,0 +1,10 @@
+# Pins the Python lint rules. This is the set ruff enabled by default while the
+# repo was clean; widening it should be a deliberate commit, not the side effect
+# of a ruff upgrade. Run: ruff check $(git ls-files '*.py')
+#
+# A source entry starting with "." is ignored by chezmoi, so this file stays in
+# the repo and never lands in $HOME.
+target-version = "py312"
+
+[lint]
+select = ["E4", "E7", "E9", "F"]

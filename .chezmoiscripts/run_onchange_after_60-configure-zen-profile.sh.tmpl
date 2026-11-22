@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+{{ $class := "desktop" -}}
+{{ if hasKey . "class" }}{{ $class = .class }}{{ end -}}
+{{ $profilesIni := joinPath .chezmoi.homeDir ".var/app/app.zen_browser.zen/.zen/profiles.ini" -}}
+{{ $chromeSrc := joinPath .chezmoi.sourceDir "dot_local/share/zen-chrome" -}}
+# Installs the sanitized Zen user.js and the chrome/ customizations into Zen's
+# installation-selected profile, wires browserpass' native messaging host, and
+# seeds handlers.json on a fresh profile. The profile itself stays local.
+# Profile selection state: {{ if lstat $profilesIni }}{{ include $profilesIni | sha256sum }}{{ else }}missing{{ end }}
+# chrome/ asset state, so this re-runs when the customizations change:
+{{ range $asset := list "userChrome.css" "userContent.css" "zen-newtab-wallpaper.png" -}}
+#   {{ $asset }}: {{ $path := joinPath $chromeSrc $asset }}{{ if lstat $path }}{{ include $path | sha256sum }}{{ else }}missing{{ end }}
+{{ end -}}
+set -euo pipefail
+
+{{ if or (ne .chezmoi.os "linux") (ne $class "desktop") -}}
+echo "Non-Linux desktop; skipping Zen profile configuration."
+exit 0
+{{- else -}}
+readonly zen_root={{ joinPath .chezmoi.homeDir ".var/app/app.zen_browser.zen/.zen" | quote }}
+readonly profiles_ini={{ $profilesIni | quote }}
+readonly chrome_src={{ joinPath .chezmoi.homeDir ".local/share/zen-chrome" | quote }}
+readonly nmh_dir={{ joinPath .chezmoi.homeDir ".var/app/app.zen_browser.zen/.mozilla/native-messaging-hosts" | quote }}
+
+# Writes stdin to $1 with mode $2, only when the content differs.
+install_file() {
+    local dest="$1" mode="$2" tmp
+    mkdir -p -- "${dest%/*}"
+    tmp="$(mktemp "${dest}.XXXXXX")"
+    cat >"$tmp"
+    chmod "$mode" -- "$tmp"
+    if [[ -f "$dest" ]] && cmp -s "$tmp" "$dest"; then
+        rm -f -- "$tmp"
+        return 0
+    fi
+    mv -f -- "$tmp" "$dest"
+    echo "Installed ${dest##*/}."
+}
+
+# Browserpass reaches `pass` through flatpak-spawn, via the shim and manifest
+# below plus the bus grant in dot_local/share/flatpak/overrides/. Manifest paths
+# are sandbox-internal, so this is built from .chezmoi.homeDir, not $zen_root.
+install_file "${zen_root}/browserpass-native-host" 0755 <<'BROWSERPASS_SHIM_EOF'
+#!/usr/bin/env sh
+exec /usr/bin/flatpak-spawn --host /usr/lib/browserpass/browserpass-native "$@"
+BROWSERPASS_SHIM_EOF
+
+install_file "${nmh_dir}/com.github.browserpass.native.json" 0644 <<'BROWSERPASS_MANIFEST_EOF'
+{
+    "name": "com.github.browserpass.native",
+    "description": "Browserpass native component for the Firefox extension",
+    "path": {{ printf "%s/.zen/browserpass-native-host" .chezmoi.homeDir | quote }},
+    "type": "stdio",
+    "allowed_extensions": ["browserpass@maximbaz.com"]
+}
+BROWSERPASS_MANIFEST_EOF
+
+if [[ ! -f "$profiles_ini" ]]; then
+    echo "Zen has not created a profile yet; skipping profile configuration."
+    exit 0
+fi
+
+{{ template "script-helpers/mozilla-profile.sh" . }}
+profile_dir="$(select_mozilla_profile "$zen_root" "$profiles_ini")"
+
+if [[ -z "$profile_dir" ]]; then
+    echo "No usable Zen profile found; skipping profile configuration."
+    exit 0
+fi
+
+# Copied, not symlinked: the sandbox sees only its own ~/.var/app tree, so a
+# link into ~/.local/share dangles. zen-themes.css is Zen Mods' and stays.
+if [[ -d "$chrome_src" ]]; then
+    mkdir -p -- "${profile_dir}/chrome"
+    for asset in userChrome.css userContent.css zen-newtab-wallpaper.png; do
+        src="${chrome_src}/${asset}"
+        dest="${profile_dir}/chrome/${asset}"
+        [[ -f "$src" ]] || continue
+        if [[ ! -f "$dest" ]] || ! cmp -s "$src" "$dest"; then
+            cp -f -- "$src" "$dest"
+            echo "Updated chrome/${asset}."
+        fi
+    done
+fi
+
+# Zen rewrites handlers.json whenever a handler changes in the UI, so seed a
+# fresh profile only; enforcing it would revert handlers added later.
+readonly handlers_json="${profile_dir}/handlers.json"
+if [[ -e "$handlers_json" ]]; then
+    echo "handlers.json exists; leaving Zen's copy alone."
+else
+    install_file "$handlers_json" 0644 <<'HANDLERS_EOF'
+{
+    "defaultHandlersVersion": {},
+    "mimeTypes": {
+        "application/pdf": { "action": 0, "extensions": ["pdf"] },
+        "image/webp": { "action": 3, "extensions": ["webp"] },
+        "image/avif": { "action": 3, "extensions": ["avif"] },
+        "image/jxl": { "action": 0, "extensions": ["jxl"] }
+    },
+    "schemes": {
+        "mailto": {
+            "stubEntry": true,
+            "handlers": [
+                null,
+                {
+                    "name": "Gmail",
+                    "uriTemplate": "https://mail.google.com/mail/?extsrc=mailto&url=%s"
+                }
+            ]
+        }
+    },
+    "isDownloadsImprovementsAlreadyMigrated": false
+}
+HANDLERS_EOF
+fi
+
+readonly user_js="${profile_dir}/user.js"
+temp_user_js="$(mktemp "${profile_dir}/.user.js.XXXXXX")"
+trap 'rm -f -- "$temp_user_js"' EXIT
+
+cat >"$temp_user_js" <<'ZEN_USER_JS_EOF'
+{{ template "zen-user.js" . -}}
+ZEN_USER_JS_EOF
+chmod 0600 "$temp_user_js"
+
+if [[ -f "$user_js" ]] && cmp -s "$temp_user_js" "$user_js"; then
+    echo "Zen user.js is already up to date."
+    exit 0
+fi
+
+mv -f -- "$temp_user_js" "$user_js"
+trap - EXIT
+echo "Installed sanitized Zen user.js; restart Zen to load it."
+{{- end }}

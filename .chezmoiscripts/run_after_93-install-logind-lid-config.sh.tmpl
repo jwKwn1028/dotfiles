@@ -1,0 +1,40 @@
+{{- if eq .chezmoi.os "linux" -}}
+#!/bin/sh
+set -eu
+
+# A drop-in avoids dpkg conflicts.
+
+if [ ! -e /proc/acpi/button/lid ]; then
+    echo "No lid switch; skipping logind lid configuration."
+    exit 0
+fi
+
+dropin=/etc/systemd/logind.conf.d/10-lid-switch.conf
+
+{{ template "script-helpers/install-root-config.sh" . }}
+
+# logind precedence: docked, mains, then battery.
+install_config "$dropin" -D <<'EOF'
+[Login]
+# Docked lid changes only the display.
+HandleLidSwitchDocked=ignore
+# Keep jobs and Wi-Fi running; xss-lock handles Lock.
+HandleLidSwitchExternalPower=lock
+HandleLidSwitch=lock
+EOF
+
+if [ "$changed" -eq 1 ]; then
+    echo "==> Reloading systemd-logind"
+    sudo systemctl reload systemd-logind
+fi
+
+# XFCE delegates lid handling via logind-handle-lid-switch=true.
+# Warn if XFCE takes an inhibitor; xfconf strips comments from its XML.
+if command -v xfconf-query >/dev/null 2>&1 &&
+    defer=$(xfconf-query -c xfce4-power-manager \
+        -p /xfce4-power-manager/logind-handle-lid-switch 2>/dev/null) &&
+    [ "$defer" != "true" ]; then
+    echo "WARNING: xfce4-power-manager logind-handle-lid-switch=$defer;" >&2
+    echo "         xfpm now owns the lid and $dropin is inert." >&2
+fi
+{{- end }}

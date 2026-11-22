@@ -1,0 +1,162 @@
+# ---------------- C / C++ ----------------
+# Override Helix's built-in 2-space default with 4-space indentation.
+[[language]]
+name = "c"
+indent = { tab-width = 4, unit = "    " }
+
+[[language]]
+name = "cpp"
+indent = { tab-width = 4, unit = "    " }
+
+
+[[language]]
+name = "python"
+language-servers = ["basedpyright", "ruff"]
+auto-format = false
+formatter = { command = "ruff", args = ["format", "--stdin-filename", "stdin.py", "-"] }
+
+# Run debugpy in the project venv via uv; debug keys: Alt-d.
+[language.debugger]
+name = "debugpy"
+transport = "stdio"
+command = "uv"
+args = ["run", "--with", "debugpy", "python", "-m", "debugpy.adapter"]
+
+# Debug a file; justMyCode=false includes library code.
+[[language.debugger.templates]]
+name = "launch (file)"
+request = "launch"
+completion = [ { name = "entrypoint", completion = "filename", default = "main.py" } ]
+args = { program = "{0}", console = "internalConsole", justMyCode = false }
+
+# Attach: python -m debugpy --listen 5678 --wait-for-client your_app.py
+[[language.debugger.templates]]
+name = "attach (port)"
+request = "attach"
+completion = [ { name = "port", default = "5678" } ]
+args = { host = "127.0.0.1", port = "{0}" }
+
+[language-server.basedpyright]
+command = "basedpyright-langserver"
+args = ["--stdio"]
+config = { python = { analysis = { typeCheckingMode = "basic", diagnosticSeverityOverrides = { reportOptionalMemberAccess = "none", reportOptionalSubscript = "none", reportOptionalCall = "none" } } } }
+
+[language-server.ruff]
+command = "ruff"
+args = ["server"]
+
+
+# ---------------- LaTeX ----------------
+[[language]]
+name = "latex"
+language-servers = ["texlab"]
+auto-format = true
+formatter = { command = "tex-fmt", args = ["--stdin", "--nowrap", "--quiet"] }
+soft-wrap = { enable = true, wrap-at-text-width = true }
+
+[language-server.texlab]
+command = "texlab"
+
+[language-server.texlab.config.texlab]
+build = { onSave = false, forwardSearchAfter = false }
+chktex = { onOpenAndSave = true, onEdit = false }
+forwardSearch = { executable = "zathura", args = ["--synctex-forward", "%l:1:%f", "%p"] }
+
+# ---------------- BibTeX ----------------
+[[language]]
+name = "bibtex"
+language-servers = ["texlab"]
+auto-format = false
+
+
+# ---------------- Bash / Zsh ----------------
+# Zsh is its own language because shfmt breaks Zsh syntax.
+[[language]]
+name = "bash"
+language-servers = ["bashls"]
+auto-format = true
+file-types = [
+  "sh", "bash", "ebuild", "eclass", "PKGBUILD",
+  { glob = ".bashrc" }, { glob = ".bash_profile" }, { glob = ".bash_aliases" },
+]
+shebangs = ["sh", "bash", "dash"]
+formatter = { command = "shfmt", args = ["-ln", "bash", "-i", "2", "-ci", "-bn", "-sr", "-filename", "stdin.sh", "-"] }
+
+# Highlighting: runtime/queries/zsh/ inherits bash.
+[[language]]
+name = "zsh"
+scope = "source.zsh"
+grammar = "bash"
+language-servers = ["bashls"]
+auto-format = false
+file-types = [
+  "zsh", { glob = ".zshrc" }, { glob = ".zshenv" }, { glob = ".zprofile" }, { glob = ".zlogin" }, { glob = ".zlogout" },
+]
+shebangs = ["zsh"]
+comment-token = "#"
+indent = { tab-width = 2, unit = "  " }
+
+[language-server.bashls]
+command = "bash-language-server"
+args = ["start"]
+config = { bashIde = { shellcheck = { enable = true, executablePath = "shellcheck" }, globPattern = "**/*@(.sh|.inc|.bash|.command)" } }
+
+
+# ---------------- Typst ----------------
+[[language]]
+name = "typst"
+language-servers = ["tinymist"]
+auto-format = true
+formatter = { command = "typstyle" }
+soft-wrap = { enable = true, wrap-at-text-width = true }
+
+[language-server.tinymist]
+command = "tinymist"
+# Keep tinymist's PDF in target/; hxp writes beside the source. Use never to disable.
+config = { exportPdf = "onSave", outputPath = "$root/target/$dir/$name", formatterMode = "typstyle", previewFeature = "enable" }
+
+
+# ---------------- Julia ----------------
+[[language]]
+name = "julia"
+language-servers = ["julia-lsp"]
+auto-format = true
+formatter = { command = "julia", args = [
+  "--project=@helix-lsp",
+  "--startup-file=no",
+  "--history-file=no",
+  "-e",
+  "using JuliaFormatter; print(format_text(read(stdin, String)))",
+] }
+
+[language-server.julia-lsp]
+command = "julia"
+args = [ "--project=@helix-lsp", "--startup-file=no", "--history-file=no", "-e", "using LanguageServer; LanguageServer.runserver()" ]
+
+
+# ---------------- Markdown ----------------
+[[language]]
+name = "markdown"
+# marksman: wiki-link nav + completion. zk: your notebook.
+language-servers = ["marksman", "zk"]
+auto-format = true
+# `--prose-wrap preserve` keeps manual wrapping; "always" reflows at print-width.
+formatter = { command = "prettier", args = ["--parser", "markdown", "--prose-wrap", "preserve"] }
+soft-wrap = { enable = true, wrap-at-text-width = true }
+
+[language-server.marksman]
+command = "marksman"
+args = ["server"]
+
+[language-server.zk]
+command = "zk"
+args = ["lsp"]
+
+
+# ---------------- Plain text ----------------
+[[language]]
+name = "text"
+scope = "text.plain"
+file-types = ["txt"]
+language-servers = []
+soft-wrap = { enable = true, wrap-at-text-width = true }

@@ -1,0 +1,216 @@
+#!/usr/bin/python3
+"""Rebuild saved pane records with nonempty titles and live commands."""
+
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import socket
+import subprocess
+import sys
+
+SHELLS = {"sh", "dash", "bash", "zsh", "fish", "ksh"}
+CLAUDE = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+CODEX = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+REWRITES = (
+    (re.compile(r"^ssh .*tmux attach-session -t =([A-Za-z0-9_-]+)$"), r"hpc \1"),
+    (re.compile(r"^ssh .*zmx attach ([A-Za-z0-9_-]+)$"), r"hpcz \1"),
+)
+FIELDS = ("session_name", "window_index", "pane_index", "pane_id", "pane_pid", "pane_active",
+          "pane_current_command", "pane_current_path", "@resurrect-command", "@hxp-resume", "pane_title")
+
+
+def tmux(*args):
+    return subprocess.run(["tmux", *args], capture_output=True, text=True).stdout
+
+
+def matchers():
+    default = tmux("show", "-gqv", "@resurrect-default-processes").strip() or \
+        "vi vim view nvim emacs man less more tail top htop irssi weechat mutt"
+    found = []
+    for entry in shlex.split(default) + shlex.split(tmux("show", "-gqv", "@resurrect-processes")):
+        name = entry.split("->", 1)[0]
+        if name.startswith("~"):
+            found.append(re.compile(name[1:]).search)
+        elif name:
+            found.append(re.compile(rf"^{name}( |$)").search)
+    return found
+
+
+def processes():
+    argv, children = {}, {}
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            with open(f"/proc/{name}/stat") as stat:
+                ppid = int(stat.read().rsplit(")", 1)[1].split()[1])
+            with open(f"/proc/{name}/cmdline", "rb") as cmdline:
+                args = cmdline.read().split(b"\0")[:-1]
+        except (OSError, IndexError, ValueError):
+            continue
+        argv[int(name)] = [a.decode(errors="replace") for a in args]
+        children.setdefault(ppid, []).append(int(name))
+    return argv, children
+
+
+def command(pid, args):
+    try:
+        cwd = os.readlink(f"/proc/{pid}/cwd")
+    except OSError:
+        cwd = None
+    # Waiting wrappers run as shell scripts.
+    if len(args) > 1 and os.path.basename(args[0]) in SHELLS and os.path.basename(args[1]) == "fancy-cat-open":
+        args = args[1:]
+    words = [os.path.basename(args[0])]
+    if words[0] in ("fancy-cat", "fancy-cat-open"):
+        # Restored viewers wait for a client.
+        words = ["fancy-cat-open", "--wait-for-client"]
+        args = [args[0], *(arg for arg in args[1:] if arg != "--wait-for-client")]
+    for arg in args[1:]:
+        if cwd and arg and arg[0] not in "-/" and os.path.exists(os.path.join(cwd, arg)):
+            arg = os.path.join(cwd, arg)
+        words.append(arg)
+    plain = " ".join(words)
+    for pattern, replacement in REWRITES:
+        if pattern.search(plain):
+            return pattern.sub(replacement, plain)
+    return " ".join(shlex.quote(word) for word in words)
+
+
+def agent(name, pid, title):
+    """Resume an interactive agent's chat; "" restores nothing, so no prompt reruns."""
+    if name == "codex":
+        # The zsh codex wrapper puts the chat ID in the pane title.
+        found = UUID.search(title)
+        if found and any(CODEX.glob(f"sessions/*/*/*/rollout-*-{found[0]}.jsonl")):
+            return "codex resume " + found[0]
+        return ""
+    try:
+        record = json.loads((CLAUDE / "sessions" / f"{pid}.json").read_text())
+        with open(f"/proc/{pid}/stat") as stat:
+            started = stat.read().rsplit(")", 1)[1].split()[19]
+    except (OSError, ValueError, IndexError):
+        return ""
+    if record.get("kind") != "interactive" or str(record.get("procStart")) != started:
+        return ""
+    session = str(record.get("sessionId", ""))
+    if UUID.fullmatch(session) and any(CLAUDE.glob(f"projects/*/{session}.jsonl")):
+        return "claude --resume " + session
+    return "claude"
+
+
+def choose(root, argv, children, listed, title=""):
+    best, direct = None, None
+    pending = [(child, 1) for child in sorted(children.get(root, []))]
+    while pending:
+        pid, depth = pending.pop(0)
+        args = argv.get(pid)
+        if not args:
+            continue
+        if os.path.basename(args[0]) in ("claude", "codex"):
+            return agent(os.path.basename(args[0]), pid, title)
+        text = command(pid, args)
+        on_list = any(match(text) for match in listed)
+        if direct is None:
+            direct = text
+        if on_list and (best is None or depth > best[0]):
+            best = (depth, text)
+        if on_list or os.path.basename(args[0]).lstrip("-") in SHELLS:
+            pending += [(child, depth + 1) for child in sorted(children.get(pid, []))]
+    return best[1] if best else direct or ""
+
+
+def hxp_sessions():
+    """Live sessions from hxp's own lister (hxp repository); none without hxp."""
+    command = shutil.which("hxp-sessions") or str(Path.home() / ".local/bin/hxp-sessions")
+    try:
+        output = subprocess.run([command], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    # TMUX_SOCKET TMUX_PANE EDITOR VIEWER VIEWER_SOCKET SOURCE
+    return [line.split("\t") for line in output.splitlines() if line.count("\t") == 5]
+
+
+def hxp_windows(live, argv):
+    """Save hxp as an idle editor plus a resume command in its viewer."""
+    socket_path = tmux("display-message", "-p", "#{socket_path}").strip()
+    panes = {pane["pane_id"]: key for key, pane in live.items()}
+    found = {}
+    for server, pane_id, editor_name, viewer, listen, src in hxp_sessions():
+        editor = panes.get(pane_id)
+        if server != socket_path or not editor or viewer != "fancy-cat" or not os.path.isabs(src):
+            continue
+        viewers = [key for key, pane in live.items() if key[:2] == editor[:2] and key != editor
+                   and listens(argv.get(int(pane["pane_pid"]), []), listen)]
+        if viewers:
+            name = "micro" if editor_name == "micro" else "helix"
+            found[editor] = ""
+            found[viewers[0]] = " ".join(shlex.quote(word) for word in ("hxp-resume", editor[2], name, src))
+    return found
+
+
+def pending_hxp(pane, live):
+    """Resolve the current editor index from its stable pane ID."""
+    editor_id, name, src = (pane["@hxp-resume"].split(" ", 2) + ["", ""])[:3]
+    window = (pane["session_name"], pane["window_index"])
+    editor = next((other for other in live.values() if other["pane_id"] == editor_id and
+                   (other["session_name"], other["window_index"]) == window), None)
+    if not editor or editor is pane or name not in ("helix", "micro") or not os.path.isabs(src):
+        return ""
+    return " ".join(shlex.quote(word) for word in ("hxp-resume", editor["pane_index"], name, src))
+
+
+def listens(args, socket_file):
+    return any(args[i:i + 2] == ["--listen", socket_file] for i in range(len(args) - 1))
+
+
+def main():
+    path = sys.argv[1]
+    form = "\t".join(f"#{{{field}}}" for field in FIELDS)
+    live = {}
+    for line in tmux("list-panes", "-a", "-F", form).splitlines():
+        values = line.split("\t", len(FIELDS) - 1)
+        if len(values) == len(FIELDS):
+            live[tuple(values[:3])] = dict(zip(FIELDS, values))
+    argv, children = processes()
+    listed = matchers()
+    hxp = hxp_windows(live, argv)
+    host = socket.gethostname().split(".")[0] or "tmux"
+
+    def clean(text):
+        return text.replace("\\", "\\\\").replace("\t", " ").replace("\n", " ")
+
+    lines = []
+    with open(path) as saved:
+        for line in saved:
+            fields = line.rstrip("\n").split("\t")
+            key = tuple(fields[i] for i in (1, 2, 5)) if fields[0] == "pane" and len(fields) > 5 else None
+            pane = live.get(key)
+            if pane:
+                if pane["@resurrect-command"]:
+                    full = pane["@resurrect-command"]
+                elif pane["@hxp-resume"]:
+                    full = pending_hxp(pane, live)
+                elif key in hxp:
+                    full = hxp[key]
+                else:
+                    full = choose(int(pane["pane_pid"]), argv, children, listed, pane["pane_title"])
+                line = "\t".join([*fields[:6], clean(pane["pane_title"]) or host,
+                                  ":" + clean(pane["pane_current_path"]), pane["pane_active"],
+                                  clean(pane["pane_current_command"]) or "?", ":" + clean(full)]) + "\n"
+            lines.append(line)
+    temporary = f"{path}.tmp"
+    with open(temporary, "w") as rewritten:
+        rewritten.writelines(lines)
+    os.replace(temporary, path)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        sys.exit(1)

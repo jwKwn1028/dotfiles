@@ -1,0 +1,4 @@
+#!/bin/sh
+# Shared launcher; native menus follow XSettings.
+
+exec /usr/bin/code "$@"

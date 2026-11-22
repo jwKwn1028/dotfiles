@@ -1,0 +1,8 @@
+paned .surface > overlay > box {
+  border: 1px solid transparent;
+  border-radius: 0;
+}
+
+paned .surface > overlay > box:focus-within {
+  border-color: #7dcfff;
+}

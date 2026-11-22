@@ -1,0 +1,28 @@
+{
+  "directory": "~/.i3/i3-resurrect/",
+  "window_command_mappings": [
+    {
+      "class": "Gnome-terminal",
+      "command": "gnome-terminal"
+    },
+    {
+      "class": "Xfce4-terminal",
+      "command": "xfce4-terminal"
+    },
+    {
+      "class": "com.mitchellh.ghostty",
+      "command": "ghostty"
+    },
+    {
+      "class": "zen",
+      "command": "flatpak run app.zen_browser.zen"
+    }
+  ],
+  "window_swallow_criteria": {},
+  "terminals": [
+    "Alacritty",
+    "Gnome-terminal",
+    "Xfce4-terminal",
+    "com.mitchellh.ghostty"
+  ]
+}

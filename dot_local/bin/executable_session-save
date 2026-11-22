@@ -1,0 +1,6 @@
+#!/bin/sh
+# Save tmux and i3 before exit.
+timeout 2 notify-send -t 3000 'Saving session' 'tmux and the i3 layout' >/dev/null 2>&1 &
+timeout 15 tmux-resurrect-autosave >/dev/null 2>&1 &
+ZEN_LIVE_URL_CAPTURE=0 timeout 30 "${I3_RESURRECT_SAVE:-$HOME/.config/i3/i3-resurrect-session.py}" save --auto >/dev/null 2>&1
+wait

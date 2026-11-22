@@ -1,0 +1,100 @@
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" -}}{{- $class = .class -}}{{- end -}}
+{{- $desktopProfile := "none" -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{-     $desktopProfile = "linuxmint-i3-x11" -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey . "desktopProfile" -}}{{- $desktopProfile = .desktopProfile -}}{{- end -}}
+#!/usr/bin/env bash
+# Installs pipx apps, Rust tools, Starship, zoxide, and Miniconda.
+set -euo pipefail
+failed=0
+
+echo "==> CLI tools provisioning"
+
+{{ if and (eq $class "desktop") (eq $desktopProfile "linuxmint-i3-x11") -}}
+# --- pipx desktop apps ---
+if ! command -v pipx >/dev/null 2>&1; then
+    echo "pipx not found; cannot install desktop pipx apps." >&2
+    exit 1
+fi
+{{ range .packages.pipx.apps -}}
+if command -v {{ .bin | quote }} >/dev/null 2>&1; then
+    echo "  {{ .bin }} already present; skipping pipx package {{ .package }}"
+else
+    pipx install {{ .package | quote }}
+fi
+{{ end -}}
+{{ else -}}
+echo "  profile is not linuxmint-i3-x11; skipping desktop pipx apps"
+{{ end }}
+
+# --- Rust toolchain (rustup) ---
+if ! command -v cargo >/dev/null 2>&1; then
+    echo "  installing rustup..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+fi
+# Must be an `if`, not `[ -f ... ] && . ...`: under `set -e` that one-liner
+# aborts the whole script when the file is absent -- which happens whenever cargo
+# came from a distro package rather than rustup -- skipping everything below.
+if [ -f "$HOME/.cargo/env" ]; then
+    # shellcheck disable=SC1091
+    . "$HOME/.cargo/env"
+fi
+
+# --- cargo crates from crates.io ---
+# Skipped when the crate's binary is already on PATH, so a distro-packaged tool
+# is not rebuilt from source.
+{{- range .packages.cargo.registry }}
+if command -v {{ .bin }} >/dev/null 2>&1; then
+    echo "  {{ .bin }} already present; skipping crate {{ .crate }}"
+else
+    if ! cargo install --locked {{ .crate }}; then
+        echo "WARN: cargo install {{ .crate }} failed" >&2
+        failed=1
+    fi
+fi
+{{- end }}
+
+# --- cargo crates from git ---
+# Same skip rule. `package` is passed when the repo holds several crates with
+# binaries; cargo aborts rather than guessing between them.
+{{- range .packages.cargo.git }}
+if command -v {{ .bin }} >/dev/null 2>&1; then
+    echo "  {{ .bin }} already present; skipping {{ .url }}"
+else
+    if ! cargo install --git {{ .url | quote }} --locked {{ if hasKey . "package" }}{{ .package }}{{ end }}; then
+        echo "WARN: cargo install --git {{ .url }} failed" >&2
+        failed=1
+    fi
+fi
+{{- end }}
+
+# --- starship prompt ---
+if ! command -v starship >/dev/null 2>&1; then
+    echo "  installing starship..."
+    curl -sS https://starship.rs/install.sh | sh -s -- -y
+fi
+
+# --- zoxide (installs to ~/.local/bin, matching this machine) ---
+if ! command -v zoxide >/dev/null 2>&1; then
+    echo "  installing zoxide..."
+    curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh
+fi
+
+# --- Miniconda (shell configs expect ~/miniconda3) ---
+if [ ! -d "$HOME/miniconda3" ]; then
+    echo "  installing Miniconda to ~/miniconda3..."
+    tmp="$(mktemp -d)"
+    curl -fsSL "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" -o "$tmp/miniconda.sh"
+    bash "$tmp/miniconda.sh" -b -p "$HOME/miniconda3"
+    rm -rf "$tmp"
+fi
+
+if [ "$failed" -ne 0 ]; then
+    echo "CLI tools provisioning incomplete; rerun chezmoi apply." >&2
+    exit 1
+fi
+echo "==> CLI tools provisioning done."

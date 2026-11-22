@@ -1,0 +1,185 @@
+#!/usr/bin/python3
+"""Cross-check i3 bar navigation against the Polybar module configuration."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import re
+import shlex
+import unittest
+
+
+I3_ROOT = Path(__file__).resolve().parent.parent
+I3_CONFIG = I3_ROOT / "config"
+BAR_NAV = I3_ROOT / "bar-nav.sh"
+if not BAR_NAV.exists():
+    BAR_NAV = I3_ROOT / "executable_bar-nav.sh"
+RESTORE = I3_ROOT / "i3-resurrect-restore-all.sh"
+if not RESTORE.exists():
+    RESTORE = I3_ROOT / "executable_i3-resurrect-restore-all.sh"
+SNAP_COMMON = I3_ROOT / "_snap-common.sh"
+if not SNAP_COMMON.exists():
+    SNAP_COMMON = I3_ROOT / "executable__snap-common.sh"
+
+POLYBAR_CONFIG = Path(
+    os.environ.get("I3_POLYBAR_CONFIG", I3_ROOT.parent / "polybar" / "config.ini")
+)
+POLYBAR_ROOT = POLYBAR_CONFIG.parent
+
+
+def bash_array(source: str, name: str) -> list[str]:
+    match = re.search(
+        rf"^{re.escape(name)}=\(\s*(.*?)\s*\)$",
+        source,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if match is None:
+        raise AssertionError(f"missing Bash array: {name}")
+    return shlex.split(match.group(1))
+
+
+class ConfigConsistencyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.i3_config = I3_CONFIG.read_text(encoding="utf-8")
+        cls.bar_nav = BAR_NAV.read_text(encoding="utf-8")
+        cls.polybar = POLYBAR_CONFIG.read_text(encoding="utf-8")
+        cls.restore = RESTORE.read_text(encoding="utf-8")
+
+    def test_placement_workers_are_owned_by_session_controller(self) -> None:
+        self.assertIn("exec_always --no-startup-id ~/.config/i3/workspace-groups.py start", self.i3_config)
+        for line in self.i3_config.splitlines():
+            if line.startswith("exec_always"):
+                self.assertNotIn("autotiling", line)
+                self.assertNotIn("overflow-watcher", line)
+                self.assertNotIn("snap-watcher", line)
+        source = (I3_ROOT / "group_controller.py").read_text()
+        self.assertIn('".local/bin/autotiling"', source)
+        self.assertNotIn('"--limit"', source)
+        self.assertIn('limit="${2:-0}"', SNAP_COMMON.read_text())
+
+    def test_process_guards_use_a_matchable_pgrep_pattern(self) -> None:
+        names = re.findall(r"pgrep -x ([A-Za-z0-9_.-]+)", self.i3_config)
+        self.assertTrue(names)
+        for name in names:
+            with self.subTest(name=name):
+                self.assertLessEqual(
+                    len(name),
+                    15,
+                    f"pgrep -x {name} can never match; use -f or -fx",
+                )
+
+    def test_parallel_navigation_arrays_have_the_same_length(self) -> None:
+        names = (
+            "modules",
+            "tray_class",
+            "click_left",
+            "click_left_opens",
+            "click_right",
+            "click_right_opens",
+            "scroll_down",
+            "scroll_up",
+        )
+        lengths = {name: len(bash_array(self.bar_nav, name)) for name in names}
+        self.assertEqual(
+            len(set(lengths.values())),
+            1,
+            f"bar-nav parallel arrays drifted: {lengths}",
+        )
+
+    def test_navigable_polybar_modules_have_adjacent_selected_twins(self) -> None:
+        modules = bash_array(self.bar_nav, "modules")
+        tray_classes = bash_array(self.bar_nav, "tray_class")
+        sections = set(
+            re.findall(r"^\[module/([^]]+)]$", self.polybar, flags=re.MULTILINE)
+        )
+        layouts = [
+            shlex.split(value)
+            for value in re.findall(
+                r"^modules-(?:left|center|right)\s*=\s*(.+)$",
+                self.polybar,
+                flags=re.MULTILINE,
+            )
+        ]
+
+        for module, tray_class in zip(modules, tray_classes, strict=True):
+            if tray_class:
+                continue
+            twin = f"{module}-sel"
+            self.assertIn(module, sections)
+            self.assertIn(twin, sections)
+            self.assertTrue(
+                any(
+                    any(
+                        tokens[index : index + 2] == [module, twin]
+                        for index in range(len(tokens) - 1)
+                    )
+                    for tokens in layouts
+                ),
+                f"{module} and {twin} are not adjacent in a bar module list",
+            )
+
+    def test_power_menu_uses_current_actions_and_safe_commands(self) -> None:
+        self.assertNotRegex(self.polybar, r"\bmenu-(?:open|close)(?:-|\b)")
+        self.assertRegex(
+            self.polybar,
+            r"(?m)^menu-0-0-exec\s*=.*confirm-poweroff\.sh poweroff$",
+        )
+        self.assertRegex(
+            self.polybar,
+            r"(?m)^menu-0-1-exec\s*=.*confirm-poweroff\.sh reboot$",
+        )
+        self.assertRegex(self.polybar, r"(?m)^menu-0-2-exec\s*=\s*\$HOME/\.config/i3/lock\.sh$")
+        self.assertRegex(
+            self.polybar, r"(?m)^menu-0-3-exec\s*=\s*#powermenu\.open\.1$"
+        )
+        self.assertRegex(
+            self.polybar, r"(?m)^menu-1-0-exec\s*=\s*#powermenu\.open\.0$"
+        )
+
+    def test_resurrect_restore_uses_shared_polybar_helpers(self) -> None:
+        self.assertIn('. "$DIR/_polybar-common.sh"', self.restore)
+        self.assertNotIn("set_polybar_visibility()", self.restore)
+        self.assertNotIn("wait_for_polybar_state()", self.restore)
+        self.assertIn("polybar_set_state hide 0", self.restore)
+        self.assertIn("polybar_set_state show 1", self.restore)
+
+    def test_volume_ipc_modules_have_a_session_watcher(self) -> None:
+        import configparser
+
+        config = configparser.ConfigParser(interpolation=None)
+        config.read_string(self.polybar)
+        self.assertEqual(config["module/pulseaudio"]["type"], "custom/ipc")
+        self.assertEqual(config["module/pulseaudio"]["initial"], "1")
+        self.assertIn("scripts/volume.py", config["module/pulseaudio"]["hook-0"])
+        self.assertEqual(config["module/pulseaudio-sel"]["inherit"], "module/pulseaudio")
+        self.assertEqual(config["module/pulseaudio-sel"]["format-background"], "${colors.selection}")
+        self.assertIn("exec /usr/bin/python3 ~/.config/polybar/scripts/volume.py watch", self.i3_config)
+
+    def test_locked_watchers_close_the_lock_in_their_subscribers(self) -> None:
+        checked = 0
+        for path in I3_ROOT.glob("*.sh"):
+            source = path.read_text(encoding="utf-8")
+            if "exec 200>" not in source:
+                continue
+            for line in source.splitlines():
+                if "i3-msg -t subscribe" in line and not line.lstrip().startswith("#"):
+                    self.assertIn("200>&-", line, str(path))
+                    checked += 1
+        self.assertGreaterEqual(checked, 3)
+
+    def test_desktop_python_entrypoints_use_the_system_interpreter(self) -> None:
+        entrypoints = [
+            *I3_ROOT.glob("*.py"),
+            *(I3_ROOT / "tests").glob("*.py"),
+            *(POLYBAR_ROOT / "scripts").glob("*.py"),
+        ]
+        self.assertTrue(entrypoints)
+        for path in entrypoints:
+            first_line = path.read_text(encoding="utf-8").splitlines()[0]
+            self.assertEqual(first_line, "#!/usr/bin/python3", str(path))
+
+
+if __name__ == "__main__":
+    unittest.main()

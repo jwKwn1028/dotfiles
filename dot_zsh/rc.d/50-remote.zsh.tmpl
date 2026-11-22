@@ -1,0 +1,951 @@
+{{- $tailscaleExitNode := "" -}}
+{{- if hasKey . "tailscaleExitNode" }}{{ $tailscaleExitNode = .tailscaleExitNode }}{{ end -}}
+# --- Remote Access Tools ---
+# Values come from the local chezmoi config; env vars override per session.
+HPC_REMOTE_USER=${HPC_REMOTE_USER:-{{ .sshRemoteUser | quote }}}
+HPC_REMOTE_HOST=${HPC_REMOTE_HOST:-{{ .sshGpuHost | quote }}}
+TAILSCALE_LAB_EXIT_NODE=${TAILSCALE_LAB_EXIT_NODE:-{{ $tailscaleExitNode | quote }}}
+TAILSCALE_REMOTE_SERVICE=${TAILSCALE_REMOTE_SERVICE:-tailscale-remote-proxy.service}
+TAILSCALE_REMOTE_SOCKET=${TAILSCALE_REMOTE_SOCKET:-${XDG_RUNTIME_DIR:-/run/user/$EUID}/tailscale-remote/tailscaled.sock}
+TAILSCALE_REMOTE_MODE_FILE=${TAILSCALE_REMOTE_MODE_FILE:-${XDG_RUNTIME_DIR:-/run/user/$EUID}/tailscale-remote-proxy-required}
+# Remote prelude: prefer ~/.local/bin/tmux, fall back to the global tmux.
+_HPC_TMUX_PRELUDE='PATH="$HOME/.local/bin:$PATH"; '
+
+ssh-close() {
+  emulate -L zsh
+  local -a hosts tsessions zsessions
+  local host all= found=0 label line kind sname scount
+  local -a f
+
+  if [[ $1 == -a ]]; then
+    all=1
+    shift
+  fi
+
+  if (( $# > 1 )) || [[ -n $all && $# -eq 1 ]]; then
+    print -u2 'usage: ssh-close [-a | HOST_ALIAS]'
+    return 2
+  fi
+
+  if (( $# == 1 )); then
+    command ssh -O exit "$1"
+    return
+  fi
+
+  hosts=({{ .sshHpcHost | quote }} {{ .sshGpuHost | quote }})
+
+  for host in $hosts; do
+    command ssh -O check "$host" >/dev/null 2>&1 || continue
+    found=1
+
+    tsessions=()
+    zsessions=()
+
+    for line in ${(f)"$(_hpc_sessions "$host")"}; do
+      f=("${(@s:%|%:)line}")
+      kind=$f[1] sname=$f[2] scount=$f[4]
+      [[ -n $sname ]] || continue
+      [[ $scount == <-> ]] || scount=
+      if [[ $kind == tmux ]]; then
+        tsessions+=("$sname${scount:+($scount)}")
+      else
+        zsessions+=("$sname${scount:+($scount)}")
+      fi
+    done
+
+    label=$host
+    (( $#tsessions )) && label="$label (tmux: ${(j:, :)tsessions})"
+    (( $#zsessions )) && label="$label (zmx: ${(j:, :)zsessions})"
+
+    if [[ -n $all ]]; then
+      command ssh -O exit "$host" >/dev/null 2>&1 && print "closed: $label"
+    else
+      print "open: $label"
+    fi
+  done
+
+  (( found )) || print 'no shared connections open'
+}
+
+_labroute_retire_masters() {
+  emulate -L zsh
+  local host
+  local -a hosts
+
+  hosts=({{ .sshHpcHost | quote }} {{ .sshGpuHost | quote }})
+
+  for host in $hosts; do
+    [[ -n $host ]] || continue
+    command ssh -O stop "$host" >/dev/null 2>&1 || true
+  done
+}
+
+_labroute_cli() {
+  command tailscale --socket="$TAILSCALE_REMOTE_SOCKET" "$@"
+}
+
+_labroute_service_active() {
+  command systemctl --user is-active --quiet "$TAILSCALE_REMOTE_SERVICE"
+}
+
+_labroute_start_service() {
+  command systemctl --user daemon-reload &&
+  command systemctl --user start "$TAILSCALE_REMOTE_SERVICE"
+}
+
+_labroute_stop_service() {
+  command systemctl --user stop "$TAILSCALE_REMOTE_SERVICE"
+}
+
+_labroute_wait_for_socket() {
+  integer attempt
+
+  for attempt in {1..50}; do
+    [[ -S "$TAILSCALE_REMOTE_SOCKET" ]] && return 0
+    command sleep 0.1
+  done
+
+  print -u2 'labroute: the userspace Tailscale daemon did not become ready'
+  return 1
+}
+
+_labroute_proxy_snapshot_ready() {
+  command jq -e '
+    .BackendState == "Running" and
+    ((.ExitNodeStatus.ID // "") != "") and
+    (.ExitNodeStatus.Online == true)
+  ' >/dev/null <<<"$1"
+}
+
+_labroute_proxy_snapshot_offline() {
+  command jq -e '
+    .BackendState == "Running" and
+    ((.ExitNodeStatus.ID // "") != "") and
+    (.ExitNodeStatus.Online != true)
+  ' >/dev/null <<<"$1"
+}
+
+_labroute_proxy_enabled() {
+  local snapshot
+
+  _labroute_service_active || return 1
+  snapshot=$(_labroute_cli status --json 2>/dev/null) || return 1
+  _labroute_proxy_snapshot_ready "$snapshot"
+}
+
+_labroute_wait_for_proxy() {
+  integer attempt
+
+  for attempt in {1..50}; do
+    _labroute_proxy_enabled && return 0
+    command sleep 0.1
+  done
+
+  return 1
+}
+
+_labroute_set_exit_node() {
+  _labroute_cli set \
+    --accept-dns=false \
+    --accept-routes=false \
+    --exit-node="$TAILSCALE_LAB_EXIT_NODE"
+}
+
+# A cache-restored daemon is Running before its netmap lists the exit node.
+_labroute_select_exit_node() {
+  integer attempt
+
+  for attempt in {1..49}; do
+    _labroute_set_exit_node 2>/dev/null && return 0
+    command sleep 0.2
+  done
+  _labroute_set_exit_node
+}
+
+_labroute_proxy_requested() {
+  [[ -f "$TAILSCALE_REMOTE_MODE_FILE" ]]
+}
+
+_labroute_main_exit_enabled() {
+  local snapshot
+
+  snapshot=$(command tailscale status --json 2>/dev/null) || return 1
+  command jq -e '((.ExitNodeStatus.ID // "") != "")' >/dev/null \
+    <<<"$snapshot"
+}
+
+_labroute_require_commands() {
+  local dependency
+
+  for dependency in tailscale tailscaled jq systemctl; do
+    if ! command -v "$dependency" >/dev/null 2>&1; then
+      print -u2 -- "labroute: $dependency is not installed"
+      return 127
+    fi
+  done
+}
+
+_labroute_status() {
+  local backend snapshot
+
+  if command -v tailscale >/dev/null 2>&1 &&
+      command -v jq >/dev/null 2>&1 &&
+      _labroute_main_exit_enabled
+  then
+    print 'Lab SSH route: CONFLICT (the main Tailscale exit node is ON)'
+    return 1
+  fi
+
+  if ! _labroute_proxy_requested; then
+    print 'Lab SSH route: OFF (direct connection)'
+    return 0
+  fi
+
+  _labroute_require_commands || return
+
+  if ! _labroute_service_active; then
+    print 'Lab SSH route: ON (blocked: proxy service is stopped)'
+    return 1
+  fi
+
+  snapshot=$(_labroute_cli status --json 2>/dev/null) || {
+    print 'Lab SSH route: ERROR (proxy service is running but unavailable)'
+    return 1
+  }
+  backend=$(command jq -r '.BackendState // "Unknown"' <<<"$snapshot") || return
+
+  if _labroute_proxy_snapshot_ready "$snapshot"; then
+    print 'Lab SSH route: ON'
+  elif _labroute_proxy_snapshot_offline "$snapshot"; then
+    print 'Lab SSH route: ON (blocked: exit node is offline)'
+    return 1
+  elif [[ "$backend" == NeedsLogin || "$backend" == NoState ]]; then
+    print 'Lab SSH route: ON (blocked: proxy authentication required)'
+    return 1
+  else
+    print -- "Lab SSH route: ON (blocked: proxy daemon: $backend)"
+    return 1
+  fi
+}
+
+# Usage: labroute {on|off|status|toggle}
+labroute() {
+  emulate -L zsh
+
+  if (( $# > 1 )); then
+    print -u2 'usage: labroute {on|off|status|toggle}'
+    return 2
+  fi
+
+  local route_action=${1:-status}
+  local backend proxy_hostname rc tailscale_snapshot
+
+  case "$route_action" in
+    on|off|status|toggle) ;;
+    *)
+      print -u2 'usage: labroute {on|off|status|toggle}'
+      return 2
+      ;;
+  esac
+
+  if [[ "$route_action" == toggle ]]; then
+    if ! _labroute_proxy_requested; then
+      route_action=on
+    elif _labroute_require_commands 2>/dev/null && ! _labroute_proxy_enabled; then
+      # Blocked: retry, since the direct route may be unreachable.
+      labroute on && return
+      rc=$?
+      print -u2 'labroute: run labroute off for direct access'
+      return $rc
+    else
+      route_action=off
+    fi
+  fi
+
+  case "$route_action" in
+    status)
+      _labroute_status
+      ;;
+    off)
+      _labroute_retire_masters
+      command rm -f -- "$TAILSCALE_REMOTE_MODE_FILE" || return
+      if command -v systemctl >/dev/null 2>&1 &&
+          _labroute_service_active
+      then
+        if [[ -S "$TAILSCALE_REMOTE_SOCKET" ]]; then
+          if command -v tailscale >/dev/null 2>&1; then
+            _labroute_cli set --exit-node= >/dev/null 2>&1 ||
+              print -u2 'labroute: warning: could not clear the proxy exit-node preference'
+          fi
+        fi
+        _labroute_stop_service ||
+          print -u2 'labroute: warning: could not stop the proxy service'
+      elif [[ -S "$TAILSCALE_REMOTE_SOCKET" ]]; then
+        print -u2 'labroute: warning: could not stop the proxy service'
+      fi
+      print 'Lab SSH route: OFF (direct connection)'
+      ;;
+    on)
+      _labroute_retire_masters
+      if ! : >| "$TAILSCALE_REMOTE_MODE_FILE"; then
+        print -u2 'labroute: could not enable proxy-required mode'
+        return 1
+      fi
+      _labroute_require_commands || return
+      if [[ -z "$TAILSCALE_LAB_EXIT_NODE" ]]; then
+        print -u2 'labroute: tailscaleExitNode is not configured in chezmoi data'
+        return 1
+      fi
+      if _labroute_main_exit_enabled; then
+        print -u2 'labroute: the main Tailscale daemon is using an exit node'
+        print -u2 'labroute: disable it first with: sudo tailscale set --exit-node='
+        return 1
+      fi
+      if _labroute_proxy_enabled; then
+        print 'Lab SSH route is already ON'
+        return 0
+      fi
+
+      if ! _labroute_start_service; then
+        print -u2 'labroute: proxy unavailable; remote SSH remains blocked'
+        return 1
+      fi
+      if ! _labroute_wait_for_socket; then
+        _labroute_stop_service >/dev/null 2>&1
+        print -u2 'labroute: proxy unavailable; remote SSH remains blocked'
+        return 1
+      fi
+
+      tailscale_snapshot=$(_labroute_cli status --json 2>/dev/null) ||
+        tailscale_snapshot='{}'
+      backend=$(command jq -r '.BackendState // "Unknown"' \
+        <<<"$tailscale_snapshot") || return
+
+      if [[ "$backend" != Running ]]; then
+        proxy_hostname="$(command hostname -s 2>/dev/null)-remote-proxy"
+        [[ "$proxy_hostname" == -remote-proxy ]] && proxy_hostname=remote-proxy
+        proxy_hostname=${proxy_hostname[1,63]}
+        if ! _labroute_cli up \
+          --hostname="$proxy_hostname" \
+          --accept-dns=false \
+          --accept-routes=false
+        then
+          _labroute_stop_service >/dev/null 2>&1
+          print -u2 'labroute: proxy unavailable; remote SSH remains blocked'
+          return 1
+        fi
+      fi
+
+      if ! _labroute_select_exit_node; then
+        _labroute_stop_service >/dev/null 2>&1
+        print -u2 'labroute: proxy unavailable; remote SSH remains blocked'
+        return 1
+      fi
+      if ! _labroute_wait_for_proxy; then
+        tailscale_snapshot=$(_labroute_cli status --json 2>/dev/null) ||
+          tailscale_snapshot='{}'
+        if _labroute_proxy_snapshot_offline "$tailscale_snapshot"; then
+          print -u2 'labroute: exit node is offline; remote SSH remains blocked'
+        else
+          _labroute_stop_service >/dev/null 2>&1
+          print -u2 'labroute: proxy unavailable; remote SSH remains blocked'
+        fi
+        return 1
+      fi
+      print 'Lab SSH route: ON'
+      ;;
+  esac
+}
+
+# 1. Quick SFTP connect -- type 'cdcluster' to browse server files
+cdcluster() {
+  emulate -L zsh
+  sftp "${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
+}
+
+# 2. Smart download -- grem path/to/file
+
+grem() {
+  emulate -L zsh
+
+  local remote="${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
+  if [[ ${1-} == --host ]]; then
+    if (( $# < 2 )) || [[ -z $2 || $2 == -* ]]; then
+      print -u2 'grem: --host requires a hostname or SSH alias'
+      return 2
+    fi
+    # Let SSH select the alias's User unless USER@HOST is explicit.
+    remote=$2
+    shift 2
+  fi
+
+  if (( $# < 1 )); then
+    print -u2 "Usage:"
+    print -u2 "  grem [--host HOST] <remote_path...>"
+    print -u2 "  grem [--host HOST] [rsync_opts...] -- <remote_path...>"
+    return 1
+  fi
+
+  local -a rsync_opts remotes
+  # --checksum: compare by content hash, so an edit keeping size+mtime transfers.
+  rsync_opts=(-aPzh --checksum --info=progress2 --protect-args)
+
+  # If the first argument starts with '-', treat leading args as rsync options.
+  if [[ $1 == -* ]]; then
+    while (( $# )) && [[ $1 != -- ]]; do
+      rsync_opts+=("$1")
+      shift
+      case "${rsync_opts[-1]}" in
+        --exclude|--include|--filter|--exclude-from|--files-from|-e|--rsh)
+          (( $# )) || { print -u2 "grem: missing argument for ${rsync_opts[-1]}"; return 2; }
+          rsync_opts+=("$1")
+          shift
+          ;;
+      esac
+    done
+
+    # consume optional `--`
+    [[ $1 == -- ]] && shift
+  fi
+
+  if (( $# < 1 )); then
+    print -u2 "Usage: grem [--host HOST] [rsync_opts...] -- <remote_path...>"
+    return 1
+  fi
+
+  remotes=("${(@)argv/#/${remote}:}")
+  rsync "${rsync_opts[@]}" -- "${remotes[@]}" ./
+}
+
+# 3. Upload -- prem local_file.py [remote_dest]
+prem() {
+  emulate -L zsh
+
+  local remote="${HPC_REMOTE_USER}@${HPC_REMOTE_HOST}"
+  if [[ ${1-} == --host ]]; then
+    if (( $# < 2 )) || [[ -z $2 || $2 == -* ]]; then
+      print -u2 'prem: --host requires a hostname or SSH alias'
+      return 2
+    fi
+    # Let SSH select the alias's User unless USER@HOST is explicit.
+    remote=$2
+    shift 2
+  fi
+
+  if (( $# < 1 )); then
+    print -u2 "Usage:"
+    print -u2 "  prem [--host HOST] <local_path...> [remote_dest]"
+    print -u2 "  prem [--host HOST] [rsync_opts...] -- <local_path...> [remote_dest]"
+    return 1
+  fi
+
+  local -a rsync_opts
+  # See grem: content-hash comparison so same-size, same-mtime edits transfer.
+  rsync_opts=(-aPzh --checksum --info=progress2 --protect-args)
+
+  # Keep rsync filter globs quoted, e.g. prem --exclude='*.safetensors' -- src/ dst
+  if [[ $1 == -* ]]; then
+    while (( $# )) && [[ $1 != -- ]]; do
+      rsync_opts+=("$1")
+      shift
+      case "${rsync_opts[-1]}" in
+        --exclude|--include|--filter|--exclude-from|--files-from|-e|--rsh)
+          (( $# )) || { print -u2 "prem: missing argument for ${rsync_opts[-1]}"; return 2; }
+          rsync_opts+=("$1")
+          shift
+          ;;
+      esac
+    done
+
+    # consume optional `--`
+    [[ $1 == -- ]] && shift
+  fi
+
+  if (( $# < 1 )); then
+    print -u2 "Usage: prem [--host HOST] [rsync_opts...] -- <local_path...> [remote_dest]"
+    return 1
+  fi
+
+  local dst=""
+  local last="${argv[-1]}"
+  local -a srcs
+  integer i
+
+  # If last arg looks like a remote destination, treat it as destination
+  if (( $# >= 2 )) && [[ "$last" == /* || "$last" == ~* ]]; then
+    dst="$last"
+    for i in {1..$(( $# - 1 ))}; do
+      srcs+=("${argv[$i]}")
+    done
+  else
+    srcs=("$@")
+  fi
+
+  # Empty destination means the remote home; explicit paths are directories.
+  rsync "${rsync_opts[@]}" -- \
+    "${srcs[@]}" "${remote}:${dst:+${dst%/}/}"
+}
+
+# Host-specific remote transfer wrappers.
+grem-gpu() {
+  emulate -L zsh
+  local HPC_REMOTE_HOST={{ .sshGpuHost | quote }}
+  grem "$@"
+}
+
+grem-hpc() {
+  emulate -L zsh
+  local HPC_REMOTE_HOST={{ .sshHpcHost | quote }}
+  grem "$@"
+}
+
+prem-gpu() {
+  emulate -L zsh
+  local HPC_REMOTE_HOST={{ .sshGpuHost | quote }}
+  prem "$@"
+}
+
+prem-hpc() {
+  emulate -L zsh
+  local HPC_REMOTE_HOST={{ .sshHpcHost | quote }}
+  prem "$@"
+}
+
+sftp-gpu() {
+  emulate -L zsh
+  local HPC_REMOTE_HOST={{ .sshGpuHost | quote }}
+  cdcluster
+}
+
+sftp-hpc() {
+  emulate -L zsh
+  local HPC_REMOTE_HOST={{ .sshHpcHost | quote }}
+  cdcluster
+}
+
+_hpc_age() {
+  emulate -L zsh
+  zmodload -i zsh/datetime
+  local t=$1 d
+
+  if [[ $t != <-> ]] || (( t <= 0 )); then
+    print -r -- -
+    return
+  fi
+
+  (( d = EPOCHSECONDS - t ))
+  if (( d < 3600 )); then
+    print -r -- "$((d / 60))m"
+  elif (( d < 86400 )); then
+    print -r -- "$((d / 3600))h"
+  else
+    print -r -- "$((d / 86400))d"
+  fi
+}
+
+_hpc_sessions() {
+  emulate -L zsh
+  local host=$1 line sname scount screated spath listing rc probe
+  local -a f
+  local -A spaths
+
+  probe=$_HPC_TMUX_PRELUDE'tmux list-panes -a -F "P%|%#{session_name}%|%#{pane_active}#{window_active}%|%#{pane_current_path}" 2>/dev/null; tmux list-sessions -F "T%|%#{session_name}%|%#{session_windows}%|%#{session_attached}%|%#{session_created}%|%#{session_activity}%|%#{session_path}" 2>/dev/null; ~/.local/bin/zmx list 2>/dev/null'
+
+  listing=$(command ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 "$host" "$probe")
+  rc=$?
+  (( rc == 255 )) && return $rc
+
+  for line in ${(f)listing}; do
+    if [[ $line == 'P%|%'* ]]; then
+      f=("${(@s:%|%:)line}")
+      [[ $f[3] == 11 && -n $f[2] ]] && spaths[$f[2]]=$f[4]
+    elif [[ $line == 'T%|%'* ]]; then
+      f=("${(@s:%|%:)line}")
+      print -r -- "tmux%|%$f[2]%|%$f[3]%|%$f[4]%|%$f[5]%|%$f[6]%|%${spaths[$f[2]]:-$f[7]}"
+    elif [[ $line == *name=* ]]; then
+      sname=${${line#*name=}%%[[:space:]]*}
+      scount=${${line#*clients=}%%[[:space:]]*}
+      screated=${${line#*created=}%%[[:space:]]*}
+      spath=
+      [[ $line == *start_dir=* ]] && spath=${line#*start_dir=}
+      [[ -n $sname ]] && print -r -- "zmx%|%$sname%|%-%|%$scount%|%$screated%|%-%|%$spath"
+    fi
+  done
+}
+
+_hpc_session_exists() {
+  emulate -L zsh
+  local host=$1 wanted_kind=$2 wanted_name=$3 line listing
+  local -a f
+
+  listing=$(_hpc_sessions "$host") || return
+
+  for line in ${(f)listing}; do
+    f=("${(@s:%|%:)line}")
+    [[ $f[1] == "$wanted_kind" && $f[2] == "$wanted_name" ]] && return 0
+  done
+
+  return 1
+}
+
+hpc-list() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }}
+  local home={{ printf "/home/%s" .sshRemoteUser | quote }}
+  local out line kind name win clients dir age idle fmt rc
+  local -a f
+
+  if (( $# )); then
+    print -u2 'usage: hpc-list'
+    return 2
+  fi
+
+  print -u2 -- 'hpc: connecting to remote host to list sessions...'
+  out=$(_hpc_sessions "$base")
+  rc=$?
+  if (( rc != 0 )); then
+    if (( rc == 255 )); then
+      print -u2 -- 'hpc: SSH connection to the remote host failed'
+    else
+      print -u2 -- "hpc: remote session query failed (status $rc)"
+    fi
+    return $rc
+  fi
+
+  if [[ -z $out ]]; then
+    print 'no sessions'
+    return
+  fi
+
+  fmt='%-5s %-18s %4s %8s %6s %6s  %s\n'
+  printf $fmt KIND NAME WIN CLIENTS AGE IDLE PATH
+
+  for line in ${(f)out}; do
+    f=("${(@s:%|%:)line}")
+    kind=$f[1] name=$f[2] win=$f[3] clients=$f[4] dir=$f[7]
+    age=$(_hpc_age $f[5])
+    idle=$(_hpc_age $f[6])
+
+    [[ -n $dir ]] && dir=${dir/#$home/\~}
+    printf $fmt "$kind" "$name" "${win:--}" "${clients:--}" "$age" "$idle" "${dir:--}"
+  done
+}
+
+# Re-check the local tmux bar after ssh.
+_hpc_local_bar() {
+  [[ -n ${TMUX-} && -n ${TMUX_PANE-} ]] || return 0
+  command tmux set-hook -R -t "$TMUX_PANE" session-window-changed >/dev/null 2>&1
+  return 0
+}
+
+_hpc_local_bar_preexec() {
+  [[ -n ${TMUX-} && ${${(z)1}[1]-} == ssh ]] && typeset -g _HPC_LOCAL_BAR_PENDING=1
+  return 0
+}
+
+_hpc_local_bar_precmd() {
+  [[ -n ${_HPC_LOCAL_BAR_PENDING-} ]] || return 0
+  unset _HPC_LOCAL_BAR_PENDING
+  _hpc_local_bar
+}
+
+# Ghostty tmux mode, if this window has focus; on only in tmux.
+_ghostty_tmux_mode() {
+  [[ -n ${DISPLAY-} ]] && (( $+commands[xdotool] && $+commands[xprop] && $+commands[ghostty-tmux-mode] )) || return 0
+  local win
+  win=$(command xdotool getactivewindow 2>/dev/null) && [[ -n $win ]] || return 0
+  if [[ -n ${TMUX-} ]]; then
+    [[ $1 == on ]] || return 0
+    [[ $(command xprop -id "$win" WM_CLASS 2>/dev/null) == *'"com.mitchellh.ghostty"'* ]] || return 0
+  else
+    [[ -n ${WINDOWID-} && $win == "$WINDOWID" ]] || return 0
+  fi
+  command ghostty-tmux-mode $1 >/dev/null 2>&1
+  return 0
+}
+
+# True if tmux args attach (bare, attach*, new* without -d).
+_ghostty_tmux_attaches() {
+  local cmd=
+  while (( $# )); do
+    case $1 in
+      -[cfLST]) shift; (( $# )) && shift ;;
+      -*) shift ;;
+      *) cmd=$1; shift; break ;;
+    esac
+  done
+  case $cmd in
+    ''|a|at|att|atta|attac|attach|attach-*) return 0 ;;
+    new|new-*) [[ ${@[(I)-d]} == 0 ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+# $3 has aliases expanded.
+_ghostty_tmux_mode_preexec() {
+  local -a w=("${(@Q)${(z)${3:-$1}}}") rest
+  local i attaches=
+  case ${w[1]-} in
+    tmux) _ghostty_tmux_attaches "${(@)w[2,-1]}" && attaches=1 ;;
+    ssh)
+      rest=(${=${(j: :)w[2,-1]}})
+      i=${rest[(I)tmux]}
+      (( i )) && _ghostty_tmux_attaches "${(@)rest[i+1,-1]}" && attaches=1
+      ;;
+  esac
+  if [[ -n $attaches ]]; then
+    typeset -g _GHOSTTY_TMUX_MODE_PENDING=1
+    _ghostty_tmux_mode on
+  fi
+  return 0
+}
+
+_ghostty_tmux_mode_precmd() {
+  [[ -n ${_GHOSTTY_TMUX_MODE_PENDING-} ]] || return 0
+  unset _GHOSTTY_TMUX_MODE_PENDING
+  _ghostty_tmux_mode off
+}
+
+if [[ -o interactive ]]; then
+  autoload -Uz add-zsh-hook
+  add-zsh-hook preexec _hpc_local_bar_preexec
+  add-zsh-hook precmd _hpc_local_bar_precmd
+  add-zsh-hook preexec _ghostty_tmux_mode_preexec
+  add-zsh-hook precmd _ghostty_tmux_mode_precmd
+fi
+
+hpc() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }}
+  local rc remote_cmd
+
+  if (( $# == 0 )); then
+    hpc-list
+    return
+  fi
+
+  if (( $# > 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpc [session-name]'
+    return 2
+  fi
+
+  remote_cmd="${_HPC_TMUX_PRELUDE}command -v tmux >/dev/null 2>&1 || { printf '%s\n' 'hpc: tmux is not installed on the remote host' >&2; exit 127; }; "
+  remote_cmd+="tmux has-session -t =$1 2>/dev/null || { printf '%s\n' 'hpc: no tmux session named $1' >&2; exit 1; }; "
+  remote_cmd+="printf '%s\n' \"hpc: connected; attaching to tmux session '$1'...\" >&2; "
+  remote_cmd+="exec tmux attach-session -t =$1"
+
+  print -u2 -- "hpc: connecting to remote host for tmux session '$1'..."
+  _ghostty_tmux_mode on
+  {
+    ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 -t "$base" "$remote_cmd"
+    rc=$?
+  } always {
+    _hpc_local_bar
+    _ghostty_tmux_mode off
+  }
+  if (( rc == 255 )); then
+    print -u2 -- 'hpc: SSH connection to the remote host failed'
+  elif (( rc != 0 && rc != 1 && rc != 127 )); then
+    print -u2 -- "hpc: remote attach failed for tmux session '$1' (status $rc)"
+  fi
+  return $rc
+}
+
+hpc-detach() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }}
+  local rc remote_cmd
+
+  if (( $# != 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpc-detach <session-name>'
+    return 2
+  fi
+
+  remote_cmd="${_HPC_TMUX_PRELUDE}command -v tmux >/dev/null 2>&1 || { printf '%s\n' 'hpc-detach: tmux is not installed on the remote host' >&2; exit 127; }; "
+  remote_cmd+="tmux has-session -t '=$1' 2>/dev/null || { printf '%s\n' 'hpc-detach: no tmux session named $1' >&2; exit 1; }; "
+  remote_cmd+="tmux detach-client -s '=$1' && printf '%s\n' \"hpc-detach: detached clients from tmux session '$1'\""
+
+  print -u2 -- "hpc-detach: connecting to remote host for tmux session '$1'..."
+  ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 "$base" "$remote_cmd"
+  rc=$?
+  if (( rc == 255 )); then
+    print -u2 -- 'hpc-detach: SSH connection to the remote host failed'
+  elif (( rc != 0 && rc != 1 && rc != 127 )); then
+    print -u2 -- "hpc-detach: remote detach failed for tmux session '$1' (status $rc)"
+  fi
+  return $rc
+}
+
+hpc-kill() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }}
+  local force= entry attached line listing rc
+
+  if [[ $1 == -f ]]; then
+    force=1
+    shift
+  fi
+
+  if (( $# != 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpc-kill [-f] <session-name>'
+    return 2
+  fi
+
+  listing=$(command ssh "$base" "$_HPC_TMUX_PRELUDE"'tmux list-sessions -F "#{session_name} #{session_attached}" 2>/dev/null')
+  rc=$?
+  (( rc == 255 )) && return $rc
+
+  for line in ${(f)listing}; do
+    if [[ ${line%% *} == "$1" ]]; then
+      entry=$line
+      break
+    fi
+  done
+
+  if [[ -z $entry ]]; then
+    print -u2 "hpc-kill: no tmux session named $1"
+    return 1
+  fi
+
+  if [[ -z $force ]]; then
+    attached=${entry##* }
+    if [[ $attached != <-> ]]; then
+      print -u2 "hpc-kill: cannot read client count for $1; use -f to override"
+      return 1
+    fi
+    if (( attached > 0 )); then
+      print -u2 "hpc-kill: $1 has $attached client(s) attached; use -f to kill anyway"
+      return 1
+    fi
+  fi
+
+  ssh "$base" "${_HPC_TMUX_PRELUDE}tmux kill-session -t $1 && tmux list-sessions"
+}
+
+hpcz-list() {
+  emulate -L zsh
+
+  if (( $# )); then
+    print -u2 'usage: hpcz-list'
+    return 2
+  fi
+
+  hpc-list
+}
+
+hpcz() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
+  local rc
+
+  if (( $# == 0 )); then
+    hpcz-list
+    return
+  fi
+
+  if (( $# > 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpcz [session-name]'
+    return 2
+  fi
+
+  _hpc_session_exists "$base" zmx "$1"
+  rc=$?
+  if (( rc != 0 )); then
+    (( rc == 255 )) && return $rc
+    print -u2 "hpcz: no zmx session named $1"
+    return 1
+  fi
+
+  ssh -t "$base" "$zmx attach $1"
+}
+
+hpcz-detach() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }}
+  local rc remote_cmd
+
+  if (( $# != 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpcz-detach <session-name>'
+    return 2
+  fi
+
+  remote_cmd="test -x ~/.local/bin/zmx || { printf '%s\n' 'hpcz-detach: zmx is not installed on the remote host' >&2; exit 127; }; "
+  remote_cmd+="~/.local/bin/zmx list 2>/dev/null | command grep -Eq '(^|[[:space:]])name=$1([[:space:]]|$)' || { printf '%s\n' 'hpcz-detach: no zmx session named $1' >&2; exit 1; }; "
+  remote_cmd+="env ZMX_SESSION='$1' ~/.local/bin/zmx detach && printf '%s\n' \"hpcz-detach: detached clients from zmx session '$1'\""
+
+  print -u2 -- "hpcz-detach: connecting to remote host for zmx session '$1'..."
+  ssh -S none -o ConnectTimeout=8 -o ConnectionAttempts=1 "$base" "$remote_cmd"
+  rc=$?
+  if (( rc == 255 )); then
+    print -u2 -- 'hpcz-detach: SSH connection to the remote host failed'
+  elif (( rc != 0 && rc != 1 && rc != 127 )); then
+    print -u2 -- "hpcz-detach: remote detach failed for zmx session '$1' (status $rc)"
+  fi
+  return $rc
+}
+
+hpcz-kill() {
+  emulate -L zsh
+  local base={{ .sshHpcHost | quote }} zmx='~/.local/bin/zmx'
+  local force= clients found= line listing
+  local -a f
+
+  if [[ $1 == -f ]]; then
+    force=1
+    shift
+  fi
+
+  if (( $# != 1 )) || [[ -z $1 || $1 != ${1//[^A-Za-z0-9_-]/} ]]; then
+    print -u2 'usage: hpcz-kill [-f] <session-name>'
+    return 2
+  fi
+
+  listing=$(_hpc_sessions "$base") || return
+
+  for line in ${(f)listing}; do
+    f=("${(@s:%|%:)line}")
+    if [[ $f[1] == zmx && $f[2] == "$1" ]]; then
+      clients=$f[4]
+      found=1
+      break
+    fi
+  done
+
+  if [[ -z $found ]]; then
+    print -u2 "hpcz-kill: no zmx session named $1"
+    return 1
+  fi
+
+  if [[ -z $force ]]; then
+    if [[ $clients != <-> ]]; then
+      print -u2 "hpcz-kill: cannot read client count for $1; use -f to override"
+      return 1
+    fi
+    if (( clients > 0 )); then
+      print -u2 "hpcz-kill: $1 has $clients client(s) attached; use -f to kill anyway"
+      return 1
+    fi
+  fi
+
+  ssh "$base" "$zmx kill $1${force:+ --force} && $zmx list"
+}
+
+# i3-resurrect starts a restored Ghostty window's first shell with this set.
+_hpc_restore_session() {
+  emulate -L zsh
+  local session=${I3_RESURRECT_REMOTE_SESSION-}
+
+  autoload -Uz add-zsh-hook
+  add-zsh-hook -d precmd _hpc_restore_session
+  unset I3_RESURRECT_REMOTE_SESSION
+
+  case $session in
+    tmux:?*) print -rs -- "hpc ${session#tmux:}"; hpc "${session#tmux:}" ;;
+    zmx:?*) print -rs -- "hpcz ${session#zmx:}"; hpcz "${session#zmx:}" ;;
+  esac
+}
+
+if [[ -o interactive && -n ${I3_RESURRECT_REMOTE_SESSION-} ]]; then
+  autoload -Uz add-zsh-hook
+  add-zsh-hook precmd _hpc_restore_session
+fi

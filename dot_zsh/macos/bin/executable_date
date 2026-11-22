@@ -1,0 +1,47 @@
+#!/bin/sh
+# Supply GNU date semantics to unchanged functions, with a BSD-date fallback
+# for the one relative-date form currently used by rc.d/30-aliases.zsh.
+
+if [ -n "${MACOS_COREUTILS_GNUBIN:-}" ] &&
+   [ -x "$MACOS_COREUTILS_GNUBIN/date" ]; then
+  exec "$MACOS_COREUTILS_GNUBIN/date" "$@"
+fi
+
+for candidate in \
+  /opt/homebrew/opt/coreutils/libexec/gnubin/date \
+  /usr/local/opt/coreutils/libexec/gnubin/date
+do
+  if [ -x "$candidate" ]; then
+    exec "$candidate" "$@"
+  fi
+done
+
+if command -v gdate >/dev/null 2>&1; then
+  exec gdate "$@"
+fi
+
+native_date=${MACOS_NATIVE_DATE:-/bin/date}
+
+if [ "$#" -ge 2 ] && [ "$1" = -d ]; then
+  relative=$2
+  offset=
+  case $relative in
+    *" days") offset=${relative% days} ;;
+    *" day")  offset=${relative% day} ;;
+  esac
+
+  digits=${offset#[+-]}
+  case $digits in
+    ''|*[!0-9]*) ;;
+    *)
+      case $offset in
+        -*|+*) adjustment=$offset ;;
+        *)     adjustment=+$offset ;;
+      esac
+      shift 2
+      exec "$native_date" "-v${adjustment}d" "$@"
+      ;;
+  esac
+fi
+
+exec "$native_date" "$@"

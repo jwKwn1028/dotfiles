@@ -1,0 +1,22 @@
+set selection-clipboard clipboard
+set selection-notification false
+
+# Hide the statusbar by default; Ctrl+n still toggles it.
+set guioptions ""
+
+set default-bg "#ffffff"
+set recolor false
+set recolor-lightcolor "#faf7ef"
+set recolor-darkcolor "#3b352d"
+set recolor-keephue true
+set recolor-reverse-video true
+
+# Ctrl+click uses hxp-jump; Zathura reloads changed PDFs automatically.
+set synctex true
+set synctex-editor-command "hxp-jump %{input}:%{line}"
+
+# T: Ghostty tab in the document's folder (last focused window).
+map T exec "sh -c 'exec ghostty +new-tab --surface-id=0 --working-directory=\"$(dirname -- \"$1\")\"' zathura-term \"$FILE\""
+
+set incremental-search true
+set adjust-open "width"

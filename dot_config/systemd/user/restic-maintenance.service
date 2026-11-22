@@ -1,0 +1,11 @@
+[Unit]
+Description=Prune and verify the restic home repository
+Documentation=file://%h/.config/restic/README.md
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/restic-backup maintenance
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=infinity
+UMask=0077

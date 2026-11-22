@@ -1,0 +1,53 @@
+# TokyoNight Storm, matched to local Helix/Ghostty.
+# Based on btop's tokyo-storm.theme by Pascal Jaeger.
+
+# UI
+theme[main_bg]="#292d3e"
+theme[main_fg]="#c0caf5"
+theme[title]="#c0caf5"
+theme[hi_fg]="#7dcfff"
+theme[selected_bg]="#3d59a1"
+theme[selected_fg]="#c0caf5"
+theme[inactive_fg]="#565f89"
+theme[proc_misc]="#7dcfff"
+theme[cpu_box]="#565f89"
+theme[mem_box]="#565f89"
+theme[net_box]="#565f89"
+theme[proc_box]="#565f89"
+theme[div_line]="#414868"
+
+# CPU, temperature, and used capacity: green → yellow → red.
+theme[temp_start]="#9ece6a"
+theme[temp_mid]="#e0af68"
+theme[temp_end]="#f7768e"
+
+theme[cpu_start]="#9ece6a"
+theme[cpu_mid]="#e0af68"
+theme[cpu_end]="#f7768e"
+
+theme[used_start]="#9ece6a"
+theme[used_mid]="#e0af68"
+theme[used_end]="#f7768e"
+
+# Free, cached, and available capacity: green/blue/cyan.
+theme[free_start]="#1abc9c"
+theme[free_mid]="#73daca"
+theme[free_end]="#9ece6a"
+
+theme[cached_start]="#7aa2f7"
+theme[cached_mid]="#7dcfff"
+theme[cached_end]="#b4f9f8"
+
+theme[available_start]="#2ac3de"
+theme[available_mid]="#7dcfff"
+theme[available_end]="#89ddff"
+
+# Network: download blue → cyan; upload purple → magenta.
+# Empty midpoints interpolate directly between start and end.
+theme[download_start]="#7aa2f7"
+theme[download_mid]=""
+theme[download_end]="#7dcfff"
+
+theme[upload_start]="#9d7cd8"
+theme[upload_mid]=""
+theme[upload_end]="#bb9af7"

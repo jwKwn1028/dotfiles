@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# cpu-load [instance] [interval_seconds] [--follow]
+# Load = busy / total; iowait counts as idle.
+# Each instance reuses one sample per interval across concurrent callers.
+
+export LC_ALL=C                        # keep EPOCHREALTIME's decimal point a "."
+
+instance="${1:-default}"
+interval="${2:-2}"
+state="${XDG_RUNTIME_DIR:-/tmp}/cpu-load.${instance}.state"
+
+# Read aggregate CPU jiffies into cur_total and cur_idle.
+snapshot() {
+  local _ user nice system idle iowait irq softirq steal
+  read -r _ user nice system idle iowait irq softirq steal _ < /proc/stat
+  cur_total=$(( user + nice + system + idle + iowait + irq + softirq + steal ))
+  cur_idle=$(( idle + iowait ))
+}
+
+percent() {
+  local dt=$(( cur_total - prev_total )) di=$(( cur_idle - prev_idle ))
+  if (( dt <= 0 )); then
+    load=0
+  else
+    load=$(( (100 * (dt - di) + dt / 2) / dt ))   # round to nearest percent
+    (( load < 0 ))   && load=0
+    (( load > 100 )) && load=100
+  fi
+}
+
+if [[ ${3:-} == --follow ]]; then
+  # Wait without forking, aligned across bars.
+  exec {pause_fd}<> <(:)
+  pause() {
+    printf -v pause_s '%d.%06d' $(( $1 / 1000000 )) $(( $1 % 1000000 ))
+    read -rt "$pause_s" -u "$pause_fd"
+  }
+  step=$(( (interval > 0 ? interval : 2) * 1000000 ))
+  snapshot
+  pause 300000
+  while :; do
+    prev_total=$cur_total prev_idle=$cur_idle
+    snapshot
+    percent
+    echo "$load"
+    now_us=${EPOCHREALTIME/./}
+    next=$(( (now_us + step / 2 + step - 1) / step * step ))
+    while (( now_us < next )); do
+      pause $(( next - now_us ))
+      now_us=${EPOCHREALTIME/./}
+    done
+  done
+fi
+
+now_us=${EPOCHREALTIME/./}
+snapshot
+
+prev_total='' prev_idle='' prev_us='' prev_load=''
+[[ -r $state ]] && read -r prev_total prev_idle prev_us prev_load < "$state"
+
+# Reuse samples younger than 75% of the interval.
+if [[ -n $prev_us && -n $prev_load ]] &&
+   (( now_us - prev_us < interval * 750000 )); then
+  echo "$prev_load"
+  exit 0
+fi
+
+if [[ -z $prev_total ]]; then
+  # No prior snapshot: take one short sample so the first call is meaningful.
+  prev_total=$cur_total prev_idle=$cur_idle
+  sleep 0.3
+  snapshot
+  now_us=${EPOCHREALTIME/./}
+fi
+
+percent
+
+# Rename atomically so readers never see partial state.
+printf '%s %s %s %s\n' "$cur_total" "$cur_idle" "$now_us" "$load" > "$state.$$"
+mv -f "$state.$$" "$state"
+
+echo "$load"

@@ -1,0 +1,19 @@
+# User-local completions; the glob needs EXTENDED_GLOB from 00-options.
+[[ -d "$HOME/.local/share/zsh/site-functions" ]] && fpath=("$HOME/.local/share/zsh/site-functions" $fpath)
+autoload -Uz compinit
+
+_compdump="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/zcompdump"
+mkdir -p -- "${_compdump%/*}" 2>/dev/null
+
+if [[ ! -f $_compdump || -n $_compdump(#qN.mh+24) ]]; then
+  compinit -d "$_compdump" && touch -- "$_compdump"
+else
+  compinit -C -d "$_compdump"
+fi
+unset _compdump
+
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+if [[ -n "${LS_COLORS:-}" ]]; then
+  zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+fi

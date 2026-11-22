@@ -1,0 +1,137 @@
+# Whole target paths, relative to $HOME.
+{{- $desktopProfile := "none" -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   if or (eq .chezmoi.osRelease.id "linuxmint") (eq .chezmoi.osRelease.id "ubuntu") -}}
+{{-     $desktopProfile = "linuxmint-i3-x11" -}}
+{{-   end -}}
+{{- end -}}
+{{- if hasKey . "desktopProfile" -}}
+{{-   $desktopProfile = .desktopProfile -}}
+{{- end -}}
+{{- $class := "desktop" -}}
+{{- if hasKey . "class" -}}
+{{-   $class = .class -}}
+{{- end }}
+
+# Repository-only files.
+README.md
+run-tests.sh
+docs.md
+X2W.md
+MACOS_PORTING_GUIDE.md
+HARDWARE.md
+CHEZMOI_UPDATE_WORKFLOW.md
+IDEA.md
+AGENTS.md
+CLAUDE.md
+LICENSE
+desktop.nix
+
+# Browser profiles stay local; provisioning installs shareable settings.
+.mozilla/firefox/
+snap/firefox/common/.mozilla/firefox/
+.var/app/org.mozilla.firefox/.mozilla/firefox/
+.config/net.imput.helium/
+.var/app/app.zen_browser.zen/
+
+# Generated Zsh state and hxp-owned symlinks.
+.zshrc.zwc
+.zsh/**/*.zwc
+.zsh/*.bak.*
+.zsh/hxp-lib.zsh
+.zsh/hxp-main.zsh
+# hxp's install.sh links its helpers (hxp-sessions, hxp-resume, ...) too.
+.local/bin/hxp-*
+
+# Local state: ignored by both Git and chezmoi.
+# Untracked files still apply unless ignored here; ignores never delete targets.
+.config/i3/resurrect*
+.config/ghostty/tabbar-state.conf
+**/__pycache__
+**/.git
+.config/**/.codex
+**/.agents
+
+# restic-backup init creates this password locally.
+.config/restic/password
+
+# This restic setup uses Linux mount inspection and systemd user timers.
+{{ if ne .chezmoi.os "linux" -}}
+.config/restic/
+.config/systemd/user/restic-backup.service
+.config/systemd/user/restic-backup.timer
+.config/systemd/user/restic-maintenance.service
+.config/systemd/user/restic-maintenance.timer
+.local/bin/restic-backup
+.local/bin/fancy-cat-open
+
+.config/systemd/user/tailscale-remote-proxy.service
+.config/systemd/user/tmux-resurrect-save.service
+.config/systemd/user/tmux-resurrect-save.timer
+.config/systemd/user/i3-resurrect-save.service
+.config/systemd/user/i3-resurrect-save.timer
+.local/bin/tmux-resurrect-autosave
+.local/bin/tmux-resurrect-post-save
+.local/bin/session-save
+.local/bin/ghostty-tmux-mode
+.local/bin/tailscale-remote-connect
+{{ end -}}
+
+# Keep agent-owned state local; manage only the two stable settings targets.
+.claude.json*
+.claude/*
+!.claude/settings.json
+.codex/*
+!.codex/config.toml
+
+# Mint i3/X11 profile only.
+{{ if or (ne $class "desktop") (ne $desktopProfile "linuxmint-i3-x11") -}}
+.config/i3/
+.config/xfce4/
+.config/polybar/
+.config/picom/
+.config/rofi/
+.config/dunst/
+.config/fancy-cat/
+.config/systemd/user/dunst.service.d/
+.config/fcitx5/
+.config/Thunar/
+.toggle-touchpad.sh
+.local/bin/touchpad
+
+# Desktop notifications; taskrc remains shared.
+.local/bin/task-notify
+.config/systemd/user/task-notify.service
+.config/systemd/user/task-notify.timer
+.config/task/MANUAL.md
+
+# GTK session theme and shared launchers; desktop profile only.
+.themes/Ghostty-TokyoNight/
+.local/bin/thunar
+.local/share/applications/thunar.desktop
+.config/systemd/user/thunar.service.d/
+.local/bin/code
+.local/share/applications/com.microsoft.VSCode.desktop
+.local/share/applications/com.microsoft.VSCode.UrlHandler.desktop
+{{ end -}}
+
+# Desktop browser chrome and document styles.
+{{ if ne $class "desktop" -}}
+.local/share/zen-chrome/
+.local/share/helium-newtab/
+.local/share/pandoc/
+.local/share/typst/packages/local/docstyle/
+{{ end -}}
+
+# Linux desktop browserpass access from Flatpak.
+{{ if or (ne $class "desktop") (ne .chezmoi.os "linux") -}}
+.local/share/flatpak/overrides/app.zen_browser.zen
+{{ end -}}
+
+# ONLYOFFICE titlebar; desktop-class flatpak.
+{{ if or (ne $class "desktop") (ne .chezmoi.os "linux") -}}
+.var
+{{ end -}}
+
+prospect.md
+commitmsg.txt

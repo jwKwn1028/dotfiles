@@ -1,0 +1,27 @@
+#!/bin/zsh -f
+# tmux-restore-if-empty [SESSION]: restore once under a shared lock.
+
+session=${1-}
+lock=${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}/tmux-resurrect.lock
+mkdir -p -- "${lock:h}" && : >>"$lock" && zmodload zsh/system || exit 1
+# fcntl locks stay in this process.
+if ! zsystem flock -t 0 "$lock" 2>/dev/null; then
+  print -u2 'ta: waiting for the tmux restore...'
+  zsystem flock -t 30 "$lock" || { print -u2 'ta: a tmux restore is still running'; exit 1 }
+fi
+tmux has-session 2>/dev/null && exit 0
+
+# Keep launch and window IDs out of the server environment.
+unset -m 'I3_RESURRECT_*'
+unset I3_GROUP_LAUNCH DESKTOP_STARTUP_ID WINDOWID GHOSTTY_SURFACE_ID
+typeset -U path
+path+=("$HOME/.local/bin")  # Helpers used by tmux hooks.
+
+print -u2 'ta: restoring tmux sessions...'
+tmux new-session -d -s 0 || exit 1
+tmux run-shell "$HOME/.tmux/plugins/tmux-resurrect/scripts/restore.sh" && exit 0
+if [[ -n $session ]]; then
+  tmux has-session -t "=$session"
+else
+  tmux has-session
+fi

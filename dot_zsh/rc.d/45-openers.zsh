@@ -1,0 +1,191 @@
+# --- Universal Extract ---
+ex() {
+  emulate -L zsh
+  (( $# )) || { print -u2 "usage: ex <archive>..."; return 2; }
+  local a
+  for a in "$@"; do
+    [[ -f "$a" ]] || { print -u2 "ex: '$a' is not a valid file"; return 1; }
+    # tar.* patterns must precede the bare-compressor ones so foo.tar.gz untars.
+    case "$a" in
+      *.tar.bz2)        tar xjf "$a"        ;;
+      *.tar.gz)         tar xzf "$a"        ;;
+      *.tar.xz)         tar xJf "$a"        ;;
+      *.tar.zst|*.tzst) tar --zstd -xf "$a" ;;
+      *.tar)            tar xf "$a"         ;;
+      *.tbz2)           tar xjf "$a"        ;;
+      *.tgz)            tar xzf "$a"        ;;
+      *.bz2)            bunzip2 "$a"        ;;
+      *.gz)             gunzip "$a"         ;;
+      *.xz)             unxz "$a"           ;;
+      *.zst)            unzstd "$a"         ;;
+      *.rar)            unrar x "$a"        ;;
+      *.zip)            unzip "$a"          ;;
+      *.Z)              uncompress "$a"     ;;
+      *.7z)             7z x "$a"           ;;
+      *)                print -u2 "ex: don't know how to extract '$a'"; return 1 ;;
+    esac || return
+  done
+}
+
+# so/zo prefer Sioyek/Zathura. A successful interactive picker closes its shell.
+_zsh_close_after_open_pick() {
+  [[ -o interactive ]] && exit 0
+  return 0
+}
+
+_zsh_open_pdf() {
+  emulate -L zsh
+  local caller="${funcstack[2]:-open-pdf}"
+  local prefer="$1" viewer v file
+  local -i picked=0
+  local -a order
+  shift
+
+  case "$prefer" in
+    zathura) order=(zathura sioyek) ;;
+    *)       order=(sioyek zathura) ;;
+  esac
+  for v in "${order[@]}"; do
+    if _have "$v"; then
+      viewer="$v"
+      break
+    fi
+  done
+  if [[ -z "$viewer" ]]; then
+    print -u2 "$caller: neither sioyek nor zathura installed"
+    return 127
+  fi
+
+  if [[ -n "$1" ]]; then
+    file="$1"
+    [[ -f "$file" ]] || { print -u2 "$caller: '$file' not found"; return 1; }
+  else
+    _have fzf || { print -u2 "$caller: fzf not found"; return 127; }
+    file="$(_zsh_ls_files pdf | fzf --prompt='Open PDF> ')" || return
+    [[ -n "$file" ]] || return 1
+    picked=1
+  fi
+
+  case "$viewer" in
+    # --new-window overrides the hxp-tuned pref so each PDF gets its own window.
+    sioyek)  sioyek --new-window "$file" >/dev/null 2>&1 &! ;;
+    zathura) zathura "$file"             >/dev/null 2>&1 &! ;;
+  esac
+  local launch_status=$?
+  (( launch_status == 0 && picked )) && _zsh_close_after_open_pick
+  return "$launch_status"
+}
+
+so() { _zsh_open_pdf sioyek "$@"; }
+zo() { _zsh_open_pdf zathura "$@"; }
+
+# fo [FILE [PAGE]]: fancy-cat in the foreground.
+fo() {
+  emulate -L zsh
+  (( $# <= 2 )) || { print -u2 'usage: fo [FILE [PAGE]]'; return 2; }
+  _have fancy-cat-open || { print -u2 'fo: fancy-cat-open not found'; return 127; }
+  if (( $# )); then
+    fancy-cat-open "$@"
+    return
+  fi
+
+  local file
+  _have fzf || { print -u2 'fo: fzf not found'; return 127; }
+  file="$(_zsh_ls_files pdf | fzf --prompt='Open PDF> ')" || return
+  [[ -n "$file" ]] || return 1
+  fancy-cat-open "$file"
+}
+
+bo() {
+  emulate -L zsh
+  local file
+  local -i picked=0
+
+  _have ebook-viewer || { print -u2 "bo: ebook-viewer not found"; return 127; }
+
+  if [[ -n "$1" ]]; then
+    file="$1"
+    [[ -f "$file" ]] || { print -u2 "bo: '$file' not found"; return 1; }
+  else
+    _have fzf || { print -u2 "bo: fzf not found"; return 127; }
+    file="$(_zsh_ls_files epub | fzf --prompt='Open EPUB> ')" || return
+    [[ -n "$file" ]] || return 1
+    picked=1
+  fi
+
+  ebook-viewer "$file" >/dev/null 2>&1 &!
+  local launch_status=$?
+  (( launch_status == 0 && picked )) && _zsh_close_after_open_pick
+  return "$launch_status"
+}
+
+# io: xviewer, else feh; one file browses siblings, several form a set.
+io() {
+  emulate -L zsh
+  local viewer v
+  local -i picked=0
+  local -a files exts=(png jpg jpeg gif webp bmp tif tiff svg)
+
+  for v in xviewer feh; do
+    _have "$v" && { viewer="$v"; break; }
+  done
+  [[ -n "$viewer" ]] || { print -u2 "io: neither xviewer nor feh installed"; return 127; }
+
+  if (( $# )); then
+    files=("$@")
+  else
+    _have fzf || { print -u2 "io: fzf not found"; return 127; }
+    files=(${(f)"$(_zsh_ls_files $exts | fzf --multi --prompt='Open image> ')"}) || return
+    (( $#files )) || return 1
+    picked=1
+  fi
+  for v in $files; do
+    [[ -f "$v" ]] || { print -u2 "io: '$v' not found"; return 1; }
+  done
+
+  case "$viewer" in
+    feh)
+      local -a opts=(--scale-down --auto-zoom --version-sort)
+      if (( $#files == 1 )); then
+        feh $opts --start-at "${files[1]:a}" -- "${files[1]:a:h}" >/dev/null 2>&1 &!
+      else
+        feh $opts -- "${files[@]}" >/dev/null 2>&1 &!
+      fi ;;
+    xviewer) xviewer "${files[@]}" >/dev/null 2>&1 &! ;;
+  esac
+  local launch_status=$?
+  (( launch_status == 0 && picked )) && _zsh_close_after_open_pick
+  return "$launch_status"
+}
+
+# --- File manager ---
+# --print-reply keeps a first call alive while D-Bus starts thunar.service.
+_thunar_folders() {
+  local dir
+  for dir in "$@"; do
+    command dbus-send --session --print-reply --type=method_call \
+      --dest=org.xfce.FileManager /org/xfce/FileManager \
+      org.xfce.FileManager.DisplayFolder "string:${dir:a}" string: string: \
+      >/dev/null 2>&1 || return
+  done
+}
+
+# Folders use D-Bus, the rest the client. Bare thunar closes a Ghostty shell.
+thunar() {
+  emulate -L zsh
+  local arg
+  for arg in "${@:-$PWD}"; do
+    [[ -d $arg && -z $SSH_CONNECTION ]] && continue
+    command thunar "${@:-$PWD}" >/dev/null 2>&1 &!
+    return 0
+  done
+  if (( $# == 0 )) && [[ -o interactive && $TERM_PROGRAM == ghostty && -z $TMUX ]]; then
+    # Start Thunar first so a failure keeps the shell; the window opens after.
+    command dbus-send --session --print-reply --dest=org.freedesktop.DBus \
+      /org/freedesktop/DBus org.freedesktop.DBus.StartServiceByName \
+      string:org.xfce.FileManager uint32:0 >/dev/null 2>&1 || return
+    _close_gui_terminal _thunar_folders "$PWD"
+    return
+  fi
+  _thunar_folders "${@:-$PWD}" &!
+}

@@ -1,0 +1,7 @@
+# Load jobmon from its repository; host and checkout remain overridable.
+typeset -g HPC_JOBMON_HOST=${HPC_JOBMON_HOST:-{{ .sshHpcHost | quote }}}
+typeset -g HPC_JOBMON_TOOLS_DIR=${HPC_JOBMON_TOOLS_DIR:-$HOME/{{ .packages.git.remote_tools.dir }}}
+
+if [[ -r "$HPC_JOBMON_TOOLS_DIR/shell/jobmon.zsh" ]]; then
+  source "$HPC_JOBMON_TOOLS_DIR/shell/jobmon.zsh"
+fi

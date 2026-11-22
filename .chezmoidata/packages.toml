@@ -1,0 +1,224 @@
+# Mint 22.3 / Ubuntu 24.04 packages; changes rerun provisioning.
+
+[packages.apt]
+# PPAs added before the apt install pass, for packages not in the Mint repos.
+ppas = [
+    "ppa:maveonair/helix-editor",   # helix editor
+    "ppa:zhangsongcui3371/fastfetch",
+]
+
+# CLI tools; fd-find/bat use fdfind/batcat names (fd also has a symlink).
+common = [
+    "git", "git-lfs", "curl", "wget", "netcat-openbsd",
+    "restic", "openssl",
+    "build-essential", "gcc", "make", "cmake", "pkg-config",
+    "software-properties-common",
+    "zsh", "tmux", "micro", "nano", "vim",
+    "helix",
+    "bat", "btop", "htop", "fastfetch",
+    "fd-find", "fzf", "ripgrep", "jq", "tree",
+    "unzip", "zip", "7zip", "p7zip-full", "bzip2", "gzip",
+    "nodejs", "pipx",
+    "python3", "python3-tomlkit",
+    "ranger",
+    # Host half of the browserpass integration below; must not drift from it.
+    "pass",
+    # Required for repository script checks.
+    "shellcheck",
+]
+
+# Installed for class == "desktop" on any profile.
+desktop = [
+    "flatpak",
+    "librocm-smi64-1",
+    # Browserpass host for Zen and Helium; after_60/after_70 wire the manifests.
+    "webext-browserpass",
+    # hxp watcher and Typst search.
+    "inotify-tools", "poppler-utils",
+    # Pandoc PDF conversion.
+    "pandoc", "latexmk", "texlive-xetex", "texlive-latex-extra",
+    "texlive-fonts-recommended", "texlive-lang-chinese",
+    "fontconfig", "fonts-noto-core", "fonts-noto-cjk",
+]
+
+# Battery-only, gated at runtime: neither class nor desktopProfile encodes "laptop".
+laptop = [
+    "tlp", "tlp-rdw",
+]
+
+# Installed only for class == "desktop" and profile == "linuxmint-i3-x11".
+i3_x11 = [
+    "i3", "i3status", "polybar", "picom", "rofi", "dunst",
+    "util-linux",  # flock serializes i3 session saves/restores across profiles
+    "feh", "flameshot", "xdotool", "wmctrl", "xclip", "xsel",
+# Direct i3/Polybar runtime dependencies.
+    "xfce4-terminal", "xfce4-settings", "xfce4-power-manager", "xfce4-taskmanager",
+    "gnome-keyring", "libnotify-bin", "policykit-1-gnome",
+    "x11-utils", "x11-xserver-utils", "xinput", "pulseaudio-utils",
+    "zenity", "xss-lock", "i3lock", "unclutter-xfixes",
+    "thunar", "thunar-archive-plugin", "thunar-media-tags-plugin", "thunar-volman",
+    # GTK session icons.
+    "papirus-icon-theme",
+    # Theme artwork export.
+    "python3-gi", "gir1.2-gdkpixbuf-2.0",
+    "pavucontrol", "blueman", "brightnessctl", "playerctl", "thunderbird",
+    "fcitx5", "fcitx5-hangul", "fcitx5-frontend-all", "fcitx5-config-qt",
+    # nm-applet supplies the graphical wifi menu embedded by Polybar's tray.
+    "network-manager-gnome",
+    # Workspace controller and overflow.
+    "python3-i3ipc",
+    # X11 peek and restore placeholders.
+    "python3-xlib",
+    # Browser session decompression in system Python.
+    "python3-lz4",
+    "gimp", "vlc", "mpv",
+    # hxp's fallback PDF viewer; ~/.config/sioyek is managed here.
+    "sioyek",
+    # Standalone i3 login; may prompt for a display manager.
+    "lightdm", "lightdm-settings", "light-locker",
+]
+
+[packages.appimage.ghostty]
+url = "https://github.com/pkgforge-dev/ghostty-appimage/releases/download"
+version = "1.4.0"
+legacy_ppa = "ppa:mkasberg/ghostty-ubuntu"
+amd64 = { arch = "x86_64", sha256 = "50ad4f8b54a01e7d41426e7d12ffae9c88aa1c516ac140755e2bca596e1d2ae6" }
+arm64 = { arch = "aarch64", sha256 = "932e21c671c215e6140633027acb4e8705cef3377d335202211c32d88b5bf506" }
+
+[packages.fonts]
+# Document fonts for after_50; specs are FAMILY=GLOB.
+archives = [
+    { directory = "NewComputerModern", url = "https://mirrors.ctan.org/fonts/newcomputermodern.zip", fonts = ["NewComputerModernSans10=NewCMSans10-*.otf", "NewComputerModernMath=NewCMMath-Regular.otf"] },
+]
+
+[packages.flatpak]
+# Installed only when class == "desktop", from Flathub.
+apps = [
+    "app.zen_browser.zen",
+    "org.inkscape.Inkscape",
+    "org.kde.okular",
+    "org.localsend.localsend_app",
+    "org.onlyoffice.desktopeditors",
+    "com.github.jeromerobert.pdfarranger",
+    "com.github.wwmm.easyeffects",
+    "org.prismlauncher.PrismLauncher",
+]
+
+[packages.pipx]
+# linuxmint-i3-x11 apps; bin is the idempotency check.
+apps = [
+    { package = "autotiling", bin = "autotiling" },
+    { package = "i3-resurrect==1.4.5", bin = "i3-resurrect" },
+]
+
+[packages.cargo]
+# Rust crates: skip when `bin` is on PATH.
+
+# crates.io tools, language servers, and Yazi previews.
+registry = [
+    { crate = "taskwarrior-tui", bin = "taskwarrior-tui" },
+    { crate = "eza",           bin = "eza" },
+    { crate = "yazi-fm",       bin = "yazi" },
+    { crate = "yazi-cli",      bin = "ya" },
+    { crate = "resvg",         bin = "resvg" },
+    { crate = "dprint",        bin = "dprint" },
+    { crate = "taplo-cli",     bin = "taplo" },
+    { crate = "typstyle",      bin = "typstyle" },
+    { crate = "typst-cli",     bin = "typst" },
+    { crate = "texlab",        bin = "texlab" },
+    { crate = "tex-fmt",       bin = "tex-fmt" },
+    { crate = "watchexec-cli", bin = "watchexec" },
+    { crate = "cargo-update",  bin = "cargo-install-update" },
+]
+
+# Git crates; `package` selects a workspace member.
+git = [
+    # rtk: CLI output filter, configured by dot_config/rtk/filters.toml.
+    { url = "https://github.com/rtk-ai/rtk",                     bin = "rtk" },
+    # markdown LSP
+    { url = "https://github.com/Feel-ix-343/markdown-oxide.git", bin = "markdown-oxide" },
+    # typst LSP
+    { url = "https://github.com/Myriad-Dreamin/tinymist",        bin = "tinymist", package = "tinymist-cli" },
+    # tdf terminal PDF viewer
+    { url = "https://github.com/itsjunetime/tdf.git",            bin = "tdf" },
+]
+
+# Pinned source builds. .chezmoiscripts/run_once_after_95-build-i3lock-color.sh.tmpl
+# installs i3lock-color into /usr/local.
+[packages.source.i3lock_color]
+url = "https://github.com/Raymo111/i3lock-color.git"
+tag = "2.13.c.5"
+commit = "7b2badbb407ef5fce1eb338a98974ad5f70e226e"
+build_deps = [
+    "autoconf", "automake",
+    "libcairo2-dev", "libev-dev", "libfontconfig-dev", "libjpeg-dev", "libpam0g-dev",
+    "libxcb-composite0-dev", "libxcb-image0-dev", "libxcb-randr0-dev", "libxcb-util-dev",
+    "libxcb-xinerama0-dev", "libxcb-xkb-dev", "libxcb-xrm-dev",
+    "libxkbcommon-dev", "libxkbcommon-x11-dev",
+]
+
+# Build in order into ~/.local; distro zathura is 0.5.4.
+[packages.source.girara]
+url = "https://github.com/pwmt/girara.git"
+tag = "0.4.5"
+commit = "2aaf1d46e6c63e5eef64d58c4097f84c8d4ee20d"
+build_deps = ["meson", "ninja-build", "gettext", "libgtk-3-dev", "libjson-glib-dev"]
+
+[packages.source.zathura]
+url = "https://github.com/pwmt/zathura.git"
+tag = "0.5.14"
+commit = "27c9acf39aa7608c7f69e985cddad7193820a6f3"
+build_deps = [
+    "libjson-glib-dev", "libmagic-dev", "libsqlite3-dev", "libsynctex-dev", "libseccomp-dev",
+    "python3-sphinx",  # man pages
+]
+
+[packages.source.zathura_pdf_poppler]
+url = "https://github.com/pwmt/zathura-pdf-poppler.git"
+tag = "0.3.4"
+commit = "9fc8752c76f9cc95419ab7b52a822b0f038b7859"
+build_deps = ["libpoppler-glib-dev"]
+
+[packages.source.btop]
+url = "https://github.com/aristocratos/btop.git"
+tag = "v1.4.8"
+commit = "cf1da5900b1e9eaa1c20fd7148dd812b43340b8a"
+build_deps = ["g++-14", "libdrm-dev", "lowdown"]
+
+# Prefer local fork, then githubUser's pinned fork, then upstream.
+[packages.source.fancy_cat]
+url = "https://github.com/freref/fancy-cat.git"
+version = "0.6.0"
+commit = "77a7ab6c953e2a43e6e02bd7c341dc157d5da4a9"
+fork_repo = "fancy-cat"
+fork_commit = "e7b70ec817c3ce4a3d31910bde12181b62c97977"
+fork_dir = ".local/src/fancy-cat"
+fork_branch = "zathura"
+build_deps = [
+    "libmupdf-dev", "libharfbuzz-dev", "libfreetype-dev", "libjbig2dec0-dev",
+    "libjpeg-dev", "libopenjp2-7-dev", "libgumbo-dev", "libmujs-dev", "zlib1g-dev",
+]
+zig_version = "0.15.2"
+
+[packages.source.fancy_cat.zig.amd64]
+arch = "x86_64"
+sha256 = "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239"
+
+[packages.source.fancy_cat.zig.arm64]
+arch = "aarch64"
+sha256 = "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f"
+
+# Clone missing projects at `commit`, then run `install`. Existing checkouts stay put.
+# Push project changes before bumping pins here.
+[packages.git.hxp]
+repo = "hxp"
+commit = "14addcd428939e0c03db135625972a9bea61b7c6"
+dir = "Applications/hxp"
+# Zathura and Sioyek configs are managed here, not by hxp.
+install = ["./install.sh", "--no-config"]
+
+[packages.git.remote_tools]
+repo = "remote-tools"
+commit = "ad66d770be928b3228519601859ef386547feeae"
+dir = "Applications/remote-tools"
+install = []

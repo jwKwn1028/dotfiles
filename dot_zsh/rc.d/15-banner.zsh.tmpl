@@ -1,0 +1,222 @@
+{{- $birthdayMonthDay := "" -}}
+{{- if hasKey . "birthdayMonthDay" -}}
+{{-   $birthdayMonthDay = .birthdayMonthDay -}}
+{{- end -}}
+# One tmux banner; ZSH_BANNER_DISABLE=1 also skips daily tasks.
+# Special messages/colors/chance: ZSH_BANNER_SPECIAL_{MESSAGES,COLORS,CHANCE}.
+
+[[ ${ZSH_BANNER_DISABLE:-0} == 1 ]] && return 0
+
+if (( ! ${+ZSH_BANNER_SPECIAL_MESSAGES} )); then
+  typeset -ga ZSH_BANNER_SPECIAL_MESSAGES=(
+    "Banner Messages here appear with probability 1/ZSH_BANNER_SPECIAL_CHANCE-1"
+    )
+fi
+
+if (( ! ${+ZSH_BANNER_SPECIAL_COLORS} )); then
+  typeset -ga ZSH_BANNER_SPECIAL_COLORS=(
+    "#FFAF00"
+  )
+fi
+
+if (( ! ${+ZSH_BANNER_SPECIAL_CHANCE} )); then
+  typeset -g ZSH_BANNER_SPECIAL_CHANCE=1/100
+fi
+
+_zsh_banner_prompt() {
+  emulate -L zsh
+  (( ${ZSH_BANNER_ACTIVE:-0} )) || return 0
+
+  local banner_text=$ZSH_BANNER_TEXT
+  local current_time=$ZSH_BANNER_TIME
+  local tasklist=$ZSH_BANNER_TASKLIST
+  local -i banner_width padding_banner padding_time
+
+  banner_width=${(m)#banner_text}
+  (( padding_banner = (${COLUMNS:-80} - banner_width) / 2 ))
+  (( padding_banner < 0 )) && padding_banner=0
+  local indent_banner=$(printf "%*s" "$padding_banner")
+
+  (( padding_time = (${COLUMNS:-80} - ${#current_time}) / 2 ))
+  (( padding_time < 0 )) && padding_time=0
+  local indent_time=$(printf "%*s" "$padding_time")
+
+  banner_text=${banner_text//\%/%%}
+  current_time=${current_time//\%/%%}
+  tasklist=${tasklist//\%/%%}
+
+  local sgr=$'\e\\[[0-9;]*m'
+  local prompt_tasklist=
+  while [[ $tasklist =~ $sgr ]]; do
+    (( MBEGIN > 1 )) && prompt_tasklist+=${tasklist[1,MBEGIN-1]}
+    prompt_tasklist+="%{${MATCH}%}"
+    tasklist=${tasklist[MEND+1,-1]}
+  done
+  tasklist=$prompt_tasklist$tasklist
+
+  print -nr -- $'\n'
+  print -nr -- "%B%F{${ZSH_BANNER_COLOR}}${indent_banner}${banner_text}%f%b"$'\n'
+  print -nr -- "%F{245}${indent_time}${current_time}%f"$'\n\n'
+  [[ -n $tasklist ]] && print -nr -- "${tasklist}"$'\n\n'
+
+  print -nr -- '%f%b'
+}
+
+_zsh_banner_finish() {
+  emulate -L zsh
+
+  typeset -gi ZSH_BANNER_ACTIVE=0
+  typeset -gi ZSH_BANNER_INSTALLED=0
+  local banner_prefix='$(_zsh_banner_prompt)'
+  [[ $PROMPT == ${banner_prefix}* ]] && PROMPT=${PROMPT#$banner_prefix}
+
+  autoload -Uz add-zsh-hook
+  add-zsh-hook -d preexec _zsh_banner_finish
+}
+
+_zsh_banner_install() {
+  emulate -L zsh
+  (( ${ZSH_BANNER_ACTIVE:-0} && ! ${ZSH_BANNER_INSTALLED:-0} )) || return 0
+
+  if [[ -n ${TMUX-} ]]; then
+    print -nrP -- "$(_zsh_banner_prompt)"
+    ZSH_BANNER_ACTIVE=0
+    return
+  fi
+
+  PROMPT='$(_zsh_banner_prompt)'"${PROMPT}"
+  typeset -gi ZSH_BANNER_INSTALLED=1
+
+  autoload -Uz add-zsh-hook
+  add-zsh-hook preexec _zsh_banner_finish
+}
+
+if (( SHLVL <= 2 )); then
+  () {
+    local -a messages=(
+      "Welcome Back"
+      "Hello World"
+      "What's the Plan?"
+      "Have a Nice Day"
+      "Ready to Focus"
+      "One at a Time"
+    )
+
+    zmodload zsh/datetime
+    local current_time
+    strftime -s current_time '%Y-%m-%d %H:%M:%S' $EPOCHSECONDS
+    local current_date="${current_time[1,10]}"
+    local current_hour=$(( 10#${current_time[12,13]} ))
+    local month_day="${current_time[6,10]}"
+    local birthday_month_day={{ $birthdayMonthDay | quote }}
+    local banner_text banner_color="#86BE43"
+
+    local banner_state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/zsh"
+    local tasklist_date_file="$banner_state_dir/banner-terminal-date"
+    local last_tasklist_date show_tasklist=0
+
+    if (( current_hour >= 6 )) && (( $+commands[task] )); then
+      [[ -r $tasklist_date_file ]] &&
+        IFS= read -r last_tasklist_date < "$tasklist_date_file"
+      [[ $last_tasklist_date != $current_date ]] && show_tasklist=1
+    fi
+
+    local special_chance=$ZSH_BANNER_SPECIAL_CHANCE
+    local special_numerator special_denominator
+    if [[ $special_chance == <->/<-> ]]; then
+      special_numerator=${special_chance%%/*}
+      special_denominator=${special_chance#*/}
+    elif [[ $special_chance == <-> ]]; then
+      special_numerator=$special_chance
+      special_denominator=100
+    else
+      special_numerator=1
+      special_denominator=100
+    fi
+
+    special_numerator=$(( 10#$special_numerator ))
+    special_denominator=$(( 10#$special_denominator ))
+    if (( special_denominator == 0 )); then
+      special_numerator=1
+      special_denominator=1234
+    elif (( special_numerator > special_denominator )); then
+      special_numerator=$special_denominator
+    fi
+
+    local special_roll=$(( (RANDOM * 32768 + RANDOM) % special_denominator ))
+
+    if [[ -n $birthday_month_day && $month_day == $birthday_month_day ]]; then
+      banner_text="Happy Birthday!"
+    elif (( ${#ZSH_BANNER_SPECIAL_MESSAGES[@]} > 0 &&
+             special_roll < special_numerator )); then
+      local special_state_file="$banner_state_dir/banner-special-shown"
+      # Use a sidecar: rewriting the locked file drops its fcntl lock.
+      local special_lock_file="$special_state_file.lock"
+      local -a special_shown=() special_pool=()
+      local shown_message
+      local -i candidate special_lock_fd=0
+
+      if [[ -d $banner_state_dir ]] || mkdir -p -- "$banner_state_dir" 2>/dev/null; then
+        [[ -e $special_lock_file ]] || : >>! "$special_lock_file" 2>/dev/null
+        if zmodload -F zsh/system b:zsystem 2>/dev/null; then
+          zsystem flock -i 0.01 -t 1 -f special_lock_fd "$special_lock_file" 2>/dev/null ||
+            special_lock_fd=0
+        fi
+      fi
+
+      if [[ -r $special_state_file ]]; then
+        while IFS= read -r shown_message; do
+          [[ -n $shown_message ]] || continue
+          (( ${ZSH_BANNER_SPECIAL_MESSAGES[(Ie)$shown_message]} )) &&
+            special_shown+=("$shown_message")
+        done < "$special_state_file"
+      fi
+
+      for (( candidate = 1;
+             candidate <= ${#ZSH_BANNER_SPECIAL_MESSAGES[@]};
+             candidate++ )); do
+        (( ${special_shown[(Ie)${ZSH_BANNER_SPECIAL_MESSAGES[$candidate]}]} )) ||
+          special_pool+=($candidate)
+      done
+
+      if (( ${#special_pool[@]} == 0 )); then
+        special_shown=()
+        special_pool=({1..${#ZSH_BANNER_SPECIAL_MESSAGES[@]}})
+      fi
+
+      local special_index=${special_pool[RANDOM % ${#special_pool[@]} + 1]}
+      banner_text="${ZSH_BANNER_SPECIAL_MESSAGES[$special_index]}"
+
+      special_shown+=("$banner_text")
+      { print -rl -- "${special_shown[@]}" >! "$special_state_file" } 2>/dev/null
+      (( special_lock_fd )) && exec {special_lock_fd}>&-
+
+      if (( ${#ZSH_BANNER_SPECIAL_COLORS[@]} > 0 )); then
+        local color_index=$(( (special_index - 1) % ${#ZSH_BANNER_SPECIAL_COLORS[@]} + 1 ))
+        banner_color="${ZSH_BANNER_SPECIAL_COLORS[$color_index]}"
+      else
+        banner_color="#FFAF00"
+      fi
+    else
+      local index=$(( RANDOM % ${#messages[@]} + 1 ))
+      banner_text="${messages[$index]}"
+    fi
+
+    typeset -g ZSH_BANNER_TEXT=$banner_text
+    typeset -g ZSH_BANNER_COLOR=$banner_color
+    typeset -g ZSH_BANNER_TIME=$current_time
+    typeset -g ZSH_BANNER_TASKLIST=
+    typeset -gi ZSH_BANNER_ACTIVE=1
+
+    if (( show_tasklist )); then
+      if [[ -d $banner_state_dir ]] || mkdir -p -- "$banner_state_dir" 2>/dev/null; then
+        { print -r -- "$current_date" >! "$tasklist_date_file" } 2>/dev/null
+      fi
+      local -a horizon=(
+        '(' due.before:now+7d or scheduled.before:now+7d ')'
+      )
+      ZSH_BANNER_TASKLIST=$(command task rc.verbose=blank,label,affected rc._forcecolor=on \
+        "rc.defaultwidth=${COLUMNS:-80}" "${horizon[@]}" list 2>&1)
+    fi
+  }
+fi

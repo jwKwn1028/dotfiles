@@ -1,0 +1,45 @@
+#!/bin/sh
+# Save shell screens behind full-screen apps and trim prompt artifacts.
+dir=$(tmux show -gqv @resurrect-dir)
+archive=${dir:-${XDG_DATA_HOME:-$HOME/.local/share}/tmux/resurrect}/pane_contents.tar.gz
+[ -f "$archive" ] || exit 0
+tmp=$(mktemp -d) || exit 1
+trap 'rm -rf "$tmp"' EXIT
+tar xzf "$archive" -C "$tmp" || exit 1
+tmux list-panes -a -F '#{pane_id}|#{alternate_on}|#{pane_current_command}|#{session_name}:#{window_index}.#{pane_index}' |
+  while IFS='|' read -r pane alt cmd target; do
+    f=$tmp/pane_contents/pane-$target
+    if [ "$alt" = 1 ]; then
+      screen=$(tmux capture-pane -aqepJ -t "$pane") || continue
+      printf '%s\n' "$screen" >"$f"
+    else
+      case $cmd in zsh | bash | sh | dash | fish) ;; *) continue ;; esac
+    fi
+    [ -f "$f" ] || continue
+    awk '
+      function visible(s) { gsub(/\033\[[0-9;:]*m/, "", s); sub(/[ \t]+$/, "", s); return s }
+      function drop_prompt(i) {
+        omit[i - 1] = omit[i] = 1
+        if (i > 2 && plain[i - 2] == "") omit[i - 2] = 1
+      }
+      { raw[NR] = $0; plain[NR] = visible($0) }
+      END {
+        for (i = 2; i <= NR; i++) {
+          # Starship shows ❮ in Helix normal mode.
+          poweroff = (plain[i] == "❯ poweroff" || plain[i] == "❮ poweroff") &&
+                     plain[i + 1] ~ /^Power off .*\? \[y\/N\] \([0-9]+s timeout\): ([yY]|[yY][eE][sS])$/
+          if ((plain[i] == "❯" || plain[i] == "❮" || poweroff) && raw[i] ~ /^\033\[[0-9;:]+m/ &&
+              raw[i - 1] ~ /\033\[([0-9]+;)*(34|94|38;2;122;162;247)m[^ \t\033]/) {
+            drop_prompt(i)
+            if (poweroff) omit[i + 1] = 1
+          } else if (i > 2 && i < NR && plain[i - 2] == "" && plain[i + 1] == "" &&
+                     raw[i - 1] ~ /\033\[([0-9]+;)*1[;m]/ && raw[i] ~ /38;5;245m/ &&
+                     plain[i] ~ /^ *[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/) {
+            omit[i - 2] = omit[i - 1] = omit[i] = omit[i + 1] = 1
+          }
+        }
+        for (i = 1; i <= NR; i++) if (!omit[i]) print raw[i]
+      }
+    ' "$f" >"$f.new" && mv "$f.new" "$f"
+  done
+tar czf "$archive.new" -C "$tmp" ./pane_contents && mv "$archive.new" "$archive"

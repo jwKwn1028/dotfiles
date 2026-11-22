@@ -1,0 +1,8 @@
+[Unit]
+Description=Save all i3 groups every 15 minutes
+
+[Timer]
+OnCalendar=*:7/15
+
+[Install]
+WantedBy=timers.target
