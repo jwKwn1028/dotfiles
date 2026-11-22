@@ -221,6 +221,20 @@ class ProvisioningContractTests(unittest.TestCase):
         self.assertIn("sioyek", data["packages"]["apt"]["i3_x11"])
         self.assertIn("inotify-tools", data["packages"]["apt"]["desktop"], "hxp's watcher needs inotifywait")
 
+    def pinned_checkout(self, checkout: Path, commit: str, bump: str):
+        """Skip without a local checkout; fail unless the pin is in it and pushed. Returns a git runner."""
+        if not (checkout / ".git").exists():
+            self.skipTest(f"no checkout at {checkout}")
+
+        def git(*args: str) -> subprocess.CompletedProcess:
+            return subprocess.run(["git", "-C", str(checkout), *args], capture_output=True, text=True)
+
+        self.assertEqual(git("cat-file", "-e", f"{commit}^{{commit}}").returncode, 0,
+                         f"pinned {commit[:7]} is not in {checkout}; {bump}")
+        self.assertTrue(git("branch", "-r", "--contains", commit).stdout.strip(),
+                        f"pinned {commit[:7]} is on no remote branch, so fresh machines cannot fetch it; {bump}")
+        return git
+
     def test_pinned_projects_are_pushed_and_provide_what_configs_use(self) -> None:
         """Require pushed pins with the interfaces used here."""
         _, data = self.manifest_data()
@@ -228,26 +242,29 @@ class ProvisioningContractTests(unittest.TestCase):
                  "remote_tools": ("shell/jobmon.zsh",)}
         for name, paths in needs.items():
             project = data["packages"]["git"][name]
-            checkout = Path.home() / project["dir"]
             commit = project["commit"]
+            bump = f"commit and push {name}, then set packages.git.{name}.commit"
             with self.subTest(project=name):
-                if not (checkout / ".git").exists():
-                    self.skipTest(f"no checkout at {checkout}")
-
-                def git(*args: str) -> subprocess.CompletedProcess:
-                    return subprocess.run(["git", "-C", str(checkout), *args], capture_output=True, text=True)
-
-                bump = f"commit and push {name}, then set packages.git.{name}.commit"
-                self.assertEqual(git("cat-file", "-e", f"{commit}^{{commit}}").returncode, 0,
-                                 f"pinned {commit[:7]} is not in {checkout}; {bump}")
-                self.assertTrue(git("branch", "-r", "--contains", commit).stdout.strip(),
-                                f"pinned {commit[:7]} is on no remote branch, so fresh machines cannot clone it; {bump}")
+                git = self.pinned_checkout(Path.home() / project["dir"], commit, bump)
                 for path in paths:
                     self.assertEqual(git("cat-file", "-e", f"{commit}:{path}").returncode, 0,
                                      f"pinned {commit[:7]} lacks {path}; {bump}")
                 if name == "hxp":
                     self.assertIn("--no-config", git("show", f"{commit}:install.sh").stdout,
                                   f"pinned {commit[:7]}'s installer would link viewer configs; {bump}")
+
+    def test_fancy_cat_pin_is_pushed_and_has_the_flags_used_here(self) -> None:
+        """A fresh machine builds fork_commit: hxp's preview and fancy-cat-open need these flags."""
+        _, data = self.manifest_data()
+        source = data["packages"]["source"]["fancy_cat"]
+        commit = source["fork_commit"]
+        bump = "commit and push the fancy-cat fork, then set packages.source.fancy_cat.fork_commit"
+        git = self.pinned_checkout(Path.home() / source["fork_dir"], commit, bump)
+        # --listen, --inverse-search, --remote: hxp's split preview; --tmux-supported: fancy-cat-open.
+        for flag in ("--listen", "--inverse-search", "--remote", "--tmux-supported"):
+            with self.subTest(flag=flag):
+                self.assertEqual(git("grep", "-q", "-F", "-e", f'"{flag}"', commit, "--", "src").returncode, 0,
+                                 f"pinned {commit[:7]} lacks {flag}; {bump}")
 
     def test_helium_transient_deferrals_retry(self) -> None:
         manifest, _ = self.manifest_data()

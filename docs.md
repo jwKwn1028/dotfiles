@@ -18,6 +18,24 @@ Document conversion and Typst layouts:
 
 Terminal PDF viewer: [fancy-cat manual](dot_config/fancy-cat/MANUAL.md).
 
+## fancy-cat, hxp, and remote-tools
+
+Each lives in its own repository. This repo pins a pushed commit for fresh
+machines and owns the config around it; an existing checkout is never fetched
+or switched.
+
+| Project | Checkout | Pin (`.chezmoidata/packages.toml`) | Installed by |
+|---|---|---|---|
+| fancy-cat | `~/.local/src/fancy-cat`, branch `zathura` | `packages.source.fancy_cat.fork_commit` | `after_98`: builds `~/.local/bin/fancy-cat` |
+| hxp | `~/Applications/hxp` | `packages.git.hxp.commit` | `after_99`: clones if missing, runs `install.sh --no-config` |
+| remote-tools | `~/Applications/remote-tools` | `packages.git.remote_tools.commit` | `after_99`: clones if missing; zsh sources `shell/jobmon.zsh` |
+
+To change one, commit and push in its repository, then set its pin to that
+commit and commit here. hxp and remote-tools edits apply at once; fancy-cat
+rebuilds from the local `zathura` tip on the next `chezmoi apply`.
+`./run-tests.sh` fails while a pin is unpushed or lacks what these configs use.
+Fresh clones need `githubUser`.
+
 ## Agent cleanup
 
 Preview with `~/.cleanup-agents.sh`; quit Claude Code and Codex before adding

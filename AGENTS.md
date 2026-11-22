@@ -40,7 +40,7 @@ before creating files with a new prefix.
     and live in `~/.config/chezmoi/chezmoi.toml`, outside this repo: currently
     `sshRemoteUser`, `ssh{Gpu,Hpc}Host{,Name}`, `tailscaleExitNode`,
     `flameshotSavePath`, `githubUser`.
-  - Use `{{ .chezmoi.homeDir }}`, never a literal home path (see `750fd0a`).
+  - Use `{{ .chezmoi.homeDir }}`, never a literal home path.
   - `chezmoi add` copies a live file verbatim — read the result before
     committing. That is how a flameshot savePath naming a lab directory got in.
   - Never add `~/.ssh` wholesale; `.gitignore` allowlists only
