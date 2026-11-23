@@ -10,8 +10,7 @@ Terminal PDF viewer with Zathura-style controls. Config:
 new Ghostty window. Restored panes use `--wait-for-client`. Yazi `O` offers Zathura.
 
 Local tmux needs `allow-passthrough on`; graphics appear in visible panes.
-`Ctrl+b Ctrl+b` passes Ctrl-b to the viewer. `T` opens a Ghostty tab in the PDF's
-folder (last focused window when called from tmux/Zathura).
+`Ctrl+b Ctrl+b` passes Ctrl-b to the viewer.
 
 ## Keys
 
@@ -29,7 +28,7 @@ folder (last focused window when called from tmux/Zathura).
 | Tab, `f` / `F` / `c` | Contents, follow / show / copy a numbered link |
 | `Ctrl+o` / `Ctrl+i`, `m`x / `'`x | Jump back / forward, set / go to mark x |
 | `R` / `Y` | Reload / copy the file path |
-| `T` | Ghostty shell tab in the document's folder |
+| `T` | Shell in the PDF's folder: right tmux split, else a Ghostty tab |
 | `Ctrl+r` / `Ctrl+n` | Toggle recolor / single-row status bar |
 | `:12`, `:100%`, `:exec CMD` | Page, zoom, run `CMD` with `$FILE` and `$PAGE` |
 | `:y+200`, `:x-100` | Scroll down / pan left by pixels |

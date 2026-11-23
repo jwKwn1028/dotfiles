@@ -244,8 +244,9 @@ private. Validate with `--check`; recover the prior generation with `restore --p
 `I3_RESURRECT_PROC_ROOT` override lookup roots.
 
 Free saved slots stay. Collisions use the nearest free slot on the same display,
-then any free slot, else share the original. Only launched windows move. Saved
-`labroute on` must succeed. All groups launch before the shared wait
+then any free slot, else share the original. Only launched windows move. A saved
+`labroute on` runs in the background; remote windows wait for it, and failures
+notify. All groups launch before the shared wait
 (`I3_RESURRECT_SESSION_WAIT=45`); switching groups cancels pending launches.
 Placement and reattach details: `last-restore.json`.
 

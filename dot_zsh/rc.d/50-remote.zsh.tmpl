@@ -939,6 +939,18 @@ _hpc_restore_session() {
   add-zsh-hook -d precmd _hpc_restore_session
   unset I3_RESURRECT_REMOTE_SESSION
 
+  [[ $session == (tmux|zmx):?* ]] || return 0
+  # Wait for labroute-restore.sh.
+  local lock=${XDG_RUNTIME_DIR:-/tmp}/i3-resurrect-labroute.lock
+  if [[ -e $lock ]] && (( $+commands[flock] )) && ! command flock -n -s "$lock" true 2>/dev/null; then
+    print 'Waiting for the lab route...'
+    command flock -s -w 60 "$lock" true 2>/dev/null
+  fi
+  if _labroute_proxy_requested && ! _labroute_proxy_enabled; then
+    print -u2 "Lab route is not up; run labroute on, then ${${session/#tmux:/hpc }/#zmx:/hpcz }"
+    return 0
+  fi
+
   case $session in
     tmux:?*) print -rs -- "hpc ${session#tmux:}"; hpc "${session#tmux:}" ;;
     zmx:?*) print -rs -- "hpcz ${session#zmx:}"; hpcz "${session#zmx:}" ;;

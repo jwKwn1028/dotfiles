@@ -107,18 +107,24 @@ class Session:
         finally:
             os.close(fd)
 
-    def child(self, action, state, meta, group, check=False, session=None, report=None):
+    def child(self, action, state, meta, group, check=False, session=None, report=None, validated=False):
         environment = dict(os.environ, I3_RESURRECT_STATE_DIR=str(state), I3_RESURRECT_META_DIR=str(meta),
                            I3_RESURRECT_GROUP=group, I3_RESURRECT_QUIET="1")
-        environment.pop("I3_RESURRECT_SESSION_TOKEN", None)
-        environment.pop("I3_RESURRECT_REPORT_DIR", None)
-        environment.pop("I3_RESURRECT_PARENT_LOCK", None)
+        for name in ("I3_RESURRECT_SESSION_TOKEN", "I3_RESURRECT_REPORT_DIR", "I3_RESURRECT_PARENT_LOCK",
+                     "I3_RESURRECT_VALIDATED"):
+            environment.pop(name, None)
         if self.lock_path:
             environment["I3_RESURRECT_PARENT_LOCK"] = str(self.lock_path)
         if session:
             environment["I3_RESURRECT_SESSION_TOKEN"] = session
         if report:
             environment["I3_RESURRECT_REPORT_DIR"] = str(report)
+        if validated:
+            environment["I3_RESURRECT_VALIDATED"] = "1"
+        try:
+            environment.setdefault("I3_RESURRECT_CONTROLLER", str(session_dir() / "controller.sock"))
+        except (GroupError, OSError, subprocess.SubprocessError):
+            pass
         command = ["bash", str(source_path(f"i3-resurrect-{action}-all.sh")), f"--group={group}"]
         if check:
             command.append("--check")
@@ -180,11 +186,37 @@ class Session:
         with self.lock():
             return self.restore_snapshot(previous)
 
-    def start_tmux_restore(self, state, meta, groups):
+    def start_labroute(self, children):
+        """Bring a saved lab route up beside window creation; remote windows wait on its lock."""
+        if not any((meta / "labroute.txt").is_file() and
+                   (meta / "labroute.txt").read_text().splitlines()[:1] == ["on"] for _, meta in children.values()):
+            return
+        script = os.environ.get("I3_RESURRECT_LABROUTE_RESTORE") or str(source_path("labroute-restore.sh"))
+        try:
+            subprocess.run(["bash", script], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=10, check=False)
+        except InterruptedError:
+            raise
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+    def polybar(self, function):
+        """Run a _polybar-common.sh function; True on success."""
+        common = source_path("_polybar-common.sh")
+        try:
+            return subprocess.run(["bash", "-c", f'DIR=$1; . "$DIR/_polybar-common.sh"; {function}', "bash",
+                                   str(common.parent)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL, timeout=10).returncode == 0
+        except InterruptedError:
+            raise
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    def start_tmux_restore(self, children):
         """Start one detached tmux restore; clients share its lock."""
         script = Path(os.environ.get("I3_RESURRECT_TMUX_RESTORE", Path.home() / ".local/bin/tmux-restore-if-empty"))
         if not (script.is_file() and os.access(script, os.X_OK)) or not any(
-                snapshot.requests_local_tmux(*snapshot.resolve(state / group, meta / group)) for group in groups):
+                snapshot.requests_local_tmux(state, meta) for state, meta in children.values()):
             return
         try:
             subprocess.Popen([str(script)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -205,20 +237,26 @@ class Session:
             return "\n".join(plans.values())
         if self.rpc("status")["groups"] != self.groups:
             raise GroupError("Reload i3 after changing group definitions")
-        self.start_tmux_restore(state, meta, data["saved"])
+        children = {group: snapshot.resolve(state / group, meta / group) for group in data["saved"]}
+        self.start_labroute(children)
+        self.start_tmux_restore(children)
         token = uuid.uuid4().hex
         self.rpc("restore-session-begin", token=token, owner=[os.getpid(), process_identity(os.getpid())],
                  groups=list(data["groups"]))
         results = []
         mappings = {}
         cancelled = False
+        hidden = False
         try:
+            if self.polybar("polybar_visible"):
+                hidden = True
+                self.polybar("polybar_hide_for_restore")
             for group in data["saved"]:
                 self.rpc("restore-session-status", token=token)
                 report = self.meta / "reports" / token / group
                 report.mkdir(parents=True, exist_ok=True)
                 try:
-                    self.child("restore", state / group, meta / group, group, session=token, report=report)
+                    self.child("restore", *children[group], group, session=token, report=report, validated=True)
                     results.append(dict(group=group, status="ready"))
                 except GroupError as error:
                     results.append(dict(group=group, status="failed", detail=str(error)))
@@ -228,6 +266,8 @@ class Session:
                                        identity(snapshot.workspace_order(entry["workspace"])[0], self.groups)[1]
                                        for entry in snapshot.read_json(placement)["mapping"]}
                 self.rpc("restore-session-status", token=token)
+            if hidden and self.polybar("polybar_show_after_restore"):
+                hidden = False
             missing = self.wait_for_windows(token)
             for group in data["saved"]:
                 settle_report(self.meta / "reports" / token / group / "last-restore.json", missing)
@@ -241,10 +281,14 @@ class Session:
             raise
         finally:
             try:
-                self.rpc("restore-session-end", token=token)
+                if hidden:
+                    self.polybar("polybar_show_after_restore")
             finally:
-                snapshot.atomic_json(self.meta / "last-restore.json", dict(snapshot=str(state), groups=results,
-                                                                         cancelled=cancelled, operation=token))
+                try:
+                    self.rpc("restore-session-end", token=token)
+                finally:
+                    snapshot.atomic_json(self.meta / "last-restore.json", dict(snapshot=str(state), groups=results,
+                                                                             cancelled=cancelled, operation=token))
         failures = [result["detail"] for result in results if result["status"] != "ready"]
         if failures:
             raise GroupError("All-groups restore finished with errors:\n" + "\n".join(failures))

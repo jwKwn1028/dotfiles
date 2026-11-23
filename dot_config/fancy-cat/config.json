@@ -32,7 +32,7 @@
     "reload_indicator_duration": 0.0
   },
   "Maps": {
-    "T": "exec if [ -n \"$TMUX\" ]; then unset GHOSTTY_SURFACE_ID; fi; exec ghostty +new-tab --working-directory=\"$(dirname -- \"$FILE\")\""
+    "T": "exec dir=$(dirname -- \"$FILE\"); if [ -n \"$TMUX\" ]; then exec tmux split-window -h -t \"$TMUX_PANE\" -c \"$dir\"; fi; exec ghostty +new-tab --working-directory=\"$dir\""
   },
   "Cache": {
     "enabled": true,

@@ -142,8 +142,11 @@ class ConfigConsistencyTests(unittest.TestCase):
         self.assertIn('. "$DIR/_polybar-common.sh"', self.restore)
         self.assertNotIn("set_polybar_visibility()", self.restore)
         self.assertNotIn("wait_for_polybar_state()", self.restore)
-        self.assertIn("polybar_set_state hide 0", self.restore)
-        self.assertIn("polybar_set_state show 1", self.restore)
+        self.assertIn("polybar_hide_for_restore", self.restore)
+        self.assertIn("polybar_show_after_restore", self.restore)
+        common = (I3_ROOT / "_polybar-common.sh").read_text(encoding="utf-8")
+        self.assertIn("polybar_set_state hide 0", common)
+        self.assertIn("polybar_set_state show 1", common)
 
     def test_volume_ipc_modules_have_a_session_watcher(self) -> None:
         import configparser

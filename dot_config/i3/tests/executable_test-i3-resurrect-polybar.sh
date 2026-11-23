@@ -84,7 +84,9 @@ cat >"$MOCK_BIN/polybar-msg" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$RESTORE_TEST_STATE_DIR/polybar-events"
 case "$*" in
-    'cmd hide') printf 'hidden\n' >"$RESTORE_TEST_STATE_DIR/polybar-state" ;;
+    'cmd hide')
+        printf 'hidden\n' >"$RESTORE_TEST_STATE_DIR/polybar-state"
+        [ -z "${POLYBAR_TEST_TERM_ON_HIDE:-}" ] || kill -TERM "$PPID" ;;
     'cmd show') printf 'visible\n' >"$RESTORE_TEST_STATE_DIR/polybar-state" ;;
 esac
 EOF
@@ -187,5 +189,16 @@ grep -Fq '0/1 expected windows are present' "$MOCK_STATE/restore-stderr" ||
     fail 'the failed restore did not report its cause'
 grep -Fqx 'windowraise 4242' "$MOCK_STATE/x-events" ||
     fail 'the EXIT trap did not raise the bar after a failed restore'
+
+# An interrupted restore still shows the bar.
+reset_case visible empty
+POLYBAR_TEST_TERM_ON_HIDE=1 run_restore 143
+assert_polybar_sequence 'cmd hide' 'cmd show'
+
+# The session toggles the bar once for all groups.
+reset_case visible empty
+I3_RESURRECT_SESSION_TOKEN=0123456789abcdef0123456789abcdef run_restore 0
+[ ! -s "$MOCK_STATE/polybar-events" ] ||
+    fail 'a group of an all-groups restore toggled the bar itself'
 
 printf 'PASS: i3-resurrect preserves Polybar visibility\n'

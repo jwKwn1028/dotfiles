@@ -313,6 +313,7 @@ expect_failure 'hpcz-kill unreachable host' 255 'ssh: connect to host test.inval
 HPC_SESSIONS_MODE=success
 
 # A restored Ghostty window's first shell reattaches its saved session once.
+TAILSCALE_REMOTE_MODE_FILE=$TEST_TMP/proxy-required
 autoload -Uz add-zsh-hook
 SSH_MODE=success
 I3_RESURRECT_REMOTE_SESSION=tmux:dev
@@ -330,6 +331,36 @@ SSH_COMMANDS=()
 I3_RESURRECT_REMOTE_SESSION=bogus:dev
 _hpc_restore_session >| "$TEST_TMP/output" 2>&1
 (( ${#SSH_COMMANDS} == 0 )) || fail 'restore hook acted on an unknown session kind'
+
+# It waits for labroute-restore.sh.
+zmodload zsh/datetime
+saved_runtime=${XDG_RUNTIME_DIR-}
+XDG_RUNTIME_DIR=$TEST_TMP/runtime
+mkdir -p "$XDG_RUNTIME_DIR"
+route_lock=$XDG_RUNTIME_DIR/i3-resurrect-labroute.lock
+flock "$route_lock" sleep 1 &
+route_holder=$!
+for _ in {1..40}; do flock -n "$route_lock" true 2>/dev/null || break; sleep 0.05; done
+I3_RESURRECT_REMOTE_SESSION=tmux:dev
+route_start=$EPOCHREALTIME
+expect_ssh_command 'restored session after the lab route' 'exec tmux attach-session -t =dev' _hpc_restore_session
+(( EPOCHREALTIME - route_start >= 0.5 )) || fail 'restore hook did not wait for the lab route'
+grep -q 'Waiting for the lab route' "$TEST_TMP/output" || fail 'restore hook did not say it waits for the lab route'
+wait $route_holder
+XDG_RUNTIME_DIR=$saved_runtime
+
+# A required route that is down refuses direct SSH.
+saved_proxy_enabled=$functions[_labroute_proxy_enabled]
+_labroute_proxy_enabled() { return 1 }
+: >| "$TAILSCALE_REMOTE_MODE_FILE"
+SSH_COMMANDS=()
+I3_RESURRECT_REMOTE_SESSION=zmx:shell
+_hpc_restore_session >| "$TEST_TMP/output" 2>&1
+(( ${#SSH_COMMANDS} == 0 )) || fail 'restore hook connected while the required lab route was down'
+grep -q 'run labroute on, then hpcz shell' "$TEST_TMP/output" ||
+  fail "restore hook did not say how to reattach: $(<"$TEST_TMP/output")"
+rm -f "$TAILSCALE_REMOTE_MODE_FILE"
+functions[_labroute_proxy_enabled]=$saved_proxy_enabled
 
 # Local tmux bar re-check after hpc and typed ssh.
 mkdir -p "$TEST_TMP/fakebin"

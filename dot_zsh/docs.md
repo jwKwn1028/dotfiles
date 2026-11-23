@@ -16,6 +16,7 @@ attaches preserve it; Ghostty uses `no-cursor`. Extra keys:
 | `Alt+Q` / `Alt+E` | Insert | Move to the start / end of the command line. |
 | `v` | Normal | Enter select mode. |
 | `V` | Normal, select | Paste after the cursor, or replace selections with the clipboard. |
+| `Ctrl+L` | All | Clear the screen and scrollback. |
 | `Ctrl+X Ctrl+E` | Insert, normal, plain Zsh | Edit the command line in the configured editor. |
 | `Ctrl+T` / `Alt+C` | Insert, normal | Pick a file with fzf and insert its path / pick a directory and `cd` to it. |
 | `Ctrl+R` | Insert, normal | Search history with fzf. |
@@ -32,6 +33,7 @@ The fzf keys need fzf's installed widgets. Editor keymaps are separate: see
 | --- | --- |
 | `hz` | Edit the Zsh source through chezmoi, review the diff, and offer a scoped apply. |
 | `sz` | Show loaded Zsh changes, check syntax, and restart the shell. |
+| `sz-all` | Check syntax, then restart every local tmux shell at its next prompt, after its jobs. |
 | `c` / `z` | Open the current directory in VS Code / Zed.* |
 | `thunar [PATH...]` | Open the paths, or the current directory, in Thunar.* |
 | `n` / `r` / `y` | Run nnn / ranger / Yazi; on exit, `cd` to the directory chosen there. |
@@ -66,6 +68,10 @@ opening a window. Missing editors or failed Thunar startup keep it open.
 Short aliases: `h` (Helix here), `v` (Vim here), `mo` (Micro), `twt`
 (taskwarrior-tui), `tcal` (task-calendar), `:q` (exit the shell), and `:qa`
 (close the focused i3 window). `ls` runs eza; `rg` searches smart-case.
+
+Run `sz-all` after applying Zsh changes; panes older than its hook need one `sz`
+first. SSH shells are skipped. Like `sz`, restarts keep only the directory and
+exported variables.
 
 `cd --`, `cd ---`, and longer runs of `-` step back two, three, or more entries
 in the directory stack. With zoxide installed, plain `cd` also records visits.

@@ -60,3 +60,11 @@ if (( $+functions[zhm_select] )); then
 else
   bindkey '^X^E' edit-command-line
 fi
+
+# Ctrl+L also clears scrollback; zle -R flushes the clear so E3 follows it.
+_zsh_clear_screen() {
+  zle .clear-screen
+  zle -R
+  print -n -- $'\e[3J'
+}
+zle -N clear-screen _zsh_clear_screen

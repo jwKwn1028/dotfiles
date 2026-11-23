@@ -8,8 +8,10 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import socket
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 import sys
@@ -142,7 +144,8 @@ class RestoreTests(unittest.TestCase):
             path.mkdir()
         for name in ("i3-resurrect-save-all.sh", "i3-resurrect-restore-all.sh",
                      "_resurrect-common.sh", "i3-resurrect-state.py", "_polybar-common.sh",
-                     "_snap-common.sh", "ghostty-session-state.py", "workspace_groups.py", "workspace-groups.json"):
+                     "_snap-common.sh", "ghostty-session-state.py", "workspace_groups.py", "workspace-groups.json",
+                     "labroute-restore.sh"):
             (self.applied / name).write_text(source(name).read_text())
         (self.applied / "zen-url-state.py").write_text('print("[]")\n')
         for name in ("i3-msg", "i3-resurrect", "notify-send"):
@@ -583,25 +586,93 @@ class RestoreTests(unittest.TestCase):
         self.assertEqual((self.root / "tree.json").read_bytes(), before)
         self.assertEqual(SNAPSHOT.read_json(self.meta / "last-restore.json")["mapping"], [])
 
-    def test_route_failure_and_timeout_preserve_desktop(self):
-        for body in ("return 1", "sleep 2"):
+    def wait_for(self, check, seconds=6.0):
+        deadline = time.monotonic() + seconds
+        while not check() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        return check()
+
+    def route_lock_held(self):
+        lock = self.root / "runtime/i3-resurrect-labroute.lock"
+        return lock.exists() and subprocess.run(["flock", "-n", str(lock), "true"]).returncode != 0
+
+    def notified(self, text):
+        path = self.root / "notifications"
+        return path.exists() and text in path.read_text()
+
+    def test_route_failure_and_timeout_are_reported_without_holding_windows(self):
+        for body, reason in (("print -u2 'labroute: exit node is offline'; return 1", "labroute: exit node is offline"),
+                             ("sleep 2", "labroute on timed out after 0.05s")):
             with self.subTest(body=body):
                 self.route(body)
                 result = self.run_script(I3_RESURRECT_LABROUTE_TIMEOUT="0.05")
-                self.assertNotEqual(result.returncode, 0)
-                self.assertFalse(self.killed())
-                self.assertFalse(any(event["tool"] == "i3-resurrect" for event in self.events()))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(any(event["tool"] == "i3-resurrect" for event in self.events()))
+                self.assertTrue(self.wait_for(lambda: self.notified(f"Lab route not restored: {reason}")),
+                                (self.root / "notifications").read_text())
+                self.assertTrue(self.wait_for(lambda: not self.route_lock_held()))
+                # A stalled route still blocks direct SSH.
+                self.assertTrue((self.root / "route-off").exists(), "restored shells could connect directly")
+                (self.root / "route-off").unlink()
 
-    def test_route_is_ready_before_first_desktop_change(self):
-        self.live_tree(10)
-        self.route("return 0")
+    def test_route_comes_up_beside_window_creation(self):
+        self.route("sleep 3")
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stderr)
-        events = self.events()
-        route = next(i for i, event in enumerate(events) if event["tool"] == "route")
-        change = next(i for i, event in enumerate(events) if event["tool"] == "i3-resurrect" or
-                      (event["tool"] == "i3-msg" and not event["args"][0].startswith("-t")))
-        self.assertLess(route, change)
+        self.assertTrue(any(event["tool"] == "i3-resurrect" for event in self.events()))
+        self.assertTrue(self.route_lock_held(), "remote windows have no lock to wait on")
+        self.assertTrue(self.wait_for(lambda: not self.route_lock_held()))
+        self.assertTrue(any(event["tool"] == "route" for event in self.events()))
+        self.assertFalse(self.notified("Lab route not restored"))
+
+    def test_validated_generations_skip_resolve_and_validation(self):
+        log = self.root / "python.log"
+        wrapper = self.bin / "python-log"
+        wrapper.write_text(f'#!/bin/sh\nprintf "%s\\n" "$2" >>"{log}"\nexec /usr/bin/python3 "$@"\n')
+        wrapper.chmod(0o755)
+        for validated, checked in (("0", True), ("1", False)):
+            with self.subTest(validated=validated):
+                self.live_tree(1)
+                log.unlink(missing_ok=True)
+                result = self.run_script(I3_SYSTEM_PYTHON=str(wrapper), I3_RESURRECT_VALIDATED=validated)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                actions = log.read_text().split()
+                self.assertEqual({"resolve", "validate", "occupied"} <= set(actions), checked, actions)
+                self.assertIn("prepare-restore", actions)
+
+    def test_controller_requests_use_its_socket_without_python(self):
+        address = str(self.root / "controller.sock")
+        server = socket.socket(socket.AF_UNIX)
+        self.addCleanup(server.close)
+        server.bind(address)
+        server.listen()
+        received = []
+        replies = [dict(ok=True, result=dict(selected="A")), dict(ok=False, error="Restore was cancelled"), None]
+
+        def serve():
+            for reply in replies:
+                client, _ = server.accept()
+                with client, client.makefile("rb") as stream:
+                    received.append(stream.readline())
+                    if reply is not None:
+                        client.sendall(json.dumps(reply).encode() + b"\n")
+
+        threading.Thread(target=serve, daemon=True).start()
+        env = {key: value for key, value in self.env.items() if key != "I3_RESURRECT_GROUP_HELPER"}
+        env.update(I3_RESURRECT_CONTROLLER=address, I3_SYSTEM_PYTHON="/nonexistent")
+
+        def request():
+            return subprocess.run(["bash", "-c", 'DIR=$1; . "$DIR/_resurrect-common.sh"; jq -n \'{action: "status"}\' | resurrect_group',
+                                   "bash", str(self.applied)], env=env, text=True, capture_output=True, timeout=10)
+
+        self.assertEqual(request().stdout, '{"selected":"A"}\n')
+        error = request()
+        self.assertEqual((error.returncode, error.stderr), (1, "Restore was cancelled\n"))
+        closed = request()
+        self.assertEqual(closed.returncode, 1)
+        self.assertIn("Workspace controller unavailable", closed.stderr)
+        self.assertEqual([json.loads(line) for line in received], [dict(action="status")] * 3)
+        self.assertTrue(all(line.count(b"\n") == 1 for line in received), received)
 
     def test_missing_windows_and_failed_commands_cannot_report_success(self):
         cases = [("MISSING_WORKSPACE", "workspace is missing"),

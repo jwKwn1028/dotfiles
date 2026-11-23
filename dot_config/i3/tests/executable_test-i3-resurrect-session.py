@@ -63,6 +63,9 @@ class SessionTests(unittest.TestCase):
         self.session.tree = tree
         self.view = dict(selected="C", views={"C": dict(slot=9, output="primary", outputs={"primary": 1, "external": 9})})
         self.calls = []
+        self.order = []
+        self.interrupt = None
+        self.bar_visible = True
         self.rpc_calls = []
         self.fail = None
         self.placements = {group: {str(slot): slot} for group, slot in SLOTS.items()}
@@ -70,6 +73,14 @@ class SessionTests(unittest.TestCase):
         self.missing = [[]]
         self.session.rpc = self.rpc
         self.session.child = self.child
+        self.session.polybar = self.polybar
+
+    def polybar(self, function):
+        self.order.append(function)
+        if self.interrupt == function:
+            self.interrupt = None
+            raise InterruptedError("Snapshot interrupted")
+        return self.bar_visible if function == "polybar_visible" else True
 
     def rpc(self, action, **values):
         self.rpc_calls.append((action, values))
@@ -87,6 +98,7 @@ class SessionTests(unittest.TestCase):
 
     def child(self, action, state, meta, group, check=False, **values):
         self.calls.append((action, group, check, state, meta, values))
+        self.order.append(f"{action} {group}{' --check' if check else ''}")
         if not check and self.fail == group:
             raise GroupError(f"Group {group}: launch failed")
         if action == "save" and not check:
@@ -101,6 +113,7 @@ class SessionTests(unittest.TestCase):
     def publish(self):
         self.session.save()
         self.calls.clear()
+        self.order.clear()
         self.rpc_calls.clear()
 
     def test_complete_save_is_one_recoverable_generation(self):
@@ -256,6 +269,66 @@ class SessionTests(unittest.TestCase):
             self.session.restore()
         self.assertEqual(self.rpc_calls, [])
         self.assertEqual(self.calls, [])
+
+    def test_groups_restore_validated_generations_inside_one_bar_toggle(self):
+        self.publish()
+        self.session.restore()
+        state, meta = snapshot.resolve(self.session.state, self.session.meta)
+        for _, group, _, child_state, child_meta, values in (call for call in self.calls if not call[2]):
+            with self.subTest(group=group):
+                self.assertEqual((child_state, child_meta), snapshot.resolve(state / group, meta / group))
+                self.assertTrue(values["validated"])
+        self.assertEqual(self.order, ["restore A --check", "restore B --check", "restore C --check", "polybar_visible",
+                                      "polybar_hide_for_restore", "restore A", "restore B", "restore C",
+                                      "polybar_show_after_restore"])
+        self.order.clear()
+        self.fail = "B"
+        with self.assertRaises(GroupError):
+            self.session.restore()
+        self.assertEqual(self.order.count("polybar_show_after_restore"), 1)
+
+    def test_interrupted_bar_toggle_cancels_the_restore_and_shows_the_bar(self):
+        self.publish()
+        checks = ["restore A --check", "restore B --check", "restore C --check", "polybar_visible"]
+        groups = ["restore A", "restore B", "restore C"]
+        for function, launched in (("polybar_hide_for_restore", []), ("polybar_show_after_restore", groups)):
+            with self.subTest(interrupted=function):
+                self.order.clear()
+                self.rpc_calls.clear()
+                self.interrupt = function
+                with self.assertRaises(InterruptedError):
+                    self.session.restore()
+                self.assertEqual(self.order, checks + ["polybar_hide_for_restore", *launched,
+                                                       *["polybar_show_after_restore"] * (2 if launched else 1)])
+                self.assertIn("restore-session-end", [action for action, _ in self.rpc_calls])
+        self.order.clear()
+        self.bar_visible = False
+        self.session.restore()
+        self.assertEqual([call for call in self.order if call.startswith("polybar")], ["polybar_visible"])
+
+    def test_bar_calls_let_cancellation_through(self):
+        for error, outcome in ((InterruptedError("Snapshot interrupted"), InterruptedError), (OSError("no bash"), False)):
+            with self.subTest(error=type(error).__name__), patch.object(module.subprocess, "run", side_effect=error):
+                if outcome is False:
+                    self.assertFalse(module.Session.polybar(self.session, "polybar_visible"))
+                else:
+                    with self.assertRaises(outcome):
+                        module.Session.polybar(self.session, "polybar_visible")
+
+    def test_restore_starts_the_lab_route_once_when_a_group_saved_it_on(self):
+        log = self.root / "labroute.log"
+        script = self.root / "labroute-restore.sh"
+        script.write_text(f"echo started >>'{log}'\n")
+        self.publish()
+        state, meta = snapshot.resolve(self.session.state, self.session.meta)
+        with patch.dict(os.environ, I3_RESURRECT_LABROUTE_RESTORE=str(script)):
+            self.session.restore()
+            self.assertFalse(log.exists())
+            (snapshot.resolve(state / "B", meta / "B")[1] / "labroute.txt").write_text("on\n")
+            self.session.restore(check=True)
+            self.assertFalse(log.exists())
+            self.session.restore()
+        self.assertEqual(log.read_text(), "started\n")
 
     def test_restore_starts_tmux_once_only_for_a_saved_local_tmux_attach(self):
         log = self.root / "tmux-restore.log"

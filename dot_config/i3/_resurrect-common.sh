@@ -56,11 +56,35 @@ resurrect_fail() {
     exit 1
 }
 
-resurrect_group() {
+resurrect_group_helper() {
     local helper="$DIR/workspace-groups.py"
     [ -r "$helper" ] || helper="$DIR/executable_workspace-groups.py"
-    helper="${I3_RESURRECT_GROUP_HELPER:-$helper}"
-    "$RESURRECT_PYTHON" "$helper" request
+    printf '%s\n' "${I3_RESURRECT_GROUP_HELPER:-$helper}"
+}
+
+# With nc, requests skip Python's startup.
+resurrect_controller() {
+    [ -z "${I3_RESURRECT_CONTROLLER:-}" ] && [ -z "${I3_RESURRECT_GROUP_HELPER:-}" ] || return 0
+    command -v nc >/dev/null 2>&1 || return 0
+    I3_RESURRECT_CONTROLLER="$("$RESURRECT_PYTHON" "$(resurrect_group_helper)" path)/controller.sock" ||
+        I3_RESURRECT_CONTROLLER=""
+}
+
+resurrect_group() {
+    local reply
+    if [ -n "${I3_RESURRECT_GROUP_HELPER:-}" ] || [ -z "${I3_RESURRECT_CONTROLLER:-}" ] ||
+        ! command -v nc >/dev/null 2>&1; then
+        "$RESURRECT_PYTHON" "$(resurrect_group_helper)" request
+        return
+    fi
+    reply="$({ tr -d '\n'; echo; } | nc -U -w 15 "$I3_RESURRECT_CONTROLLER" 2>/dev/null |
+        jq -r 'if .ok then "ok\t" + (.result | tojson)
+               else "error\t" + (.error // "Workspace action failed") end' 2>/dev/null)"
+    case "$reply" in
+        ok$'\t'*) printf '%s\n' "${reply#*$'\t'}" ;;
+        error$'\t'*) printf '%s\n' "${reply#*$'\t'}" >&2; return 1 ;;
+        *) printf 'Workspace controller unavailable: %s\n' "$I3_RESURRECT_CONTROLLER" >&2; return 1 ;;
+    esac
 }
 
 resurrect_selected_group() {

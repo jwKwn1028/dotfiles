@@ -169,3 +169,17 @@ polybar_show_persistent() {
     polybar_raise
   fi
 }
+
+# Callers check polybar_visible first to undo an interrupted hide.
+polybar_hide_for_restore() {
+  polybar_set_state hide 0 || true
+  polybar_wait_for_state 0 2000 >/dev/null || true
+}
+
+polybar_show_after_restore() {
+  polybar_set_state show 1 || true
+  if polybar_wait_for_state 1 2000 >/dev/null; then
+    polybar_raise
+  fi
+  return 0
+}

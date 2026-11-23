@@ -35,6 +35,7 @@ if [ ! -r "$ROOT/_snap-common.sh" ]; then
     cp -p -- "$ROOT/_resurrect-common.sh" "$APPLIED_ROOT/_resurrect-common.sh"
     cp -p -- "$ROOT/executable_i3-resurrect-state.py" "$APPLIED_ROOT/i3-resurrect-state.py"
     cp -p -- "$ROOT/workspace_groups.py" "$APPLIED_ROOT/workspace_groups.py"
+    cp -p -- "$(managed labroute-restore.sh)" "$APPLIED_ROOT/labroute-restore.sh"
     RESTORE="$APPLIED_ROOT/i3-resurrect-restore-all.sh"
 fi
 
@@ -73,6 +74,17 @@ if [ -e "/proc/$$/fd/9" ]; then lock=held; else lock=closed; fi
 printf 'tmux-restore lock=%s\n' "$lock" >>"$TEST_EVENTS"
 EOF
 chmod +x "$MOCK_BIN/tmux-restore-if-empty"
+
+# Wait for the background lab route's lock.
+labroute_lock="$XDG_RUNTIME_DIR/i3-resurrect-labroute.lock"
+wait_for_route() {
+    local _
+    for _ in $(seq 120); do
+        [ -e "$labroute_lock" ] && ! flock -n "$labroute_lock" true || return 0
+        sleep 0.05
+    done
+    return 1
+}
 
 tmux_restore_events() {
     local _
@@ -354,11 +366,8 @@ export TEST_TREE="$FIXTURES/empty-tree.json"
 printf '%s\n' '{"type":"root","nodes":[]}' >"$TEST_TREE"
 
 run_restore 0
-labroute_line="$(grep -n -Fx 'labroute on' "$TEST_EVENTS" | cut -d: -f1)"
-programs_line="$(grep -n -F -- '--programs-only' "$TEST_EVENTS" | head -n 1 | cut -d: -f1)"
-[ -n "$labroute_line" ] || fail 'the restore did not bring a saved lab route back'
-[ -n "$programs_line" ] && [ "$labroute_line" -lt "$programs_line" ] ||
-    fail 'the lab route came up after programs started'
+wait_for_route || fail 'the lab route never finished'
+grep -Fqx 'labroute on' "$TEST_EVENTS" || fail 'the restore did not bring a saved lab route back'
 grep -Fqx 'Restore complete.' "$TEST_NOTIFY" ||
     fail "the restore did not report success: $(cat "$TEST_NOTIFY")"
 grep -Fqx 'Reattach by hand: hpc solo, hpcz shell' "$TEST_NOTIFY" ||
@@ -372,22 +381,25 @@ grep -Fqx 'Opened without the saved layout: 6' "$TEST_NOTIFY" ||
 [ "$(tmux_restore_events)" = 'tmux-restore lock=closed' ] ||
     fail "a saved local tmux attach did not start one tmux restore without the lock: $(tmux_restore_events)"
 
+# A failed or hung route is notified without delaying windows or tmux.
 export LABROUTE_TEST_FAIL=1
-run_restore 1
+printf '%s\n' '{"type":"root","nodes":[]}' >"$TEST_TREE"
+run_restore 0
+wait_for_route || fail 'the failed lab route never finished'
 unset LABROUTE_TEST_FAIL
-[ -z "$(tmux_restore_events)" ] || fail 'an aborted restore still started tmux'
+grep -q -F -- '--programs-only' "$TEST_EVENTS" || fail 'windows waited for a failed lab route'
+[ "$(tmux_restore_events)" = 'tmux-restore lock=closed' ] || fail 'a failed lab route stopped the tmux restore'
 reason='labroute: exit node is offline; remote SSH remains blocked'
-grep -Fqx "Lab route not restored: $reason" "$TEST_TMP/restore-stderr" ||
-    fail 'a failed lab route was not reported on stderr'
 grep -Fqx "Lab route not restored: $reason" "$TEST_NOTIFY" ||
     fail "a failed lab route was not in the notification: $(cat "$TEST_NOTIFY")"
-! grep -q -F -- '--programs-only' "$TEST_EVENTS" ||
-    fail 'programs started after the lab route failed'
 
-export LABROUTE_TEST_HANG=1 I3_RESURRECT_LABROUTE_TIMEOUT=1
-run_restore 1
+export LABROUTE_TEST_HANG=1 I3_RESURRECT_LABROUTE_TIMEOUT=3
+printf '%s\n' '{"type":"root","nodes":[]}' >"$TEST_TREE"
+run_restore 0
+! flock -n "$labroute_lock" true || fail 'remote windows had no lock to wait on while the route came up'
+wait_for_route || fail 'the hung lab route was not stopped'
 unset LABROUTE_TEST_HANG I3_RESURRECT_LABROUTE_TIMEOUT
-grep -Fqx 'Lab route not restored: labroute on timed out after 1s' "$TEST_NOTIFY" ||
+grep -Fqx 'Lab route not restored: labroute on timed out after 3s' "$TEST_NOTIFY" ||
     fail "a hung lab route did not time out: $(cat "$TEST_NOTIFY")"
 
 rm -f "$TAILSCALE_REMOTE_MODE_FILE"

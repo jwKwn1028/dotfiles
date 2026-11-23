@@ -14,10 +14,11 @@ resurrect_paths
 REMOTE_HELPERS="${I3_RESURRECT_REMOTE_HELPERS:-$HOME/.zsh/rc.d/50-remote.zsh}"
 LABROUTE_TIMEOUT="${I3_RESURRECT_LABROUTE_TIMEOUT:-45}"
 TMUX_RESTORE="${I3_RESURRECT_TMUX_RESTORE-$HOME/.local/bin/tmux-restore-if-empty}"
+LABROUTE_RESTORE="${I3_RESURRECT_LABROUTE_RESTORE:-$DIR/labroute-restore.sh}"
+[ -r "$LABROUTE_RESTORE" ] || LABROUTE_RESTORE="$DIR/executable_labroute-restore.sh"
 POLYBAR_WAS_VISIBLE=0
 RESTORE_OPERATION=""
 RESTORE_LEASE=0
-LABROUTE_ERROR=""
 
 notify() {
     [ "${I3_RESURRECT_QUIET:-0}" != 1 ] || return 0
@@ -38,22 +39,15 @@ find_i3_resurrect() {
     fi
 }
 
+# The session toggles the bar once for all groups.
 hide_polybar_for_restore() {
-    if polybar_visible; then
-        POLYBAR_WAS_VISIBLE=1
-        polybar_set_state hide 0 || true
-        polybar_wait_for_state 0 2000 >/dev/null || true
-    fi
+    [ -z "${I3_RESURRECT_SESSION_TOKEN:-}" ] && polybar_visible || return 0
+    POLYBAR_WAS_VISIBLE=1
+    polybar_hide_for_restore
 }
 
 restore_polybar_after_restore() {
-    if [ "$POLYBAR_WAS_VISIBLE" = 1 ]; then
-        polybar_set_state show 1 || true
-        if polybar_wait_for_state 1 2000 >/dev/null; then
-            polybar_raise
-        fi
-    fi
-    return 0
+    [ "$POLYBAR_WAS_VISIBLE" = 0 ] || polybar_show_after_restore
 }
 
 cleanup_restore() {
@@ -103,26 +97,10 @@ wait_for_launched() {
     done
 }
 
-restore_labroute() {
-    local output
-    local status=0
-
+start_labroute() {
     [ "$(head -n 1 "$LABROUTE_FILE" 2>/dev/null)" = on ] || return 0
-
-    output="$(
-        timeout --kill-after=2 "$LABROUTE_TIMEOUT" zsh -fc 'source "$1" && labroute on' \
-            zsh "$REMOTE_HELPERS" 9>&- 2>&1
-    )" || status="$?"
-    [ "$status" -ne 0 ] || return 0
-
-    if [ "$status" -eq 124 ]; then
-        LABROUTE_ERROR="labroute on timed out after ${LABROUTE_TIMEOUT}s"
-    else
-        LABROUTE_ERROR="$(printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | tail -n 1)"
-        LABROUTE_ERROR="${LABROUTE_ERROR:-labroute on failed}"
-    fi
-    printf 'Lab route not restored: %s\n' "$LABROUTE_ERROR" >&2
-    return 1
+    I3_RESURRECT_REMOTE_HELPERS="$REMOTE_HELPERS" I3_RESURRECT_LABROUTE_TIMEOUT="$LABROUTE_TIMEOUT" \
+        bash "$LABROUTE_RESTORE" 9>&- || true
 }
 
 # ta shares this helper's lock.
@@ -146,6 +124,7 @@ for argument in "$@"; do
     esac
 done
 missing="$(resurrect_dependencies)" || resurrect_fail "Restore unavailable: $missing not found."
+resurrect_controller
 I3_RESURRECT="$(find_i3_resurrect)" || resurrect_fail 'Restore unavailable: i3-resurrect not found.'
 if ! [[ "$PLACEHOLDER_WAIT_ATTEMPTS" =~ ^[1-9][0-9]*$ ]]; then
     resurrect_fail 'Restore wait attempts must be positive integers.'
@@ -160,21 +139,24 @@ if [[ "$LABROUTE_TIMEOUT" =~ ^0+([.]0+)?$ ]]; then
 fi
 
 DESTINATION_GROUP="$(resurrect_selected_group)" || resurrect_fail "Cannot determine the destination group."
-RESTORE_OPERATION="$("$RESURRECT_PYTHON" -c 'import uuid; print(uuid.uuid4().hex)')"
+RESTORE_OPERATION="$(tr -d '-' </proc/sys/kernel/random/uuid)"
 umask 077
 if [ "$CHECK" = 0 ]; then
     resurrect_lock || exit 1
 fi
 PROFILE_META_DIR="${I3_RESURRECT_REPORT_DIR:-$META_DIR}"
-if ! resolved="$(resurrect_state resolve "$STATE_DIR" "$META_DIR" "${PREVIOUS[@]}" 2>&1)"; then
-    resurrect_fail 'Restore aborted; invalid snapshot manifest.'$'\n'"$resolved"
-fi
-STATE_DIR="$(jq -r '.[0]' <<< "$resolved")"
-META_DIR="$(jq -r '.[1]' <<< "$resolved")"
-resurrect_paths
-if ! detail="$(resurrect_state validate "$STATE_DIR" "$META_DIR" 2>&1)" ||
-    ! detail="$(resurrect_state occupied "$STATE_DIR" "$META_DIR" 2>&1 >/dev/null)"; then
-    resurrect_fail 'Restore aborted; snapshot validation failed. Existing windows are unchanged.'$'\n'"$detail"
+# The session already resolved and validated these generations.
+if [ "${I3_RESURRECT_VALIDATED:-0}" != 1 ]; then
+    if ! resolved="$(resurrect_state resolve "$STATE_DIR" "$META_DIR" "${PREVIOUS[@]}" 2>&1)"; then
+        resurrect_fail 'Restore aborted; invalid snapshot manifest.'$'\n'"$resolved"
+    fi
+    STATE_DIR="$(jq -r '.[0]' <<< "$resolved")"
+    META_DIR="$(jq -r '.[1]' <<< "$resolved")"
+    resurrect_paths
+    if ! detail="$(resurrect_state validate "$STATE_DIR" "$META_DIR" 2>&1)" ||
+        ! detail="$(resurrect_state occupied "$STATE_DIR" "$META_DIR" 2>&1 >/dev/null)"; then
+        resurrect_fail 'Restore aborted; snapshot validation failed. Existing windows are unchanged.'$'\n'"$detail"
+    fi
 fi
 if [ "$(cat "$LABROUTE_FILE" 2>/dev/null)" = on ]; then
     for command in timeout zsh; do
@@ -182,6 +164,7 @@ if [ "$(cat "$LABROUTE_FILE" 2>/dev/null)" = on ]; then
             resurrect_fail "Restore unavailable: $command not found for the lab route."
     done
     [ -r "$REMOTE_HELPERS" ] || resurrect_fail "Restore unavailable: cannot read $REMOTE_HELPERS."
+    [ -r "$LABROUTE_RESTORE" ] || resurrect_fail "Restore unavailable: cannot read $LABROUTE_RESTORE."
 fi
 RESTORE_STATE_DIR=""
 trap cleanup_restore EXIT
@@ -198,13 +181,14 @@ if [ "$CHECK" = 1 ]; then
     printf 'Destination group %s: %s\n' "$DESTINATION_GROUP" "$RESTORE_PLAN"
     exit 0
 fi
-if ! restore_labroute; then
-    notify "Restore aborted; existing windows are unchanged."$'\n'"Lab route not restored: $LABROUTE_ERROR"
-    exit 1
-fi
 # The session coordinator handles all-groups restores.
-[ -n "${I3_RESURRECT_SESSION_TOKEN:-}" ] || start_tmux_restore
-owner="$("$RESURRECT_PYTHON" -c 'import sys; from pathlib import Path; text=Path("/proc/"+sys.argv[1]+"/stat").read_text(); print(text[text.rfind(")")+2:].split()[19])' "$$")"
+if [ -z "${I3_RESURRECT_SESSION_TOKEN:-}" ]; then
+    start_labroute
+    start_tmux_restore
+fi
+stat="$(</proc/$$/stat)"
+read -ra stat <<< "${stat##*) }"
+owner="${stat[19]}"
 jq -n --arg token "$RESTORE_OPERATION" --arg group "$DESTINATION_GROUP" --argjson pid "$$" --arg start "$owner" \
     --arg session "${I3_RESURRECT_SESSION_TOKEN:-}" \
     '{action:"restore-begin",token:$token,group:$group,owner:[$pid,$start]} +
