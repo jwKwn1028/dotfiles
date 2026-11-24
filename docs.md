@@ -126,6 +126,7 @@ Log out, pick **i3** in LightDM, and log back in.
   and `hxp` (after Ghostty attaches).
   Enable 15-minute saves with `systemctl --user daemon-reload && systemctl --user enable --now tmux-resurrect-save.timer i3-resurrect-save.timer`.
   See the [i3 manual](dot_config/i3/MANUAL.md#i3-resurrect-save-and-restore).
+- **hxp:** Ctrl+L jumps between the editor (Helix, Micro) and fancy-cat.
 - **npm:** install NodeSource's `nodejs`, which bundles npm; apt's `npm`
   conflicts with it, so the manifest installs `nodejs` alone. `~/.npmrc` puts
   global packages in `~/.local/npm-global`.

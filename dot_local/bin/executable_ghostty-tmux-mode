@@ -46,6 +46,18 @@ def wait_for_focus(d, root, active, window, pid, timeout=60):
         os.close(fd)
 
 
+def keyboard_grabbed(d, root):
+    """Whether another client (e.g. i3lock) holds the keyboard; an unmapped probe never grabs."""
+    probe = root.create_window(0, 0, 1, 1, 0, 0, window_class=X.InputOnly)
+    try:
+        status = probe.grab_keyboard(False, X.GrabModeAsync, X.GrabModeAsync, X.CurrentTime)
+        if status == X.GrabSuccess:
+            d.ungrab_keyboard(X.CurrentTime)
+        return status == X.AlreadyGrabbed
+    finally:
+        probe.destroy()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=KEYS)
@@ -88,7 +100,7 @@ def main():
         if time.monotonic() > deadline:
             return 1
         time.sleep(0.01)
-    if active() != start:
+    if active() != start or keyboard_grabbed(d, root):
         return 1
     codes = [d.keysym_to_keycode(XK.string_to_keysym(name))
              for name in ("Control_L", "Alt_L", "Shift_L", KEYS[args.mode])]

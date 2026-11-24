@@ -50,11 +50,10 @@ hidden = false
 parents = true
 
 [keys.normal]
-F8 = ":open %sh{hxp-first-error}"
 "ret" = ["open_below", "normal_mode"]
 # "C" = ":clipboard-yank"
 "V" = ":clipboard-paste-before"
-# Forward search: SyncTeX for TeX/Markdown; raise-only for Typst.
+# Forward search to fancy-cat
 "C-l" = ":sh ~/.local/bin/hxp-fwd '%{buffer_name}' %{cursor_line} %{cursor_column}"
 "C-y" = [
   ':insert-output HELIX_YAZI_ID=$PPID ~/.local/bin/hx-yazi run "%{buffer_name}"',

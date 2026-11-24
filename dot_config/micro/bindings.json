@@ -1,5 +1,5 @@
 {
-    "F8": "command:hxperror",
+    "Ctrl-l": "command:hxpfwd",
     "Alt-h": "CursorLeft",
     "Alt-j": "CursorDown",
     "Alt-k": "CursorUp",
