@@ -10,7 +10,9 @@ Terminal PDF viewer with Zathura-style controls. Config:
 new Ghostty window. Restored panes use `--wait-for-client`. Yazi `O` offers Zathura.
 
 Local tmux needs `allow-passthrough on`; graphics appear in visible panes.
-`Ctrl+b Ctrl+b` passes Ctrl-b to the viewer.
+`Ctrl+b Ctrl+b` passes Ctrl-b to the viewer. The viewer titles its terminal
+with the file name until it quits; tmux names the window after it, also when
+Yazi opened it, without `.pdf`, cut to 24 cells.
 
 ## Keys
 
