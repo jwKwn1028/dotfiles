@@ -191,7 +191,7 @@ url = "https://github.com/freref/fancy-cat.git"
 version = "0.6.0"
 commit = "77a7ab6c953e2a43e6e02bd7c341dc157d5da4a9"
 fork_repo = "fancy-cat"
-fork_commit = "7cdc3166204d40830ef85be48ff20fa269dddda7"
+fork_commit = "e83cadecf77bcc18ce86b8f2aa8e63f5024ebbaf"
 fork_dir = ".local/src/fancy-cat"
 fork_branch = "zathura"
 build_deps = [
@@ -212,7 +212,7 @@ sha256 = "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f"
 # Push project changes before bumping pins here.
 [packages.git.hxp]
 repo = "hxp"
-commit = "14addcd428939e0c03db135625972a9bea61b7c6"
+commit = "5f79fda997efbdb58cbf90a435d926b96486795a"
 dir = "Applications/hxp"
 # Zathura and Sioyek configs are managed here, not by hxp.
 install = ["./install.sh", "--no-config"]

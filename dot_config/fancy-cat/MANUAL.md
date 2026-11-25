@@ -29,6 +29,7 @@ Local tmux needs `allow-passthrough on`; graphics appear in visible panes.
 | `Ctrl+o` / `Ctrl+i`, `m`x / `'`x | Jump back / forward, set / go to mark x |
 | `R` / `Y` | Reload / copy the file path |
 | `T` | Shell in the PDF's folder: right tmux split, else a Ghostty tab |
+| `Ctrl+l`, Ctrl+click | Jump to the source at the pointer (else the view centre) in hxp's editor |
 | `Ctrl+r` / `Ctrl+n` | Toggle recolor / single-row status bar |
 | `:12`, `:100%`, `:exec CMD` | Page, zoom, run `CMD` with `$FILE` and `$PAGE` |
 | `:y+200`, `:x-100` | Scroll down / pan left by pixels |

@@ -332,7 +332,7 @@ I3_RESURRECT_REMOTE_SESSION=bogus:dev
 _hpc_restore_session >| "$TEST_TMP/output" 2>&1
 (( ${#SSH_COMMANDS} == 0 )) || fail 'restore hook acted on an unknown session kind'
 
-# It waits for labroute-restore.sh.
+# hpc and the restore hook wait for labroute-restore.sh.
 zmodload zsh/datetime
 saved_runtime=${XDG_RUNTIME_DIR-}
 XDG_RUNTIME_DIR=$TEST_TMP/runtime
@@ -347,7 +347,13 @@ expect_ssh_command 'restored session after the lab route' 'exec tmux attach-sess
 (( EPOCHREALTIME - route_start >= 0.5 )) || fail 'restore hook did not wait for the lab route'
 grep -q 'Waiting for the lab route' "$TEST_TMP/output" || fail 'restore hook did not say it waits for the lab route'
 wait $route_holder
-XDG_RUNTIME_DIR=$saved_runtime
+flock "$route_lock" sleep 1 &
+route_holder=$!
+for _ in {1..40}; do flock -n "$route_lock" true 2>/dev/null || break; sleep 0.05; done
+route_start=$EPOCHREALTIME
+expect_ssh_command 'hpc typed while the lab route comes up' 'exec tmux attach-session -t =dev' hpc dev
+(( EPOCHREALTIME - route_start >= 0.5 )) || fail 'hpc did not wait for the lab route'
+wait $route_holder
 
 # A required route that is down refuses direct SSH.
 saved_proxy_enabled=$functions[_labroute_proxy_enabled]
@@ -357,10 +363,13 @@ SSH_COMMANDS=()
 I3_RESURRECT_REMOTE_SESSION=zmx:shell
 _hpc_restore_session >| "$TEST_TMP/output" 2>&1
 (( ${#SSH_COMMANDS} == 0 )) || fail 'restore hook connected while the required lab route was down'
-grep -q 'run labroute on, then hpcz shell' "$TEST_TMP/output" ||
+grep -q 'then hpcz shell' "$TEST_TMP/output" ||
   fail "restore hook did not say how to reattach: $(<"$TEST_TMP/output")"
+expect_failure 'hpc with the required lab route down' 255 'run labroute on (or labroute off for direct SSH), then hpc dev' hpc dev
+(( ${#SSH_COMMANDS} == 0 )) || fail 'hpc connected while the required lab route was down'
 rm -f "$TAILSCALE_REMOTE_MODE_FILE"
 functions[_labroute_proxy_enabled]=$saved_proxy_enabled
+XDG_RUNTIME_DIR=$saved_runtime
 
 # Local tmux bar re-check after hpc and typed ssh.
 mkdir -p "$TEST_TMP/fakebin"
