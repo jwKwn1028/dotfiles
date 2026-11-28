@@ -91,10 +91,10 @@ class Controller:
             atomic_json(self.path, self.state)
             self.saved = text
 
-    def selected(self):
+    def selected(self, tree=None):
         group = self.state.get("selected")
         if group not in self.groups:
-            focused = self.tree().find_focused()
+            focused = (self.tree() if tree is None else tree).find_focused()
             ws = focused.workspace() if focused else None
             current = identity(ws.num, self.groups) if ws else None
             group = current[0] if current else next(iter(self.groups))
@@ -311,11 +311,11 @@ class Controller:
         self.remember()
         return True
 
-    def placement_allowed(self, con_id=None, workspace=None):
+    def placement_allowed(self, con_id=None, workspace=None, tree=None):
         if not self.ready or self.transition:
             return False
         if con_id is not None:
-            con = self.tree().find_by_id(int(con_id))
+            con = (self.tree() if tree is None else tree).find_by_id(int(con_id))
             if not con or not con.workspace():
                 return False
             if self.restore and self.restore.window_token(con):
@@ -373,17 +373,17 @@ class Controller:
             subprocess.Popen([str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def dispatch(self, action, **values):
-        self.tree()
-        group = self.selected()
+        tree = self.tree()
+        group = self.selected(tree)
         changed = False
         if action == "status":
-            return self.status()
+            return self.status(tree)
         if action == "window-menu":
-            return self.window_menu()
+            return self.window_menu(tree)
         if action == "session-view":
             return validate_view(dict(selected=group, views=self.state["views"]), self.groups)
         if action == "placement":
-            return self.placement_allowed(values.get("con_id", values.get("value")), values.get("workspace"))
+            return self.placement_allowed(values.get("con_id", values.get("value")), values.get("workspace"), tree)
         if action.startswith("restore-"):
             return self.restore.dispatch(action[8:], **values)
         if action == "overflow":
@@ -510,23 +510,24 @@ class Controller:
         status["windows"] = [{"group": window["group"]} for window in status["windows"]]
         return status
 
-    def status(self):
-        return {"selected": self.selected(), "groups": self.groups, "ready": self.ready,
+    def status(self, tree=None):
+        tree = self.tree() if tree is None else tree
+        return {"selected": self.selected(tree), "groups": self.groups, "ready": self.ready,
                 "workspaces": [dict(name=ws.name, num=ws.num, focused=ws.focused,
                                     visible=ws.visible, urgent=ws.urgent, output=ws.output)
                                for ws in self.i3.get_workspaces()],
                 "windows": [{"id": con.id, "name": con.name or "", "class": con.window_class or "",
                              "instance": con.window_instance or "",
                              "group": identity(con.workspace().num, self.groups)}
-                            for con in self.tree().leaves() if con.window and con.workspace() and
+                            for con in tree.leaves() if con.window and con.workspace() and
                             identity(con.workspace().num, self.groups) and con.window_class != SCRATCH_CLASS]}
 
-    def window_menu(self):
+    def window_menu(self, tree=None):
         directories = application_dirs()
         stamp = [directory.stat().st_mtime_ns if directory.is_dir() else None for directory in directories]
         if stamp != self.icon_stamp:
             self.icons, self.icon_stamp = desktop_icons(directories), stamp
-        windows = self.status()["windows"]
+        windows = self.status(tree)["windows"]
         lines = []
         for window in windows:
             app = window["class"].lower()

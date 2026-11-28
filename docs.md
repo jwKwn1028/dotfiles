@@ -123,9 +123,12 @@ Log out, pick **i3** in LightDM, and log back in.
   See `~/.config/task/MANUAL.md`.
 - **Session recovery.** `Super+Ctrl+P` restores i3 and reattaches Ghostty.
   `C-b C-r` restores tmux; `C-b C-s` saves. Panes resume Claude Code, Codex,
-  and `hxp` (after Ghostty attaches).
+  and `hxp` (after Ghostty attaches). Helix reopens its files, cursors and simple
+  splits ([limits](dot_config/helix/docs.md#session-recovery)).
   Enable 15-minute saves with `systemctl --user daemon-reload && systemctl --user enable --now tmux-resurrect-save.timer i3-resurrect-save.timer`.
   See the [i3 manual](dot_config/i3/MANUAL.md#i3-resurrect-save-and-restore).
+- **Tmux window names.** Editors show their active file (24 cells), also under
+  Yazi; Helix, Micro, nano and Vim follow buffer switches within a second.
 - **hxp:** Ctrl+L jumps between the editor (Helix, Micro) and fancy-cat.
 - **npm:** install NodeSource's `nodejs`, which bundles npm; apt's `npm`
   conflicts with it, so the manifest installs `nodejs` alone. `~/.npmrc` puts

@@ -1,13 +1,17 @@
 #!/usr/bin/python3
 """Rebuild saved pane records with nonempty titles and live commands."""
 
+import base64
+import functools
 import json
 import os
 from pathlib import Path
 import re
+import runpy
 import shlex
 import shutil
 import socket
+import sqlite3
 import subprocess
 import sys
 
@@ -62,8 +66,11 @@ def command(pid, args):
         cwd = os.readlink(f"/proc/{pid}/cwd")
     except OSError:
         cwd = None
-    # Waiting wrappers run as shell scripts.
-    if len(args) > 1 and os.path.basename(args[0]) in SHELLS and os.path.basename(args[1]) == "fancy-cat-open":
+    # Look through waiting wrappers to the editor or viewer they run.
+    if len(args) > 1 and (
+            os.path.basename(args[0]) in SHELLS and os.path.basename(args[1]) == "fancy-cat-open" or
+            os.path.basename(args[0]) in ("python", "python3") and
+            os.path.basename(args[1]) == "tmux-resurrect-helix"):
         args = args[1:]
     words = [os.path.basename(args[0])]
     if words[0] in ("fancy-cat", "fancy-cat-open"):
@@ -81,14 +88,67 @@ def command(pid, args):
     return " ".join(shlex.quote(word) for word in words)
 
 
+def codex_session(pid, title):
+    """The chat whose session log this process holds open."""
+    sessions, attached = set(), False
+    directory = (CODEX / "sessions").resolve()
+    try:
+        descriptors = list(Path(f"/proc/{pid}/fd").iterdir())
+    except OSError:
+        descriptors = []
+    for descriptor in descriptors:
+        try:
+            path = Path(os.readlink(descriptor)).resolve()
+            found = UUID.search(path.name)
+            if not (path.is_relative_to(directory) and path.name.startswith("rollout-") and
+                    path.suffix == ".jsonl" and found):
+                continue
+            attached = True
+            with path.open() as stream:
+                record = json.loads(stream.readline(1024 * 1024))
+            if not isinstance(record, dict):
+                continue
+            payload = record.get("payload", {})
+            if (record.get("type") != "session_meta" or not isinstance(payload, dict) or
+                    payload.get("id") != found[0]):
+                continue
+            if payload.get("source") == "cli":
+                sessions.add(found[0])
+        except (OSError, ValueError):
+            continue
+    if attached:
+        return next(iter(sessions)) if len(sessions) == 1 else ""
+    # Fall back to the pane title's chat ID prefix.
+    found = re.search(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1,12}", title)
+    ids = {match[0] for path in CODEX.glob(f"sessions/*/*/*/rollout-*-{found[0]}*.jsonl")
+           if (match := UUID.search(path.name)) and match[0].startswith(found[0])} if found else set()
+    if not found:
+        ids = codex_named(pid, title)
+    return ids.pop() if len(ids) == 1 else ""
+
+
+def codex_named(pid, title):
+    """Match "NAME | PROJECT" titles in the process's directory."""
+    name, _, project = title.partition(" | ")
+    databases = sorted(CODEX.glob("state_*.sqlite"), key=lambda path: int(re.sub(r"\D", "", path.stem) or 0))
+    if not name or not databases:
+        return set()
+    try:
+        cwd = os.readlink(f"/proc/{pid}/cwd")
+        with sqlite3.connect(f"file:{databases[-1]}?mode=ro", uri=True, timeout=2) as db:
+            rows = db.execute("select id, name, cwd from threads where archived = 0 and source = 'cli'").fetchall()
+    except (OSError, sqlite3.Error):
+        return set()
+    prefix = re.sub(r"(\.\.\.|…)$", "", name)
+    return {row[0] for row in rows if row[1] and (row[1] == name or prefix != name and row[1].startswith(prefix))
+            and row[2] == cwd and (not project or os.path.basename(row[2]) == project)}
+
+
 def agent(name, pid, title):
     """Resume an interactive agent's chat; "" restores nothing, so no prompt reruns."""
     if name == "codex":
-        # The zsh codex wrapper puts the chat ID in the pane title.
-        found = UUID.search(title)
-        if found and any(CODEX.glob(f"sessions/*/*/*/rollout-*-{found[0]}.jsonl")):
-            return "codex resume " + found[0]
-        return ""
+        session = codex_session(pid, title)
+        return "codex resume " + session if session else ""
     try:
         record = json.loads((CLAUDE / "sessions" / f"{pid}.json").read_text())
         with open(f"/proc/{pid}/stat") as stat:
@@ -104,6 +164,7 @@ def agent(name, pid, title):
 
 
 def choose(root, argv, children, listed, title=""):
+    """The command to restore and the process it came from."""
     best, direct = None, None
     pending = [(child, 1) for child in sorted(children.get(root, []))]
     while pending:
@@ -112,16 +173,34 @@ def choose(root, argv, children, listed, title=""):
         if not args:
             continue
         if os.path.basename(args[0]) in ("claude", "codex"):
-            return agent(os.path.basename(args[0]), pid, title)
+            return agent(os.path.basename(args[0]), pid, title), None
         text = command(pid, args)
         on_list = any(match(text) for match in listed)
         if direct is None:
-            direct = text
+            direct = (text, pid)
         if on_list and (best is None or depth > best[0]):
-            best = (depth, text)
+            best = (depth, text, pid)
         if on_list or os.path.basename(args[0]).lstrip("-") in SHELLS:
             pending += [(child, depth + 1) for child in sorted(children.get(pid, []))]
-    return best[1] if best else direct or ""
+    return best[1:] if best else direct or ("", None)
+
+
+@functools.cache
+def helix_snapshot():
+    helper = Path(__file__).with_name("tmux-resurrect-helix")
+    if not helper.exists():
+        helper = helper.with_name("executable_tmux-resurrect-helix")
+    return runpy.run_path(str(helper))["snapshot"]
+
+
+def helix(pane_id, pid, args, root):
+    snapshot = helix_snapshot()
+    state = snapshot(pane_id, pid, args, os.readlink(f"/proc/{root}/cwd"))
+    if not state:
+        return None
+    # Base64 keeps backslashes and quotes away from resurrect's parsing.
+    payload = base64.urlsafe_b64encode(json.dumps(state, ensure_ascii=False).encode()).decode()
+    return shlex.join(["tmux-resurrect-helix", payload])
 
 
 def hxp_sessions():
@@ -198,7 +277,12 @@ def main():
                 elif key in hxp:
                     full = hxp[key]
                 else:
-                    full = choose(int(pane["pane_pid"]), argv, children, listed, pane["pane_title"])
+                    full, pid = choose(int(pane["pane_pid"]), argv, children, listed, pane["pane_title"])
+                    if pid and os.path.basename(argv[pid][0]) == "hx":
+                        try:
+                            full = helix(pane["pane_id"], pid, argv[pid], int(pane["pane_pid"])) or full
+                        except Exception:
+                            pass
                 line = "\t".join([*fields[:6], clean(pane["pane_title"]) or host,
                                   ":" + clean(pane["pane_current_path"]), pane["pane_active"],
                                   clean(pane["pane_current_command"]) or "?", ":" + clean(full)]) + "\n"

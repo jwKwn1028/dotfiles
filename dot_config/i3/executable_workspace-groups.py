@@ -21,6 +21,9 @@ import time
 from workspace_groups import GroupError, identity, request, session_dir, socket_path, source_path, subscribe
 
 LEGACY = re.compile(r"^bash .*/(focus-tracker|snap-watcher)\.sh$|^[^ ]*/python[^ ]* [^ ]*/(autotiling|overflow-watcher\.py)( |$)")
+READ_ONLY_ACTIONS = {"status", "window-menu", "session-view", "placement",
+                     "restore-status", "restore-ready", "restore-session-status",
+                     "restore-session-ready", "restore-session-missing"}
 
 
 def serve():
@@ -82,7 +85,15 @@ def serve():
                     payload = error
                 events.put(("client", client, payload))
 
+        def i3_answers():
+            try:
+                controller.i3.get_version()
+                return True
+            except Exception:
+                return False
+
         def answer(client, payload):
+            refresh = True  # Failed requests may reveal that i3 is unavailable.
             try:
                 if isinstance(payload, Exception):
                     raise payload
@@ -90,21 +101,24 @@ def serve():
                 if action == "subscribe":
                     client.settimeout(0.5)
                     subscribers.append(client)
-                    return True
+                    return True, False
                 if action == "stop":
                     stopped.set()
                     result = True
                 else:
                     result = controller.dispatch(action, **payload)
                 reply = dict(ok=True, result=result)
+                refresh = action not in READ_ONLY_ACTIONS
             except Exception as error:
                 reply = dict(ok=False, error=str(error))
+                if not isinstance(error, GroupError) and not i3_answers():
+                    reply["transient"] = True  # i3 is down: retryable.
             try:
                 client.sendall(json.dumps(reply).encode() + b"\n")
             except OSError:
                 pass
             client.close()
-            return False
+            return False, refresh
 
         thread = threading.Thread(target=listen, daemon=True)
         thread.start()
@@ -130,11 +144,13 @@ def serve():
                         except queue.Empty:
                             break
                     for kind, change, con_id in batch:
-                        dirty = True
                         if kind == "client":
-                            if answer(change, con_id):
+                            subscribed, refresh = answer(change, con_id)
+                            dirty = dirty or refresh
+                            if subscribed:
                                 last_push = None
                             continue
+                        dirty = True
                         try:
                             if kind == "stop":
                                 continue
@@ -220,7 +236,10 @@ def start():
         while (directory / "controller.sock").exists() and time.monotonic() < deadline:
             time.sleep(0.05)
         stop_legacy()
-        with (directory / "controller.log").open("w") as log:
+        log_path = directory / "controller.log"
+        if log_path.exists() and log_path.stat().st_size:
+            os.replace(log_path, directory / "controller.log.1")  # Keep the last run's log.
+        with log_path.open("w") as log:
             subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "serve"],
                              start_new_session=True, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
         deadline = time.monotonic() + 5

@@ -72,6 +72,9 @@ snap/firefox/common/.mozilla/firefox/
 .config/systemd/user/i3-resurrect-save.timer
 .local/bin/tmux-resurrect-autosave
 .local/bin/tmux-resurrect-post-save
+.local/bin/tmux-resurrect-focus
+.local/bin/tmux-resurrect-helix
+.local/bin/tmux-editor-titles
 .local/bin/session-save
 .local/bin/ghostty-tmux-mode
 .local/bin/tailscale-remote-connect

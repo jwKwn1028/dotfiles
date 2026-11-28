@@ -8,7 +8,9 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import time
+from types import SimpleNamespace
 
 from workspace_groups import (GroupError, exact, identity, number, owner_alive,
                               process_identity, quote, validate_view, walk)
@@ -29,6 +31,8 @@ class Restore:
         self.controller = controller
         self.processes = {}
         self.display = None
+        self.started, self.started_at = time.monotonic(), time.time()
+        self.unmapped = {}  # window -> first seen hidden
 
     @property
     def state(self):
@@ -343,13 +347,55 @@ class Restore:
         if not moved or not moved.workspace() or moved.workspace().num != number(group, slot, controller.groups):
             launch["error"] = "new window did not reach its captured destination"
         else:
-            launch.update(window=moved.id, done=True)
+            launch.update(window=moved.id, xwindow=con.window, done=True)
             controller.known[moved.id] = moved.workspace().num
             controller.overflow_seen.add(moved.id)
         controller.save()
         if foreground != group:
             controller.select(foreground, foreground_slot, force=True)
         return True
+
+    def hidden_windows(self):
+        """Unmapped, never-managed normal top-level windows."""
+        from Xlib import X
+        display = self.xdisplay()
+        atom = display.intern_atom
+        state, kind, normal = atom("WM_STATE"), atom("_NET_WM_WINDOW_TYPE"), atom("_NET_WM_WINDOW_TYPE_NORMAL")
+        role, transient = atom("WM_WINDOW_ROLE"), atom("WM_TRANSIENT_FOR")
+        found = []
+        for window in display.screen().root.query_tree().children:
+            try:
+                attributes = window.get_attributes()
+                types = window.get_full_property(kind, X.AnyPropertyType)
+                if (attributes.override_redirect or attributes.map_state != X.IsUnmapped or
+                        window.get_full_property(state, X.AnyPropertyType) or
+                        window.get_full_property(transient, X.AnyPropertyType) or
+                        not types or normal not in types.value):
+                    continue
+                instance, cls = window.get_wm_class() or ("", "")
+                value = window.get_full_property(role, X.AnyPropertyType)
+                found.append(SimpleNamespace(window=window.id, window_instance=instance, window_class=cls,
+                                             window_role=value.value.decode(errors="replace") if value else "", pid=None))
+            except Exception:
+                continue
+        return found
+
+    def map_window(self, window):
+        display = self.xdisplay()
+        display.create_resource_object("window", window).map()
+        display.flush()
+
+    def show_stranded(self):
+        """Show restore windows whose map request died with the old i3."""
+        now = time.monotonic()
+        hidden = {con.window: con for con in self.hidden_windows()}
+        self.unmapped = {window: self.unmapped.get(window, now) for window in hidden}
+        for window, seen in self.unmapped.items():
+            # Hidden 2 s: not about to be shown.
+            token = self.window_token(hidden[window]) if now - seen >= 2 else None
+            if token and self.state["launches"][token]["created"] < self.started_at:
+                self.map_window(window)
+                print(f"Restore: showed window {window:#x} left hidden by an i3 restart", file=sys.stderr, flush=True)
 
     def maintain(self):
         session = self.state.get("session_restore")
@@ -366,6 +412,9 @@ class Restore:
             for con in self.controller.tree().leaves():
                 if con.window:
                     self.route(con)
+            # Launches older than this controller outlived a restart.
+            if time.monotonic() - self.started < 60 and any(launch["created"] < self.started_at for launch in pending):
+                self.show_stranded()
         for token, launch in list(self.state["launches"].items()):
             session = self.state.get("session_restore", {})
             retained = self.session_active() and launch.get("session") == session.get("token")
@@ -381,6 +430,8 @@ class Restore:
         missing = []
         for launch in launches:
             con = tree.find_by_id(launch.get("window")) if launch.get("window") else None
+            if not con and launch.get("xwindow"):
+                con = tree.find_by_window(launch["xwindow"])  # Container IDs change when i3 restarts.
             if (not launch.get("done") or launch.get("error") or launch.get("transferred") or
                     not con or not con.workspace() or
                     con.workspace().num != number(launch["group"], launch["slot"])):

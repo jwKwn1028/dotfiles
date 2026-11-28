@@ -75,6 +75,13 @@ runs() {
   wc -l < "$RUN_LOG" | tr -d ' '
 }
 
+# Wait up to 5 s for display-setup run $1, then until no more arrive.
+await_runs() {
+  local tries=100
+  while [ "$(runs)" -lt "$1" ] && [ "$tries" -gt 0 ]; do tries=$((tries - 1)); sleep 0.05; done
+  sleep "$QUIET"
+}
+
 toasts() {
   wc -l < "$TOAST_LOG" | tr -d ' '
 }
@@ -102,7 +109,7 @@ set_outputs eDP DisplayPort-1
 emit_event
 emit_event
 emit_event
-sleep "$SETTLE"
+await_runs 1
 [ "$(runs)" = 1 ] || fail "a hotplug burst produced $(runs) runs, want exactly 1"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display connected" ] ||
   fail "a plug did not request the connected toast"
@@ -117,14 +124,14 @@ sleep "$SETTLE"
 
 set_outputs eDP
 emit_event
-sleep "$SETTLE"
+await_runs 2
 [ "$(runs)" = 2 ] || fail "an unplug produced $(runs) runs, want 2"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display disconnected" ] ||
   fail "an unplug did not request the disconnected toast"
 
 set_outputs eDP DisplayPort-1
 emit_event
-sleep "$SETTLE"
+await_runs 3
 [ "$(runs)" = 3 ] || fail "replugging the same output did not run display-setup"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display connected" ] ||
   fail "a replug did not request the connected toast"
@@ -143,8 +150,7 @@ chmod +x "$TEST_TMP/bin/display-setup-mock"
 
 set_outputs eDP
 emit_event
-sleep "$SETTLE"
-sleep "$QUIET"
+await_runs 5
 [ "$(runs)" = 5 ] ||
   fail "a hotplug during the run left $(runs) runs, want 5 (the mid-run output went unconfigured)"
 [ "$(tail -n 2 "$TOAST_LOG" | head -n 1)" = "Display disconnected" ] ||
@@ -154,21 +160,21 @@ sleep "$QUIET"
 
 set_outputs eDP HDMI-1 USB-C-1
 emit_event
-sleep "$SETTLE"
+await_runs 6
 [ "$(runs)" = 6 ] || fail "a same-count output replacement did not run display-setup"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display changed" ] ||
   fail "a same-count output replacement did not request the changed toast"
 
 printf 'state:      closed\n' > "$LID"
 emit_event
-sleep "$SETTLE"
+await_runs 7
 [ "$(runs)" = 7 ] || fail "closing the lid beside an external did not run display-setup"
 [ -z "$(tail -n 1 "$TOAST_LOG")" ] || fail "a lid change requested a toast"
 [ "$(tail -n 1 "$DELAY_LOG")" = 0 ] || fail "a lid change waited out the hotplug settle"
 
 set_outputs eDP
 emit_event
-sleep "$SETTLE"
+await_runs 8
 [ "$(runs)" = 8 ] || fail "an unplug with the lid closed produced $(runs) runs, want 8"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display disconnected" ] ||
   fail "an unplug with the lid closed did not request the disconnected toast"
@@ -185,15 +191,14 @@ emit_event
 sleep 0.25
 set_outputs eDP DisplayPort-1 HDMI-1
 emit_event
-sleep "$SETTLE"
-sleep "$QUIET"
+await_runs 9
 [ "$(runs)" = 9 ] || fail "a dock plugged into a closed laptop produced $(runs) runs, want 9"
 [ "$(tail -n 1 "$TOAST_LOG")" = "Display connected" ] ||
   fail "a dock plugged into a closed laptop did not request the connected toast"
 
 printf 'state:      open\n' > "$LID"
 emit_event
-sleep "$SETTLE"
+await_runs 10
 [ "$(runs)" = 10 ] || fail "opening the lid beside an external did not run display-setup"
 [ -z "$(tail -n 1 "$TOAST_LOG")" ] || fail "opening the lid requested a toast"
 [ "$(tail -n 1 "$DELAY_LOG")" = 0 ] || fail "opening the lid waited out the hotplug settle"

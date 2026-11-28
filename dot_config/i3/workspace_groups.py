@@ -22,6 +22,10 @@ class GroupError(RuntimeError):
     pass
 
 
+class ControllerUnavailable(GroupError):
+    """The controller or i3 is restarting; retry."""
+
+
 def definitions():
     path = Path(os.environ.get("I3_GROUP_CONFIG", ROOT / "workspace-groups.json"))
     groups = json.loads(path.read_text()) if path.exists() else {"A": 0, "B": 1, "C": 2}
@@ -125,9 +129,10 @@ def request(action, **values):
             with client.makefile("rb") as stream:
                 result = json.loads(stream.readline(8 * 1024 * 1024))
     except (OSError, ValueError) as error:
-        raise GroupError(f"Workspace controller unavailable: {error}") from error
+        raise ControllerUnavailable(f"Workspace controller unavailable: {error}") from error
     if not result.get("ok"):
-        raise GroupError(result.get("error", "Workspace action failed"))
+        kind = ControllerUnavailable if result.get("transient") else GroupError
+        raise kind(result.get("error", "Workspace action failed"))
     return result.get("result")
 
 

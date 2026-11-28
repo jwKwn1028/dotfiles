@@ -10,7 +10,7 @@ One bar per active output, hidden initially; the tray uses the laptop panel
 | --- | --- | --- | --- |
 | Group tab | Select that group on both screens. | — | Up/down: previous/next group; no wrap. |
 | Workspace | Switch to that slot of the selected group. | — | Up/down: previous/next slot. |
-| Date/time | — | Thunderbird mail. | — |
+| Date/time | — | Task calendar (`tcal`) in the browser. | — |
 | Volume | Toggle mute. | `pavucontrol`. | ±1%. |
 | Battery | XFCE power settings. | — | Brightness ±5%. |
 | Network/Bluetooth tray | Applet menu. | Context menu. | Applet-defined. |

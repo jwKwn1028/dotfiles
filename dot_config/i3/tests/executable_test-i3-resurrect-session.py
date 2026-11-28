@@ -16,7 +16,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from workspace_groups import GroupError, process_identity  # noqa: E402
+from workspace_groups import ControllerUnavailable, GroupError, process_identity  # noqa: E402
 from group_restore import Restore  # noqa: E402
 
 path = ROOT / "i3-resurrect-session.py"
@@ -204,6 +204,62 @@ class SessionTests(unittest.TestCase):
                 self.session.restore()
         self.assertEqual(self.reports(), dict(A="ready", B="failed", C="ready"))
         self.assertFalse(self.session.may_autosave())
+
+    def test_controller_restarts_are_retryable_and_refusals_are_not(self):
+        import socket
+        import threading
+        from workspace_groups import request, session_dir
+        with self.assertRaises(ControllerUnavailable):
+            request("status")  # No controller socket yet.
+        session_dir().mkdir(parents=True, exist_ok=True)
+        replies = [dict(ok=False, error="[Errno 32] Broken pipe", transient=True), dict(ok=False, error="Refused")]
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(session_dir() / "controller.sock"))
+            server.listen(2)
+
+            def serve():
+                for reply in replies:
+                    client, _ = server.accept()
+                    with client:
+                        client.makefile("rb").readline()
+                        client.sendall(json.dumps(reply).encode() + b"\n")
+            thread = threading.Thread(target=serve)
+            thread.start()
+            with self.assertRaises(ControllerUnavailable):
+                request("status")
+            with self.assertRaises(GroupError) as refused:
+                request("status")
+            thread.join(5)
+        self.assertNotIsInstance(refused.exception, ControllerUnavailable)
+
+    def test_requests_retry_while_i3_restarts(self):
+        session, replies = module.Session(), [ControllerUnavailable("down"), ControllerUnavailable("down"), "ok"]
+
+        def once(action, **values):
+            reply = replies.pop(0)
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+        session.rpc_once = once
+        with patch.object(module.time, "sleep"):
+            self.assertEqual(session.rpc("status"), "ok")
+            session.rpc_once = lambda action, **values: (_ for _ in ()).throw(ControllerUnavailable("down"))
+            with patch.dict(os.environ, I3_RESURRECT_CONTROLLER_WAIT="0"), self.assertRaises(ControllerUnavailable):
+                session.rpc("status")
+            session.rpc_once = lambda action, **values: (_ for _ in ()).throw(GroupError("logic"))
+            with self.assertRaisesRegex(GroupError, "logic"):
+                session.rpc("status")
+
+    def test_window_wait_does_not_count_an_i3_restart(self):
+        answers = [["16"], []]
+
+        def rpc(action, **values):
+            if len(answers) == 2:
+                self.session.outage = getattr(self.session, "outage", 0) + 5  # This call waited out a restart.
+            return answers.pop(0)
+        self.session.rpc = rpc
+        with patch.dict(os.environ, I3_RESURRECT_SESSION_WAIT="0"), patch.object(module.time, "sleep"):
+            self.assertEqual(self.session.wait_for_windows("token"), [])
 
     def test_automatic_save_waits_for_a_restore_or_manual_save(self):
         self.assertTrue(self.session.may_autosave())
@@ -515,6 +571,36 @@ class ControllerSessionTests(unittest.TestCase):
         self.assertEqual(self.restore.dispatch("session-missing", token=self.token), ["16"])
         with self.assertRaisesRegex(GroupError, "workspace 16"):
             self.restore.dispatch("session-ready", token=self.token)
+
+    def test_windows_stranded_by_an_i3_restart_are_shown(self):
+        rules = [{"class": "^zen$", "instance": "^Navigator$"}]
+        self.controller.state["launches"].update(
+            old=dict(done=False, before=[], created=self.restore.started_at - 10, match=rules),
+            new=dict(done=False, before=[], created=self.restore.started_at + 1, match=[{"class": "^helium$"}]))
+        self.restore.property = lambda window, name: None
+        self.restore.x11_client_pid = lambda window: None
+        windows = [SimpleNamespace(window=7, window_instance="Navigator", window_class="zen", window_role="", pid=None),
+                   SimpleNamespace(window=8, window_instance="helium", window_class="Helium", window_role="", pid=None),
+                   SimpleNamespace(window=9, window_instance="other", window_class="Other", window_role="", pid=None)]
+        self.restore.hidden_windows = lambda: windows
+        shown = []
+        self.restore.map_window = shown.append
+        clock = [100.0]
+        with patch("group_restore.time.monotonic", side_effect=lambda: clock[0]):
+            self.restore.show_stranded()
+            self.assertEqual(shown, [], "a window is shown only after staying hidden")
+            clock[0] += 2.5
+            self.restore.show_stranded()
+        # Only the pre-restart launch's window.
+        self.assertEqual(shown, [7])
+
+    def test_placed_windows_are_found_after_i3_renumbers_containers(self):
+        con = SimpleNamespace(workspace=lambda: SimpleNamespace(num=16))
+        self.controller.tree = lambda: SimpleNamespace(find_by_id=lambda con_id: None,
+                                                       find_by_window=lambda window: con if window == 77 else None)
+        self.controller.state["launches"]["launch"] = dict(session=self.token, operation="child", done=True, window=5,
+                                                          xwindow=77, workspace="16", group="B", slot=6)
+        self.assertEqual(self.restore.dispatch("session-missing", token=self.token), [])
 
     def test_owner_death_releases_session_reservations(self):
         self.controller.state["session_restore"]["owner"] = [99999999, "0"]

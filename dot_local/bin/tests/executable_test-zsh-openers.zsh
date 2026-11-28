@@ -533,8 +533,8 @@ codex_args() {
     source "$TEST_ALIASES"
     codex resume x' </dev/null 2>/dev/null
 }
-[[ $(codex_args /tmp/sock,1,0) == $'-c\ntui.terminal_title=["thread-id"]\nresume\nx' ]] ||
-  fail 'codex in tmux did not title its pane with the chat ID'
+[[ $(codex_args /tmp/sock,1,0) == $'-c\ntui.terminal_title=["thread-id","thread-title"]\nresume\nx' ]] ||
+  fail 'codex in tmux did not put its chat ID in the pane title'
 [[ $(codex_args '') == $'resume\nx' ]] || fail 'codex outside tmux changed its arguments'
 
 print 'PASS: terminal PDF routing and GUI picker shell lifetimes'

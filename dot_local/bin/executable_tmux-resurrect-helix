@@ -1,0 +1,425 @@
+#!/usr/bin/python3
+"""Save Helix's files and splits from its screen; reopen them."""
+
+import base64
+from contextlib import contextmanager
+import fcntl
+import functools
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import time
+import unicodedata
+
+MODES = {"N", "I", "S", "NOR", "INS", "SEL"}
+STATUS = re.compile(r"\d+(?:/\d+)? sels?\s+(?:\S+\s+)?(\d+):(\d+)\s+\d+%")
+SGR = re.compile(r"\x1b\[([0-9;:]*)m")
+DIAGNOSTICS = re.compile(r"(?:●\s+\d+\s*)+$")
+
+
+def styled_rows(raw):
+    """Plain screen rows with the foreground colour of each character."""
+    rows, colour = [("", [])], None
+    for index, part in enumerate(SGR.split(raw)):
+        if index % 2:
+            codes = [int(code or 0) for code in part.replace(":", ";").split(";")]
+            at = 0
+            while at < len(codes):
+                code = codes[at]
+                if code in (38, 48, 58) and at + 1 < len(codes):
+                    size = 5 if codes[at + 1] == 2 else 3
+                    if code == 38:
+                        colour = tuple(codes[at:at + size])
+                    at += size
+                    continue
+                if code in (0, 39):
+                    colour = None
+                elif 30 <= code <= 37 or 90 <= code <= 97:
+                    colour = (code,)
+                at += 1
+        else:
+            for number, text in enumerate(part.split("\n")):
+                if number:
+                    rows.append(("", []))
+                previous, colours = rows[-1]
+                rows[-1] = previous + text, colours + [colour] * len(text)
+    return rows
+
+
+def active_buffer_name(rows):
+    """Match the highlighted buffer tab to the focused statusline's colour."""
+    focused_colour = None
+    for text, colours in rows:
+        offset = 0
+        for segment in text.split("│"):
+            position = STATUS.search(segment)
+            if position and re.match(r"\s*(?:N|I|S|NOR|INS|SEL)\s+", segment):
+                focused_colour = colours[offset + position.start()]
+            offset += len(segment) + 1
+    if focused_colour is None or not rows:
+        return None
+    text, colours = rows[0]
+    text = text.rstrip()  # Helix pads after the last tab.
+    entries = [(match[0], colours[match.start()])
+               for match in re.finditer(r"\S(?:.*?\S)?(?= {2,}|$)", text)]
+    candidates = [re.sub(r"\[\+\]$", "", name) for name, colour in entries if colour == focused_colour]
+    if len({colour for _, colour in entries}) > 1 and len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
+def tmux(*args):
+    return subprocess.run(["tmux", *args], capture_output=True, text=True,
+                          check=True, timeout=2).stdout
+
+
+@contextmanager
+def capture_window(pane):
+    """Widen the window temporarily, one capture at a time; restore its geometry."""
+    socket, window = tmux("display-message", "-p", "-t", pane,
+                          "#{socket_path}\t#{window_id}").strip().split("\t")
+    directory = Path(os.environ.get("XDG_RUNTIME_DIR") or
+                     os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "tmux-resurrect-helix"
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    key = hashlib.sha256(f"{socket}:{window}".encode()).hexdigest()
+    fd = os.open(directory / key, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as lock:
+        deadline = time.monotonic() + 3
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("Helix window capture is busy")
+                time.sleep(0.05)
+        width, height, layout, zoomed, active = tmux(
+            "display-message", "-p", "-t", window,
+            "#{window_width}\t#{window_height}\t#{window_layout}\t#{window_zoomed_flag}\t#{pane_id}"
+        ).strip().split("\t")
+        local_size = next((line.split(" ", 1)[1] for line in
+                           tmux("show-options", "-w", "-t", window).splitlines()
+                           if line.startswith("window-size ")), None)
+        changed = False
+
+        def widen(minimum):
+            nonlocal changed
+            current = int(tmux("display-message", "-p", "-t", pane, "#{pane_width}"))
+            if current >= minimum:
+                return current
+            changed = True
+            if tmux("display-message", "-p", "-t", window, "#{window_zoomed_flag}").strip() == "1":
+                tmux("resize-pane", "-Z", "-t", active)
+                current = int(tmux("display-message", "-p", "-t", pane, "#{pane_width}"))
+            window_width = int(tmux("display-message", "-p", "-t", window, "#{window_width}"))
+            target = min(8192, (window_width * minimum + current - 1) // current)
+            tmux("resize-window", "-t", window, "-x", str(target))
+            return int(tmux("display-message", "-p", "-t", pane, "#{pane_width}"))
+
+        try:
+            yield widen
+        finally:
+            if changed:
+                commands = [
+                    ("resize-window", "-t", window, "-x", width, "-y", height),
+                    ("select-layout", "-t", window, layout),
+                ]
+                for command in commands:
+                    try:
+                        tmux(*command)
+                    except subprocess.SubprocessError:
+                        pass  # The window may have closed.
+                try:
+                    if tmux("display-message", "-p", "-t", window, "#{window_zoomed_flag}").strip() != zoomed:
+                        tmux("resize-pane", "-Z", "-t", active)
+                finally:
+                    if local_size is None:
+                        tmux("set-window-option", "-u", "-t", window, "window-size")
+                    else:
+                        tmux("set-window-option", "-t", window, "window-size", local_size)
+
+
+def screen(pane, cwd, existing_only=True):
+    raw = tmux("capture-pane", "-pe", "-t", pane)
+    rows = SGR.sub("", raw).split("\n")
+    lines = []
+    for text in rows:
+        views = []
+        for segment in text.split("│"):
+            found = STATUS.search(segment)
+            if not found:
+                views.append(None)
+                continue
+            tokens = [t for t in re.split(r" {2,}", segment[:found.start()].strip())
+                      if t and not re.fullmatch(r"[⠀-⣿]+", t)]
+            focused = bool(tokens) and tokens[0] in MODES
+            name = tokens[1] if len(tokens) > 1 and focused else tokens[0] if tokens and not focused else ""
+            name = re.sub(r"( \[(\+|readonly)\])+$", "", re.sub(r"^[⠀-⣿]+\s*", "", name))
+            path = os.path.join(cwd, os.path.expanduser(name))
+            if name and not os.path.isfile(path):
+                diagnostics = DIAGNOSTICS.search(name)
+                if diagnostics:
+                    # Diagnostic dots can overwrite a path; never restore a clipped one.
+                    clipped = diagnostics.start() > 0 and not name[diagnostics.start() - 1].isspace()
+                    name = name[:diagnostics.start()].rstrip()
+                    if clipped:
+                        name = active_buffer_name(styled_rows(raw)) if focused and not existing_only else ""
+                    path = os.path.join(cwd, os.path.expanduser(name or ""))
+            path = os.path.realpath(path) if name and (not existing_only or os.path.isfile(path)) else None
+            views.append([path, int(found[1]), int(found[2]), focused])
+        if any(views):
+            lines.append(views)
+    return rows, lines
+
+
+def cells(text):
+    return sum(2 if unicodedata.east_asian_width(char) in "WF" else 1 for char in text)
+
+
+def bar_overflows(rows, width):
+    """Whether the buffer bar fills the pane, hiding later tabs."""
+    if not rows or re.match(r"\s*\S?\s*\d+\s", rows[0]):
+        return False  # A text row (line-number gutter): no buffer bar.
+    return cells(rows[0].rstrip()) >= width - 1
+
+
+def cut_short(rows):
+    """Whether a statusline name may be clipped."""
+    for text in rows:
+        for segment in text.split("│"):
+            found = STATUS.search(segment)
+            if not found:
+                continue
+            left = segment[:found.start()]
+            tokens = [t for t in re.split(r" {2,}", left.strip()) if t and not re.fullmatch(r"[⠀-⣿]+", t)]
+            name = tokens[1] if len(tokens) > 1 and tokens[0] in MODES else tokens[0] if tokens and tokens[0] not in MODES else ""
+            if not name or DIAGNOSTICS.search(name) or not re.search(re.escape(name) + " {2,}", left):
+                return True
+    return False
+
+
+@functools.cache
+def repo_root(directory):
+    try:
+        return subprocess.run(["git", "-C", directory, "rev-parse", "--show-toplevel"], capture_output=True,
+                              text=True, timeout=2, check=True).stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+@functools.cache
+def repo_files(root):
+    """Files git knows in the repository: tracked or untracked, not ignored."""
+    try:
+        listed = subprocess.run(["git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+                                capture_output=True, timeout=3, check=True).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ()
+    return tuple(os.path.join(root, os.fsdecode(path)) for path in listed.split(b"\0") if path)
+
+
+def find_buffer(name, near, cwd, limit=20000):
+    """The only file called name: beside known files, in their repositories, or under cwd."""
+    directories = list(dict.fromkeys(os.path.dirname(path) for path in near))
+    beside = {path for path in (os.path.join(d, name) for d in directories) if os.path.isfile(path)}
+    if beside:
+        return beside.pop() if len(beside) == 1 else None
+    roots = {root for root in map(repo_root, [cwd, *directories]) if root}
+    found = {os.path.realpath(path) for root in roots for path in repo_files(root) if os.path.basename(path) == name}
+    found = {path for path in found if os.path.isfile(path)}
+    if found:
+        return found.pop() if len(found) == 1 else None
+    found, seen, depth = set(), 0, cwd.rstrip(os.sep).count(os.sep)
+    for top, dirs, files in os.walk(cwd):
+        dirs[:] = [] if top.count(os.sep) - depth >= 4 else [d for d in dirs if not d.startswith(".")]
+        seen += len(files)
+        if name in files:
+            found.add(os.path.realpath(os.path.join(top, name)))
+        if len(found) > 1 or seen > limit:
+            return None
+    return found.pop() if found else None
+
+
+def launch_args(args, cwd):
+    """Split launch options from files."""
+    options, files = [], []
+    words = iter(args[1:])
+    for word in words:
+        if word == "--":
+            files.extend(words)
+            break
+        if word in ("--vsplit", "--hsplit") or re.fullmatch(r"\+\d+", word):
+            continue
+        if word in ("-c", "--config", "--log", "-w", "--working-dir"):
+            value = next(words)
+            options.extend([word, os.path.abspath(os.path.join(cwd, value))])
+        elif re.fullmatch(r"-v+", word):
+            options.append(word)
+        elif word.startswith("-"):
+            return None  # Unknown option: keep the launch command.
+        else:
+            files.append(word)
+    known = []
+    for word in files:
+        name = re.sub(r":\d+(?::\d+)?$", "", word)
+        path = os.path.realpath(os.path.join(cwd, name))
+        if os.path.isfile(path):
+            known.append((path, path + word[len(name):]))
+    return options, known
+
+
+def snapshot(pane, pid, args, launch_cwd):
+    cwd = os.readlink(f"/proc/{pid}/cwd")
+    launch = launch_args(args, launch_cwd)
+    if launch is None:
+        return None
+    options, known = launch
+    for index, option in enumerate(options[:-1]):
+        if option in ("-w", "--working-dir"):
+            options[index + 1] = cwd
+    with capture_window(pane) as widen:
+        rows, lines = screen(pane, cwd)
+        shown = [view for views in lines for view in views if view]
+        width = int(tmux("display-message", "-p", "-t", pane, "#{pane_width}"))
+        clipped = not shown or any(view[0] is None for view in shown) and cut_short(rows)
+        overflow, bar = bar_overflows(rows, width), rows[0].rstrip() if rows else ""
+        if clipped or overflow:
+            # Widen to show clipped paths and hidden tabs rather than guess.
+            columns = max((len(row) for row in lines), default=1)
+            width = widen(min(8192, max(1024, columns * 512 if clipped else width * 8)))
+            deadline = time.monotonic() + 1.5
+            while time.monotonic() < deadline:
+                rows, lines = screen(pane, cwd)
+                shown = [view for views in lines for view in views if view]
+                # A changed bar means Helix redrew.
+                if (shown and sum(view[3] for view in shown) == 1 and not bar_overflows(rows, width) and
+                        (not overflow or rows[0].rstrip() != bar) and (not clipped or all(view[0] for view in shown))):
+                    break
+                time.sleep(0.05)
+        capture_width = int(tmux("display-message", "-p", "-t", pane, "#{pane_width}"))
+    shown = [view for views in lines for view in views if view]
+    focused = [view for view in shown if view[3]]
+    if len(focused) != 1 or not focused[0][0]:
+        return None
+    paths = [view[0] for view in shown]
+    exact = None not in paths and (
+        len(lines) == 1 and None not in lines[0] or all(len(views) == 1 for views in lines))
+    split = ("vsplit" if len(lines) == 1 else "hsplit") if exact and len(shown) > 1 else None
+    if not exact:
+        # Mixed layouts become buffers.
+        unique = {}
+        for view in [focused[0], *shown]:
+            if view[0]:
+                unique.setdefault(view[0], view)
+        shown = list(unique.values())
+        paths = list(unique)
+    focus = shown.index(focused[0])
+    names = [re.sub(r"\[\+\]$", "", t) for t in re.split(r" {2,}", rows[0].strip())] if rows else []
+    if bar_overflows(rows, capture_width):
+        names = names[:-1]  # Cut at the edge.
+    if not any(os.path.basename(path) in names for path in paths):
+        names = []  # No buffer bar.
+    for path in paths:
+        if os.path.basename(path) in names:
+            names.remove(os.path.basename(path))
+    # Prefer startup paths when resolving hidden buffers.
+    hidden = []
+    for name in names:
+        found = next((position for path, position in known if path not in paths and
+                      os.path.basename(path) == name and position not in hidden), None)
+        near = [*paths, *(path for path, _ in known)]
+        hidden.append(found or (find_buffer(name, near, cwd) if not name.startswith("[") else None))
+    hidden = [path for path in hidden if path and path not in paths]
+    return dict(options=options, views=[view[:3] for view in shown],
+                hidden=list(dict.fromkeys(hidden)), split=split, focus=focus, cwd=cwd,
+                capture_width=capture_width)
+
+
+def at(view):
+    return f"{view[0]}:{view[1]}:{view[2]}"
+
+
+def quote(text):
+    """A Helix command-line string with no expansions."""
+    if any(ord(char) < 32 for char in text):
+        raise ValueError("Helix path contains control characters")
+    for delimiter in ("'", "`"):
+        if delimiter not in text:
+            return delimiter + text + delimiter
+    return '"' + text.replace("%", "%%").replace('"', "%u{22}") + '"'
+
+
+def restore(state):
+    views = state["views"]
+    # Splits are typed in below: repeated files would become selections.
+    initial = views[:1] if state["split"] else views
+    args = ["hx", *state["options"], "--", *map(at, initial), *state["hidden"]]
+    os.chdir(state["cwd"])  # tmux reads the pane path from it.
+    if not state["split"]:
+        try:
+            os.execvp("hx", args)
+        except OSError:
+            return 1
+    pane = os.environ.get("TMUX_PANE")
+    pending = "tmux-resurrect-helix " + base64.urlsafe_b64encode(
+        json.dumps(state, ensure_ascii=False).encode()).decode()
+    owned = False
+    editor = None
+    try:
+        if pane and not tmux("show-options", "-pqv", "-t", pane, "@resurrect-command").strip():
+            # An autosave during setup keeps the saved layout.
+            tmux("set-option", "-p", "-t", pane, "@resurrect-command", pending)
+            owned = True
+        editor = subprocess.Popen(args)
+        if pane:
+            # Wait for resurrect to finish its own pane and zoom changes.
+            deadline = time.monotonic() + 30
+            while tmux("show-options", "-sqv", "@resurrect-restoring").strip():
+                if editor.poll() is not None or time.monotonic() >= deadline:
+                    raise RuntimeError("tmux-resurrect is still restoring the window")
+                time.sleep(0.05)
+
+            def wait_for(expected, focus):
+                deadline = time.monotonic() + 10
+                while editor.poll() is None and time.monotonic() < deadline:
+                    _, lines = screen(pane, state["cwd"])
+                    actual = [view for row in lines for view in row if view]
+                    if ([view[:3] for view in actual] == expected and
+                            [i for i, view in enumerate(actual) if view[3]] == [focus]):
+                        return
+                    time.sleep(0.05)
+                raise RuntimeError("Helix did not render the expected files and cursors")
+
+            with capture_window(pane) as widen:
+                widen(state.get("capture_width", 0))
+                wait_for(views[:1], 0)
+                for index, view in enumerate(views[1:], 1):
+                    # Unlike :open, split commands treat :row:col as a filename.
+                    for command in (":" + state["split"] + " " + quote(view[0]), ":open " + quote(at(view))):
+                        tmux("send-keys", "-t", pane, "-l", command)
+                        tmux("send-keys", "-t", pane, "Enter")
+                    wait_for(views[:index + 1], index)
+                direction = "h" if state["split"] == "vsplit" else "k"
+                for index in range(len(views) - 2, state["focus"] - 1, -1):
+                    tmux("send-keys", "-t", pane, "C-w", direction)
+                    wait_for(views, index)
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        if pane and editor and editor.poll() is None:
+            subprocess.run(["tmux", "display-message", "-t", pane, f"Helix restore: {error}"],
+                           capture_output=True, timeout=2)
+    finally:
+        if owned:
+            try:
+                if tmux("show-options", "-pqv", "-t", pane, "@resurrect-command").strip() == pending:
+                    tmux("set-option", "-pu", "-t", pane, "@resurrect-command")
+            except subprocess.SubprocessError:
+                pass
+    return editor.wait() if editor else 1
+
+
+if __name__ == "__main__":
+    sys.exit(restore(json.loads(base64.urlsafe_b64decode(sys.argv[1]))))

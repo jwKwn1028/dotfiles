@@ -115,7 +115,8 @@ evaluating macOS support — it is the migration contract and file inventory.
 
 ## Verifying
 
-`./run-tests.sh` runs every test but the live Xephyr ones;
+`./run-tests.sh` runs every test but the live Xephyr ones, in parallel
+(`--serial` runs them one at a time);
 `dot_config/i3/MANUAL.md` documents the i3 checks. `chezmoi apply` against live
 config is the risky step, so verify with `chezmoi diff` / `chezmoi status` /
 `chezmoi apply --dry-run`. Check Bash/POSIX scripts with `shellcheck` and

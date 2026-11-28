@@ -1,0 +1,218 @@
+#!/usr/bin/python3
+"""Label tmux panes with their editor's active file."""
+
+import argparse
+import fcntl
+import hashlib
+import os
+from pathlib import Path
+import re
+import runpy
+import shlex
+import subprocess
+import sys
+import time
+
+EDITORS = {"hx", "helix", "micro", "nano", "rnano", "pico", "vim", "nvim", "vi", "view",
+           "emacs", "emacsclient", "kak", "kakoune", "vis", "ne", "joe", "jmacs", "jstar",
+           "jed", "mcedit", "tilde", "amp", "kilo", "editor", "sensible-editor"}
+for _variable in ("EDITOR", "VISUAL"):
+    try:
+        _words = shlex.split(os.environ.get(_variable, ""))
+    except ValueError:
+        _words = []
+    if _words:
+        EDITORS.add(os.path.basename(_words[0]).split(".", 1)[0])
+# pane -> (inputs, label, read time)
+CACHE = {}
+
+
+def tmux(socket, *args):
+    return subprocess.run(["tmux", "-S", socket, *args], capture_output=True,
+                          text=True, check=True, timeout=3).stdout
+
+
+def children(pid):
+    found = set()
+    try:
+        for task in Path(f"/proc/{pid}/task").iterdir():
+            try:
+                found.update(map(int, (task / "children").read_text().split()))
+            except (OSError, ValueError):
+                pass
+    except OSError:
+        pass
+    return found
+
+
+def editor(root, tty):
+    """The editor in this pane's foreground."""
+    pending, visited, found = [(int(root), 0)], set(), None
+    while pending and len(visited) < 256:
+        pid, depth = pending.pop()
+        if pid in visited:
+            continue
+        visited.add(pid)
+        try:
+            terminal = os.readlink(f"/proc/{pid}/fd/1") == tty
+            if depth and not terminal:
+                continue
+            args = [part.decode(errors="replace") for part in Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")[:-1]]
+            stat = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+            name = os.path.basename(args[0]).split(".", 1)[0] if args else ""
+            if (name in EDITORS and stat[2] == stat[5] and
+                    terminal and (found is None or depth > found[0])):
+                found = depth, name, pid, args
+            pending.extend((child, depth + 1) for child in children(pid))
+        except (OSError, ValueError, IndexError):
+            pass
+    return found[1:] if found else None
+
+
+def startup_file(args, cwd):
+    words = iter(args[1:])
+    for word in words:
+        if word in ("-c", "--config", "--cmd", "-u", "-U", "-i", "-f", "--rcfile", "--log", "--config-dir"):
+            next(words, None)
+            continue
+        name = re.sub(r":\d+(?::\d+)?$", "", word)
+        if not word.startswith(("-", "+")) and not os.path.isdir(os.path.join(cwd, name)):
+            return name
+    return ""
+
+
+def filename(socket, pane, command, title, x, y, helix_screen):
+    name, pid, args = command
+    cwd = os.readlink(f"/proc/{pid}/cwd")
+    if name in ("hx", "helix"):
+        _, lines = helix_screen(pane, cwd, existing_only=False)
+        for row in lines:
+            for view in row:
+                if view and view[3]:
+                    return view[0] or ""
+    elif name in ("vim", "nvim", "vi", "view") and title.startswith("editor:"):
+        return title.removeprefix("editor:")
+    elif name in ("nano", "rnano", "pico", "micro"):
+        rows = tmux(socket, "capture-pane", "-p", "-t", pane).splitlines()
+        if name == "micro":
+            # The focused split's statusline is below the cursor.
+            for row in rows[int(y):]:
+                start = 0
+                for segment in re.split(r"[│|]", row):
+                    match = re.match(r"\s*(.+?)\s+[+*]?\(\d+,\d+\)", segment)
+                    if match and start <= int(x) < start + len(segment):
+                        return match[1]
+                    start += len(segment) + 1
+            if rows:
+                active = re.search(r"\[([^\]]+)\]", rows[0])
+                if active:
+                    return active[1]
+        else:
+            for row in reversed(rows):
+                # Nano's minibar: file name, then line count.
+                match = re.match(r"\s*(.+?)\s{2,}(?:\(\d+ [^()]+\)\s+)?\d+,\d+\s+U\+[0-9A-Fa-f]+", row)
+                if match:
+                    return re.sub(r"\s+(?:\*\s*)?(?:\[\d+/\d+\])?$", "", match[1])
+                match = re.match(r"\s*(.+?)\s{2,}\(\d+ [^()]+\)", row)
+                if match:
+                    return match[1].lstrip("*+ ")
+            if rows:
+                match = re.match(r"\s*(?:GNU )?nano\s+\S+\s{2,}(.+?)\s*$", rows[0])
+                if match:
+                    return re.sub(r"\s{2,}(Modified|\*)$", "", match[1])
+    return startup_file(args, cwd)
+
+
+def update(socket, helix_screen):
+    updates, now, seen = [], time.time(), set()
+    fields = ("pane_id", "pane_pid", "pane_tty", "cursor_x", "cursor_y", "@editor_filename",
+              "window_activity", "pane_title")
+    form = "\t".join(f"#{{{field}}}" for field in fields)
+    for row in tmux(socket, "list-panes", "-a", "-F", form).splitlines():
+        fields = row.split("\t", 7)
+        if len(fields) != 8:
+            continue
+        pane, root, tty, x, y, previous, activity, title = fields
+        seen.add(pane)
+        key = (root, tty, x, y, title, activity)
+        try:
+            cached = CACHE.get(pane)
+            # Reuse while nothing was drawn since (activity has 1 s resolution).
+            if cached and cached[0] == key and int(activity or 0) < int(cached[2]):
+                label = cached[1]
+            else:
+                active = editor(root, tty)
+                file = filename(socket, pane, active, title, x, y, helix_screen) if active else ""
+                label = "".join(char for char in os.path.basename(file) if char.isprintable())
+                CACHE[pane] = (key, label, now)
+            if label != previous:
+                if label:
+                    # tmux treats a trailing ";" as a command separator.
+                    value = label[:-1] + r"\;" if label.endswith(";") else label
+                    updates.append(("set-option", "-p", "-t", pane, "@editor_filename", value))
+                else:
+                    updates.append(("set-option", "-pu", "-t", pane, "@editor_filename"))
+        except (OSError, ValueError, subprocess.SubprocessError):
+            continue  # The pane or editor went away.
+    for pane in CACHE.keys() - seen:
+        del CACHE[pane]
+    changed = False
+    if updates:
+        commands = [arg for command in updates for arg in (*command, ";")]
+        try:
+            tmux(socket, *commands[:-1])
+            changed = True
+        except (OSError, subprocess.SubprocessError):
+            # One closed pane aborts the sequence; retry each update alone.
+            for command in updates:
+                try:
+                    tmux(socket, *command)
+                    changed = True
+                except (OSError, subprocess.SubprocessError):
+                    continue
+    if changed:
+        # Reapply automatic-rename so tmux renames windows; manual names stay.
+        auto = tmux(socket, "show-options", "-gwv", "automatic-rename").strip()
+        tmux(socket, "set-window-option", "-g", "automatic-rename", auto)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--watch", action="store_true")
+    parser.add_argument("socket")
+    args = parser.parse_args()
+    os.environ["TMUX"] = f"{args.socket},0,0"
+    helper = Path(__file__).with_name("tmux-resurrect-helix")
+    if not helper.exists():
+        helper = helper.with_name("executable_tmux-resurrect-helix")
+    helix_screen = runpy.run_path(str(helper))["screen"]
+    if not args.watch:
+        update(args.socket, helix_screen)
+        return
+    base = Path(os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    lock_dir = base / "tmux-editor-titles"
+    lock_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    server = tmux(args.socket, "display-message", "-p", "#{pid}").strip()
+    key = hashlib.sha256(args.socket.encode()).hexdigest()[:16]
+    fd = os.open(lock_dir / f"{server}-{key}.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return
+        stamp = (Path(__file__).stat().st_mtime_ns, helper.stat().st_mtime_ns)
+        while True:
+            try:
+                if not Path(f"/proc/{server}").exists():
+                    return
+                if (Path(__file__).stat().st_mtime_ns, helper.stat().st_mtime_ns) != stamp:
+                    lock.close()
+                    os.execv(sys.executable, [sys.executable, __file__, "--watch", args.socket])
+                update(args.socket, helix_screen)
+            except (OSError, subprocess.SubprocessError):
+                return
+            time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()

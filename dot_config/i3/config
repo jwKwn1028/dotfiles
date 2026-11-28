@@ -283,6 +283,7 @@ bindsym $mod+Shift+t exec --no-startup-id ~/.config/i3/toggle-titles-resnap.sh
 bindsym $mod+m exec --no-startup-id ~/.config/i3/show-desktop.sh
 bindsym $mod+Control+m move scratchpad
 # --- autostart ---
+exec_always --no-startup-id ~/.config/i3/i3-crash-log.py
 exec_always --no-startup-id ~/.config/i3/workspace-groups.py start
 exec_always --no-startup-id ~/.config/i3/session-reload.sh
 exec --no-startup-id /usr/bin/gnome-keyring-daemon --start --components=secrets
@@ -297,7 +298,7 @@ exec_always --no-startup-id sh -c 'pkill -f "^/usr/bin/python3 .*/polybar/script
 exec --no-startup-id xrdb -merge ~/.Xresources
 exec --no-startup-id xsetroot -cursor_name left_ptr
 exec_always --no-startup-id ~/.local/bin/touchpad apply
-exec_always --no-startup-id sh -c 'xfconf-query -c keyboards -p /Default/RestoreNumlock --create --type bool --set true; pgrep -x xfsettingsd >/dev/null || xfsettingsd'
+exec_always --no-startup-id ~/.config/i3/xfsettingsd-start.sh
 exec_always --no-startup-id sh -c 'pgrep -fx xfce4-power-manager >/dev/null || xfce4-power-manager &'
 exec_always --no-startup-id sh -c 'pgrep -x picom               >/dev/null || picom -b'
 exec_always --no-startup-id sh -c 'pgrep -x nm-applet           >/dev/null || nm-applet &'

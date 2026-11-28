@@ -151,6 +151,12 @@ emit_partner() {
 }
 
 toasts() { wc -l < "$TOAST_LOG" | tr -d ' '; }
+# Wait up to 5 s for toast $1, then until no more arrive.
+await_toasts() {
+  local tries=100
+  while [ "$(toasts)" -lt "$1" ] && [ "$tries" -gt 0 ]; do tries=$((tries - 1)); sleep 0.05; done
+  sleep "$QUIET"
+}
 last_toast() { tail -n 1 "$TOAST_LOG"; }
 
 TOPOLOGY="$(I3_USB_SYSFS_ROOT="$SYS" bash "$WATCHER" --dump)"
@@ -186,21 +192,21 @@ sleep "$SETTLE"
 
 rm -rf "$SYS/devices/pci/usb3/3-2" "$SYS/bus/usb/devices/3-2"
 emit_usb remove "$(devpath_of 3 3-2)" 3
-sleep "$SETTLE"
+await_toasts 1
 [ "$(last_toast)" = "USB-A keyboard disconnected${NB}· Keychron Receiver" ] ||
   fail "a pre-attached device detached as: $(last_toast)"
 
 mk_device 3 3-1 1 480 Generic 'Flash Drive' 00
 emit_usb add "$(devpath_of 3 3-1)" 3 ':080650:' Generic Flash_Drive
 emit_interface "$(devpath_of 3 3-1)"
-sleep "$SETTLE"
+await_toasts 2
 [ "$(toasts)" = 2 ] || fail "a USB-A plug produced $(toasts) toasts, want 2"
 [ "$(last_toast)" = "USB-A storage connected${NB}· 480${NB}Mbps" ] ||
   fail "USB-A plug said: $(last_toast)"
 
 rm -rf "$SYS/devices/pci/usb3/3-1" "$SYS/bus/usb/devices/3-1"
 emit_usb remove "$(devpath_of 3 3-1)" 3
-sleep "$SETTLE"
+await_toasts 3
 [ "$(toasts)" = 3 ] || fail "a USB-A unplug produced $(toasts) toasts, want 3"
 [ "$(last_toast)" = "USB-A storage disconnected${NB}· Generic Flash Drive" ] ||
   fail "USB-A unplug said: $(last_toast)"
@@ -209,36 +215,36 @@ mk_partner 1 DisplayPort 3000
 mk_device 6 6-1 1 10000 Samsung 'Portable SSD' 00
 emit_partner add 1
 emit_usb add "$(devpath_of 6 6-1)" 6 ':080650:' Samsung Portable_SSD
-sleep "$SETTLE"
+await_toasts 4
 [ "$(toasts)" = 4 ] || fail "a Type-C plug produced $(toasts) toasts, want 4"
 [ "$(last_toast)" = "USB-C storage connected${NB}· 10${NB}Gbps${NB}· 60${NB}W${NB}· DP" ] ||
   fail "Type-C plug said: $(last_toast)"
 
 rm -rf "$SYS/devices/pci/usb6/6-1" "$SYS/bus/usb/devices/6-1"
 emit_usb remove "$(devpath_of 6 6-1)" 6
-sleep "$SETTLE"
+await_toasts 5
 [ "$(last_toast)" = "USB-C storage disconnected${NB}· Samsung Portable SSD" ] ||
   fail "Type-C unplug said: $(last_toast)"
 
 rm -rf "$SYS/class/typec/port1-partner"
 emit_partner remove 1
-sleep "$SETTLE"
+await_toasts 6
 [ "$(last_toast)" = "USB-C dock disconnected${NB}· 60${NB}W${NB}· DP" ] ||
   fail "Type-C partner unplug said: $(last_toast)"
 
 mk_partner 0 '' 3000
 emit_partner add 0
-sleep "$SETTLE"
+await_toasts 7
 [ "$(last_toast)" = "USB-C charger connected${NB}· 60${NB}W" ] ||
   fail "charger-only partner said: $(last_toast)"
 
 rm -rf "$SYS/class/typec/port0-partner"
 emit_partner remove 0
-sleep "$SETTLE"
+await_toasts 8
 BEFORE="$(toasts)"
 mk_device 5 5-1 1 5000 Logitech 'Webcam' 00
 emit_usb add "$(devpath_of 5 5-1)" 5 ':0e0100:' Logitech Webcam
-sleep "$SETTLE"
+await_toasts 9
 [ "$(toasts)" = "$((BEFORE + 1))" ] || fail "an uncorrelated Type-C plug produced no toast"
 [ "$(last_toast)" = "USB-C camera connected${NB}· 5${NB}Gbps" ] ||
   fail "uncorrelated Type-C plug said: $(last_toast)"
@@ -248,7 +254,7 @@ emit_partner add 1
 sleep 2.2
 mk_device 7 7-1 1 10000 Generic 'Late Disk' 00
 emit_usb add "$(devpath_of 7 7-1)" 7 ':080650:' Generic Late_Disk
-sleep "$SETTLE"
+await_toasts 11
 [ "$(last_toast)" = "USB-C storage connected${NB}· 10${NB}Gbps" ] ||
   fail "a plug past the correlation window carried partner detail: $(last_toast)"
 
@@ -261,7 +267,7 @@ emit_usb add "$(devpath_of 3 3-3)" 3 ':090000:' Generic USB_Hub
 emit_usb add "$(devpath_of 3 3-3.1)" 3 ':030102:' Generic Mouse
 emit_usb add "$(devpath_of 3 3-3.2)" 3 ':030101:' Generic Keyboard
 emit_usb add "$(devpath_of 3 3-3.3)" 3 ':010100:' Generic Audio
-sleep "$SETTLE"
+await_toasts 12
 [ "$(toasts)" = "$((BEFORE + 1))" ] ||
   fail "a hub and three children produced $(( $(toasts) - BEFORE )) toasts, want 1"
 [ "$(last_toast)" = "USB-A hub connected${NB}· 480${NB}Mbps${NB}· +3${NB}devices" ] ||
@@ -276,7 +282,10 @@ sleep "$SETTLE"
 kill "$DAEMON_PID"
 wait "$DAEMON_PID" 2>/dev/null || true
 DAEMON_PID=""
-sleep 0.5
+for _ in $(seq 100); do
+  flock -n "$TEST_TMP/i3-usb-hotplug.lock" true && ! pgrep -f "cat $FIFO" >/dev/null && break
+  sleep 0.05
+done
 
 flock -n "$TEST_TMP/i3-usb-hotplug.lock" true ||
   fail "the killed watcher's monitor still holds the lock, so a restart cannot take over"
@@ -290,12 +299,19 @@ I3_USB_MONITOR="cat $FIFO" \
   I3_TOAST_WRAP=999 \
   bash "$WATCHER" &
 DAEMON_PID=$!
-sleep "$SETTLE"
+for _ in $(seq 100); do
+  kill -0 "$DAEMON_PID" 2>/dev/null ||
+    fail "the restarted watcher exited before starting its monitor"
+  pgrep -f "cat $FIFO" >/dev/null && break
+  sleep 0.05
+done
+pgrep -f "cat $FIFO" >/dev/null ||
+  fail "the restarted watcher's monitor did not start within 5 seconds"
 
 BEFORE="$(toasts)"
 mk_device 3 3-4 1 480 Generic 'Second Disk' 00
 emit_usb add "$(devpath_of 3 3-4)" 3 ':080650:' Generic Second_Disk
-sleep "$SETTLE"
+await_toasts 13
 [ "$(toasts)" = "$((BEFORE + 1))" ] ||
   fail "a watcher started after the old one was killed never toasted"
 

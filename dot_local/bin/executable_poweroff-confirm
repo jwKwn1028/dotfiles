@@ -12,10 +12,13 @@ if ! { exec 3<>/dev/tty; } 2>/dev/null; then
     exit 1
 fi
 
-trap 'printf "\nCancelled.\n" >&3; exit 130' INT
-printf 'Power off %s? [y/N] (10s timeout): ' "$host" >&3 || exit 1
+timeout=${POWEROFF_CONFIRM_TIMEOUT:-10}  # Tests shorten it.
+case $timeout in '' | *[!0-9]* | 0) timeout=10 ;; esac
 
-IFS= read -r -t 10 reply <&3 || {
+trap 'printf "\nCancelled.\n" >&3; exit 130' INT
+printf 'Power off %s? [y/N] (%ss timeout): ' "$host" "$timeout" >&3 || exit 1
+
+IFS= read -r -t "$timeout" reply <&3 || {
     printf '\nNo confirmation received; cancelled.\n' >&3
     exit 1
 }

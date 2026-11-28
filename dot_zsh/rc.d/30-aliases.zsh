@@ -198,9 +198,9 @@ if [[ -o interactive && -n ${I3_RESURRECT_LOCAL_TMUX-} ]]; then
   add-zsh-hook precmd _i3_restore_local_tmux
 fi
 
-# In tmux, title the pane with Codex's chat ID so tmux saves can resume it.
+# Include Codex's chat ID in pane titles for tmux recovery.
 _have codex && codex() {
-  [[ -z ${TMUX-} ]] || set -- -c 'tui.terminal_title=["thread-id"]' "$@"
+  [[ -z ${TMUX-} ]] || set -- -c 'tui.terminal_title=["thread-id","thread-title"]' "$@"
   command codex "$@"
 }
 

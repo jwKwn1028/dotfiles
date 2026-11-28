@@ -22,7 +22,8 @@ click_left=(
 )
 click_left_opens=(0 0 1 0 0 0)
 
-click_right=("thunderbird -mail" "pavucontrol" "" "tray_click 3" "tray_click 3" "")
+# shellcheck disable=SC2016  # eval expands $HOME when the action runs
+click_right=('"$HOME/Applications/task-calendar/task-calendar"' "pavucontrol" "" "tray_click 3" "tray_click 3" "")
 click_right_opens=(1 1 0 0 0 0)
 
 scroll_down=("" "pactl set-sink-volume @DEFAULT_SINK@ -1%" "brightnessctl -q set 5%-" "" "" "")

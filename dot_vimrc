@@ -15,6 +15,9 @@ set number relativenumber
 set cursorline
 set mouse=a
 set shortmess+=I
+" Tell tmux the active file.
+set title titlelen=0
+let &titlestring = empty($TMUX) ? '%t' : 'editor:%t'
 
 " --- Minimal Helix-style mappings ---------------------------------------
 " Fallback layer: helix.vim (sourced below) redefines most of these with

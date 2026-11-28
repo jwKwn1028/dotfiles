@@ -22,6 +22,7 @@ SPEC = importlib.util.spec_from_file_location("zen_url_state", SOURCE)
 assert SPEC is not None and SPEC.loader is not None
 ZEN = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ZEN)
+os.environ["HELIUM_PROFILE_ROOTS"] = ""  # Not the live session; HeliumSessionTests sets its own.
 
 import lz4.block  # noqa: E402  the subject bails out without it, so import after
 
@@ -498,6 +499,71 @@ class MainTests(unittest.TestCase):
         result = json.loads(self.run_main(json.dumps(tree)))
         self.assertEqual({m["window_id"]: m["url"] for m in result},
                          {"1": "https://live.test", "2": "https://mail.test"})
+
+
+def snss(*records):
+    """A Chromium session file: header, then uint16 size + command id + payload."""
+    import struct
+    data = bytearray(b"SNSS" + struct.pack("<i", 3))
+    for command, payload in records:
+        data += struct.pack("<HB", len(payload) + 1, command) + payload
+    return bytes(data)
+
+
+def pair(command, first, second):
+    import struct
+    return command, struct.pack("<ii", first, second)
+
+
+def navigation(tab, index, url, title):
+    import struct
+    body = struct.pack("<ii", tab, index)
+    encoded, text = url.encode(), title.encode("utf-16-le")
+    body += struct.pack("<i", len(encoded)) + encoded + b"\0" * (-len(encoded) % 4)
+    body += struct.pack("<i", len(title)) + text + b"\0" * (-len(text) % 4) + struct.pack("<i", 0)
+    return 6, struct.pack("<I", len(body)) + body
+
+
+class HeliumSessionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.sessions = Path(self.directory.name) / "net.imput.helium/Default/Sessions"
+        self.sessions.mkdir(parents=True)
+        absent = str(Path(self.directory.name) / "absent")  # Never read the real Zen or Firefox profiles.
+        patcher = patch.dict(os.environ, HELIUM_PROFILE_ROOTS=str(self.sessions.parent.parent),
+                             ZEN_PROFILE_ROOTS=absent)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_each_open_window_gives_its_selected_tab_current_page(self) -> None:
+        import struct
+        data = snss(
+            # Window 1: two tabs, the second selected and back on page 1.
+            pair(0, 1, 10), pair(2, 10, 0), navigation(10, 0, "https://a.test/", "A"),
+            pair(0, 1, 11), pair(2, 11, 1), navigation(11, 0, "https://b.test/one", "인생 Page"),
+            navigation(11, 1, "https://b.test/two", "Two"), pair(7, 11, 0), pair(8, 1, 1),
+            # Window 2 is open; window 3 and tab 12 were closed.
+            pair(0, 2, 20), pair(2, 20, 0), navigation(20, 0, "https://c.test/", "C"), pair(8, 2, 0),
+            pair(0, 3, 30), navigation(30, 0, "https://gone.test/", "Gone"), pair(8, 3, 0),
+            (17, struct.pack("<iq", 3, 0)), pair(0, 2, 12), navigation(12, 0, "https://x.test/", "X"),
+            (16, struct.pack("<iq", 12, 0)))
+        path = self.sessions / "Session_2"
+        path.write_bytes(data + b"\x40\x00\x06")  # A record cut off mid-write.
+        (self.sessions / "Session_1").write_bytes(snss(pair(0, 9, 90), navigation(90, 0, "https://old.test/", "Old"),
+                                                       pair(8, 9, 0)))
+        os.utime(self.sessions / "Session_1", (1, 1))
+        self.assertEqual(ZEN.helium_session_files(), [path])
+        pages = ZEN.pages_from_chromium_session(path)
+        self.assertEqual([(page["url"], page["title"], page["browser"]) for page in pages],
+                         [("https://b.test/one", "인생 Page", "helium"), ("https://c.test/", "C", "helium")])
+        windows = [dict(workspace="4", window_id="7", title="C - Helium", title_key="C", browser="helium")]
+        self.assertEqual([match["url"] for match in ZEN.match_pages(windows, ZEN.active_pages())], ["https://c.test/"])
+
+    def test_unreadable_or_foreign_files_give_no_pages(self) -> None:
+        (self.sessions / "Session_1").write_bytes(b"not a session")
+        self.assertEqual(ZEN.pages_from_chromium_session(self.sessions / "Session_1"), [])
+        self.assertEqual(ZEN.pages_from_chromium_session(self.sessions / "missing"), [])
 
 
 if __name__ == "__main__":

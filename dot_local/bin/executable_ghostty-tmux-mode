@@ -96,7 +96,10 @@ def main():
     mods = {kc for codes in d.get_modifier_mapping() for kc in codes
             if kc and d.keycode_to_keysym(kc, 0) not in LOCKS}
     deadline = time.monotonic() + 1.0
-    while any(d.query_keymap()[kc // 8] >> (kc % 8) & 1 for kc in mods):
+    while mods:
+        keymap = d.query_keymap()
+        if not any(keymap[kc // 8] >> (kc % 8) & 1 for kc in mods):
+            break
         if time.monotonic() > deadline:
             return 1
         time.sleep(0.01)

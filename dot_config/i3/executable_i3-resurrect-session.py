@@ -19,7 +19,7 @@ import tempfile
 import time
 import uuid
 
-from workspace_groups import (GroupError, definitions, filtered_tree, identity, process_identity,
+from workspace_groups import (ControllerUnavailable, GroupError, definitions, filtered_tree, identity, process_identity,
                               request, session_dir, source_path, validate_view, walk)
 
 spec = importlib.util.spec_from_file_location("session_snapshot", source_path("i3-resurrect-state.py"))
@@ -36,6 +36,23 @@ class Session:
         self.lock_path = None
 
     def rpc(self, action, **values):
+        """Retry while i3 restarts."""
+        started, retried = time.monotonic(), False
+        deadline = started + float(os.environ.get("I3_RESURRECT_CONTROLLER_WAIT", "180"))
+        try:
+            while True:
+                try:
+                    return self.rpc_once(action, **values)
+                except ControllerUnavailable:
+                    if time.monotonic() >= deadline:
+                        raise
+                    retried = True
+                    time.sleep(0.5)
+        finally:
+            if retried:
+                self.outage = getattr(self, "outage", 0) + time.monotonic() - started
+
+    def rpc_once(self, action, **values):
         helper = os.environ.get("I3_RESURRECT_GROUP_HELPER")
         if not helper:
             return request(action, **values)
@@ -79,10 +96,12 @@ class Session:
         return not (self.meta / "snapshot.json").exists() or self.armed_path().exists()
 
     def wait_for_windows(self, token):
-        deadline = time.monotonic() + float(os.environ.get("I3_RESURRECT_SESSION_WAIT", "45"))
+        start, wait = time.monotonic(), float(os.environ.get("I3_RESURRECT_SESSION_WAIT", "45"))
         while True:
+            before = getattr(self, "outage", 0)
             missing = self.rpc("restore-session-missing", token=token)
-            if not missing or time.monotonic() >= deadline:
+            start += getattr(self, "outage", 0) - before  # Exclude restart time.
+            if not missing or time.monotonic() >= start + wait:
                 return missing
             time.sleep(0.25)
 

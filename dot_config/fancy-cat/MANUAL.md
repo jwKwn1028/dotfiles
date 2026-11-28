@@ -58,7 +58,7 @@ unbinds. `Maps` binds commands (used for `T`).
 | --- | --- |
 | `white`, `black`, `recolor_keephue`, `recolor_reverse_video` | Recolor as in zathurarc |
 | `first_page_column` | `2`: page 1 alone on the right of spreads |
-| `remember_page` | Reopen at the last page (1000 most recent files) |
+| `remember_page` | Reopen at the last page (1000 most recent files); saved once settled and on exit |
 | `scroll_step`, `wheel_step`, `page_gap` | 40 px per `j`/`k`, 12 px per wheel event, 3 px between pages |
 | `zoom_step`, `zoom_mult` | 10% steps, 32% with Alt |
 | `trim_margins`, `smooth_scroll` | Off |

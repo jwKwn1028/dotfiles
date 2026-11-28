@@ -81,9 +81,11 @@ class PoweroffConfirmationTests(unittest.TestCase):
     def actions(self):
         return self.log.read_text().splitlines() if self.log.exists() else []
 
-    def run_terminal(self, shell, answer=None, action_status=0):
+    def run_terminal(self, shell, answer=None, action_status=0, timeout=None):
         self.log.unlink(missing_ok=True)
         env = {**self.env, "POWER_ACTION_STATUS": str(action_status)}
+        if timeout is not None:
+            env["POWEROFF_CONFIRM_TIMEOUT"] = str(timeout)
         started = time.monotonic()
         pid, master = pty.fork()
         if pid == 0:
@@ -103,7 +105,7 @@ class PoweroffConfirmationTests(unittest.TestCase):
                     except OSError as exc:
                         if exc.errno != errno.EIO:
                             raise
-                if not sent and b"(10s timeout): " in output:
+                if not sent and re.search(rb"\(\d+s timeout\): ", output):
                     self.assertIn(b"Power off test-host? [y/N]", output)
                     if answer is not None:
                         os.write(master, answer)
@@ -124,8 +126,9 @@ class PoweroffConfirmationTests(unittest.TestCase):
         for shell in self.shells:
             for answer in [b"y\n", b"Y\n", b"yes\n", b"YES\n", b"YeS\n"]:
                 with self.subTest(shell=shell, answer=answer):
-                    status, _, _ = self.run_terminal(shell, answer)
+                    status, output, _ = self.run_terminal(shell, answer)
                     self.assertEqual(status, 0)
+                    self.assertIn(b"(10s timeout): ", output, "the default timeout changed")
                     self.assertEqual(self.actions(), ["session-save", "poweroff"])
 
     def test_blank_no_and_unrecognized_input_cancel(self):
@@ -140,9 +143,10 @@ class PoweroffConfirmationTests(unittest.TestCase):
         for shell in self.shells:
             for answer in [None, b"y"]:
                 with self.subTest(shell=shell, answer=answer):
-                    status, output, elapsed = self.run_terminal(shell, answer)
+                    status, output, elapsed = self.run_terminal(shell, answer, timeout=1)
                     self.assertEqual(status, 1)
-                    self.assertGreaterEqual(elapsed, 9)
+                    self.assertGreaterEqual(elapsed, 0.9)
+                    self.assertIn(b"(1s timeout): ", output)
                     self.assertIn(b"No confirmation received; cancelled.", output)
                     self.assertEqual(self.actions(), [])
 

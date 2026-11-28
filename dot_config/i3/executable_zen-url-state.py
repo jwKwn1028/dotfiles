@@ -8,6 +8,7 @@ import os
 import pathlib
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import time
@@ -126,6 +127,97 @@ def zen_session_files():
     return [path for _mtime, path in found]
 
 
+def helium_session_files():
+    """Each Helium profile's newest session file, newest first."""
+    roots = os.environ.get("HELIUM_PROFILE_ROOTS", str(pathlib.Path.home() / ".config/net.imput.helium"))
+    found = []
+    for root_name in roots.split(os.pathsep):
+        root = pathlib.Path(root_name).expanduser() if root_name else None
+        if not root or not root.is_dir():
+            continue
+        for profile in root.iterdir():
+            try:
+                sessions = list((profile / "Sessions").glob("Session_*"))
+                if sessions:
+                    newest = max(sessions, key=lambda path: path.stat().st_mtime)
+                    found.append((newest.stat().st_mtime, newest))
+            except OSError:
+                continue
+    found.sort(key=lambda item: item[0], reverse=True)
+    return [path for _mtime, path in found]
+
+
+def snss_commands(data):
+    """(id, payload) per record: uint16 size, id byte, payload."""
+    if data[:4] != b"SNSS":
+        return
+    at = 8
+    while at + 2 <= len(data):
+        size = struct.unpack_from("<H", data, at)[0]
+        at += 2
+        if size == 0 or at + size > len(data):
+            return  # Helium may be mid-write.
+        yield data[at], data[at + 1:at + size]
+        at += size
+
+
+def snss_navigation(payload):
+    """Tab, index, URL and title of an UpdateTabNavigation pickle."""
+    tab, index, length = struct.unpack_from("<iii", payload, 4)
+    at = 16
+    url = payload[at:at + length].decode(errors="replace")
+    at += (length + 3) & ~3
+    count = struct.unpack_from("<i", payload, at)[0]
+    title = payload[at + 4:at + 4 + 2 * count].decode("utf-16-le", errors="replace")
+    return tab, index, url, title
+
+
+def pages_from_chromium_session(path, browser="helium"):
+    """Each open window's selected page."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return []
+    tabs, windows, closed = {}, {}, set()
+    for command, payload in snss_commands(data):
+        try:
+            if command == 0:  # SetTabWindow: window, tab
+                window, tab = struct.unpack_from("<ii", payload)
+                tabs.setdefault(tab, {})["window"] = window
+            elif command == 2:  # SetTabIndexInWindow
+                tab, index = struct.unpack_from("<ii", payload)
+                tabs.setdefault(tab, {})["index"] = index
+            elif command == 6:  # UpdateTabNavigation
+                tab, index, url, title = snss_navigation(payload)
+                tabs.setdefault(tab, {}).setdefault("navigations", {})[index] = (url, title)
+            elif command == 7:  # SetSelectedNavigationIndex
+                tab, index = struct.unpack_from("<ii", payload)
+                tabs.setdefault(tab, {})["selected"] = index
+            elif command == 8:  # SetSelectedTabInIndex
+                window, index = struct.unpack_from("<ii", payload)
+                windows[window] = index
+            elif command in (16, 17):  # TabClosed, WindowClosed
+                closed.add((command, struct.unpack_from("<i", payload)[0]))
+        except (struct.error, UnicodeError):
+            continue
+    pages = []
+    for window_index, (window, selected) in enumerate(windows.items()):
+        if (17, window) in closed:
+            continue
+        own = sorted((tab for number, tab in tabs.items()
+                      if tab.get("window") == window and tab.get("navigations") and (16, number) not in closed),
+                     key=lambda tab: tab.get("index", 0))
+        if not own:
+            continue
+        tab = next((tab for tab in own if tab.get("index") == selected), own[0])
+        navigations = tab["navigations"]
+        url, title = navigations.get(tab.get("selected"), navigations[max(navigations)])
+        page = page_from_entry(dict(url=url, title=title), path.parent.parent, path, window_index, browser)
+        if page:
+            pages.append(page)
+    return pages
+
+
 def selected_entry(tab):
     entries = tab.get("entries") or []
     tab_index = tab.get("index") or len(entries)
@@ -213,6 +305,9 @@ def active_pages():
             continue
         loaded_firefox_profiles.add(profile)
         pages.extend(pages_from_firefox_session(path))
+
+    for path in helium_session_files():
+        pages.extend(pages_from_chromium_session(path))
     return pages
 
 

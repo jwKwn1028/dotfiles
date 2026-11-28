@@ -135,12 +135,17 @@ Hidden-group activation marks urgency (`C!`); background arrivals preserve focus
 Slots 1–2 use primary, 3–10 external; one monitor shows all. Switch/reload/hotplug
 reconciles placement. Invalid or empty remembered slots reset to 1/3;
 disconnection preserves group membership and remembered external views.
+`display-setup.sh` owns the layout: `xfsettingsd-start.sh` turns off xfsettingsd's
+profiles and new-display action and clears the layout it applies at start.
 
 ### Session Controller
 
 `workspace-groups.py start` replaces the controller and its autotiling, snap,
 and overflow workers. It reconnects after restarts and exits 10 s after i3.
-IPC failure pauses placement and shows `groups unavailable`.
+IPC failure pauses placement and shows `groups unavailable`. Restores survive an
+i3 crash: press `r` on its crash screen (`b` cannot attach a debugger here).
+`i3-crash-log.py` keeps i3's recent log in memory and, after the restart, saves
+it to `~/.local/state/i3/crash/` (newest 10) and says so.
 
 | File | Responsibility |
 | --- | --- |
@@ -238,10 +243,10 @@ private. Validate with `--check`; recover the prior generation with `restore --p
 | --- | --- |
 | Zathura | File and page when readable. |
 | Zen/Helium | Address-bar URL or browser session file. Ambiguous windows launch plain. |
-| Ghostty | Directory and first tmux, `hpc`, or `hpcz` session per window. Local tmux restores once before attach. |
+| Ghostty | Directory and first tmux, `hpc`, or `hpcz` session per window. Local tmux restores once before attach, including each window's focused pane. |
 
-`ZEN_LIVE_URL_CAPTURE=0` disables automation. `ZEN_PROFILE_ROOTS` and
-`I3_RESURRECT_PROC_ROOT` override lookup roots.
+`ZEN_LIVE_URL_CAPTURE=0` disables automation. `ZEN_PROFILE_ROOTS`,
+`HELIUM_PROFILE_ROOTS` and `I3_RESURRECT_PROC_ROOT` override lookup roots.
 
 Free saved slots stay. Collisions use the nearest free slot on the same display,
 then any free slot, else share the original. Only launched windows move. A saved
@@ -266,7 +271,8 @@ i3 Python helpers use system Python with i3ipc, Xlib, and lz4.
 Runtime: `i3-groups-<hash>/`, `i3-polybar-*`, `i3-*-mode.restore-hidden`,
 `i3-titles.state`, `tile-snap-<id>.lock` under `$XDG_RUNTIME_DIR`.
 Logs rotate around 200 KB: `~/.local/state/i3/snap.log`,
-`~/.local/state/polybar/polybar-<output>.log`, and `controller.log`.
+`~/.local/state/polybar/polybar-<output>.log`, and `controller.log`
+(previous run: `controller.log.1`).
 
 ## Maintenance
 
@@ -287,10 +293,12 @@ jq . ~/.config/i3/resurrect-meta/last-restore.json
 ## Tests
 
 `bash dot_config/i3/tests/executable_run-fast.sh` checks syntax, ShellCheck,
-config, and units in a temporary tree. Live tests need Xephyr/xterm (overflow:
-autotiling too). Stub `I3_GROUP_PEEK`: Polybar IPC is not display-scoped.
+config, and units in a temporary tree, in parallel (`TEST_JOBS=1`: serially).
+Live tests need Xephyr/xterm (overflow: autotiling too; crash log: xdotool). Stub
+`I3_GROUP_PEEK`: Polybar IPC is not display-scoped.
 
 ```sh
 ~/.config/i3/tests/test-workspace-groups-live.py [scratch-only|session-only]
 ~/.config/i3/tests/test-overflow-live.py
+~/.config/i3/tests/test-i3-crash-log-live.py
 ```

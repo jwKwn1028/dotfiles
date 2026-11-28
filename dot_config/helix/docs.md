@@ -1,7 +1,14 @@
 # Helix keybindings
 
-Custom `config.toml` keys; defaults still apply. Spaces mean sequences;
-uppercase requires Shift. Python DAP is in `languages.toml`.
+Custom `config.toml` keys; defaults still apply. Spaces separate key sequences;
+uppercase means Shift. Python DAP is in `languages.toml`.
+
+## Session recovery
+
+tmux restores each split's file, cursor and launch options, and other buffers.
+Splits return if all side by side or all stacked, else as buffers. Later buffers
+return if their name is unique near open files, in their git repositories or
+under Helix's directory. Unsaved edits are lost; `hxp` panes recover separately.
 
 ## Writing language servers
 
@@ -12,28 +19,22 @@ Plain text wraps without an LSP.
 
 | Keys | Action |
 | --- | --- |
-| `Enter` | Open a line below the selection and return to normal mode. |
-| `V` | Paste the system clipboard before the selection. |
-| `Space p` | Paste the system clipboard before the selection. |
-| `Space P` | Paste the system clipboard after the selection. |
-| `Ctrl+L` | Forward search from the cursor to an open PDF viewer. LaTeX and Markdown use the matching PDF; Typst raises its viewer. |
-| `Ctrl+Y` | Open Yazi at the current buffer as a file picker. Opening a file returns to Helix; quitting can update Helix's working directory. |
-
-The `Ctrl+Y` integration is also described in the
-[Yazi guide](../yazi/yazi_docs.md#from-helix).
+| `Enter` | Open a line below the selection; stay in normal mode. |
+| `V`, `Space p` | Paste the clipboard before the selection. |
+| `Space P` | Paste the clipboard after the selection. |
+| `Ctrl+L` | Jump to the cursor's spot in the open PDF (LaTeX, Markdown); Typst raises its viewer. |
+| `Ctrl+Y` | Pick a file in Yazi; quitting can change Helix's directory ([Yazi guide](../yazi/yazi_docs.md#from-helix)). |
 
 ### Python debugger
 
-Alt+D, then a key below. uv runs debugpy; launch prompts for a template/parameters.
+`Alt+D`, then a key below. uv runs debugpy; launch prompts for a template.
 
 | Next key | Action |
 | --- | --- |
 | `t` | Toggle a breakpoint. |
 | `d` | Launch a debug session. |
 | `c` | Continue. |
-| `n` | Step over. |
-| `i` | Step into. |
-| `o` | Step out. |
+| `n` / `i` / `o` | Step over / into / out. |
 | `v` | Show variables. |
 | `r` | Restart. |
 | `k` | Terminate. |
@@ -44,21 +45,19 @@ Alt+D, then a key below. uv runs debugpy; launch prompts for a template/paramete
 | --- | --- |
 | `Alt+H` / `Alt+L` | Move left / right. |
 | `Alt+J` / `Alt+K` | Move down / up. |
-| `Alt+Q` / `Alt+E` | Move to the beginning / end of the line. |
-| `j k` | Return to normal mode. Type the two letters in sequence. |
+| `Alt+Q` / `Alt+E` | Move to the line's start / end. |
+| `j k` | Return to normal mode. |
 
 ## Select mode
 
 | Keys | Action |
 | --- | --- |
-| `V` | Replace the selection with the system clipboard. |
-| `Tab` / `Shift+Tab` | Indent / outdent the selection. |
-| `Space p` | Paste the system clipboard before the selection. |
-| `Space P` | Paste the system clipboard after the selection. |
+| `V` | Replace the selection with the clipboard. |
+| `Tab` / `Shift+Tab` | Indent / outdent. |
+| `Space p` / `Space P` | Paste the clipboard before / after the selection. |
 
-These insert and paste choices are mirrored in the
-[Zed guide](../zed/docs.md) and `~/.config/Code/User/docs.md` where those
-editors support them.
+[Zed](../zed/docs.md) and VS Code (`~/.config/Code/User/docs.md`) mirror these
+where they can.
 
 ## Bash and Zsh
 

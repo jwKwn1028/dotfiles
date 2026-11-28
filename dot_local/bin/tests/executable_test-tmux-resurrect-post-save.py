@@ -4,6 +4,7 @@
 import os
 import shlex
 import shutil
+import sqlite3
 import subprocess
 import sys
 import json
@@ -18,6 +19,7 @@ if not SCRIPT.exists():
     SCRIPT = BIN_DIR / "tmux-resurrect-post-save"
 PROCESSES = 'btop hx hpc hpcz micro fancy-cat fancy-cat-open hxp-resume sysmon claude codex "yazi->y" "~^ssh [-A-Za-z0-9_.@:=/ ]+$"'
 CHAT, THREAD = str(uuid.uuid4()), str(uuid.uuid4())
+LIVE, EXEC, OTHER = (str(uuid.uuid4()) for _ in range(3))
 
 if not shutil.which("tmux") or not shutil.which("zsh"):
     print("SKIP: tmux and zsh are required")
@@ -44,6 +46,22 @@ with tempfile.TemporaryDirectory(prefix="resurrect-post-save-") as directory:
     (claude / f"projects/p/{CHAT}.jsonl").write_text("")
     (codex / "sessions/2026/01/01").mkdir(parents=True)
     (codex / f"sessions/2026/01/01/rollout-2026-01-01T00-00-00-{THREAD}.jsonl").write_text("")
+    # Shared 29-character ID prefixes are ambiguous.
+    SHARED = str(uuid.uuid4())[:29]
+    for tail in ("aaaaaaa", "bbbbbbb"):
+        (codex / f"sessions/2026/01/01/rollout-2026-01-01T00-00-00-{SHARED}{tail}.jsonl").write_text("")
+    # Default titles resolve through the state database.
+    named, NAMED = Path(os.path.realpath(root / "named")), str(uuid.uuid4())
+    named.mkdir()
+    with sqlite3.connect(codex / "state_5.sqlite") as db:
+        db.execute("create table threads (id text, name text, cwd text, archived int, source text)")
+        db.executemany("insert into threads values (?, ?, ?, 0, 'cli')",
+                       [(NAMED, "Unique chat", str(named)), (str(uuid.uuid4()), "Twin chat", str(named)),
+                        (str(uuid.uuid4()), "Twin chat", str(named))])
+    logs = {}
+    for thread, kind in ((LIVE, "cli"), (EXEC, "exec"), (OTHER, "cli")):
+        logs[thread] = codex / f"sessions/2026/01/01/rollout-2026-01-01T00-00-00-{thread}.jsonl"
+        logs[thread].write_text(json.dumps(dict(type="session_meta", payload=dict(id=thread, source=kind))) + "\n")
 
     def tmux(*args):
         return subprocess.run(["tmux", "-S", str(socket_path), *args], env=env,
@@ -71,6 +89,16 @@ with tempfile.TemporaryDirectory(prefix="resurrect-post-save-") as directory:
         "8": "ARGV0=codex sleep 304",
         # Viewer awaiting a client.
         "11": f"cd {docs} && sh {root}/fancy-cat-open --wait-for-client doc.pdf",
+        # Codex: open session log, then pane title.
+        "13": "ARGV0=codex python3 -c 'import sys,time; f=open(sys.argv[1]); time.sleep(300)' " + shlex.quote(str(logs[LIVE])),
+        "14": "ARGV0=codex python3 -c 'import sys,time; f=open(sys.argv[1]); time.sleep(300)' " + shlex.quote(str(logs[EXEC])),
+        "15": "ARGV0=codex python3 -c 'import sys,time; fs=[open(p) for p in sys.argv[1:]]; time.sleep(300)' " +
+              shlex.join([str(logs[LIVE]), str(logs[OTHER])]),
+        "16": "ARGV0=codex python3 -c 'import sys,time; f=open(sys.argv[1]); time.sleep(300)' " + shlex.quote(str(logs[LIVE])),
+        "17": "ARGV0=codex sleep 305",
+        "18": "ARGV0=codex sleep 306",
+        "19": f"cd {named} && ARGV0=codex sleep 307",
+        "20": f"cd {named} && ARGV0=codex sleep 308",
     }
     expected = {
         "0": f"fancy-cat-open --wait-for-client -f {docs}/doc.pdf",
@@ -87,6 +115,14 @@ with tempfile.TemporaryDirectory(prefix="resurrect-post-save-") as directory:
         "10": "",
         "10/1": "",
         "11": f"fancy-cat-open --wait-for-client {docs}/doc.pdf",
+        "13": f"codex resume {LIVE}",
+        "14": "",
+        "15": "",
+        "16": f"codex resume {LIVE}",
+        "17": f"codex resume {THREAD}",
+        "18": "",
+        "19": f"codex resume {NAMED}",
+        "20": "",
         # Editor index changed while hxp-resume waited.
         "12": "",
         "12/1": "",
@@ -96,13 +132,20 @@ with tempfile.TemporaryDirectory(prefix="resurrect-post-save-") as directory:
         tmux("-f", "/dev/null", "new-session", "-d", "-s", "t", "-x", "120", "-y", "30", "--", "zsh", "-f")
         tmux("set", "-g", "@resurrect-processes", PROCESSES)
         (root / "fancy-cat-open").write_text("sleep 300\n")
-        for window in [*"12345678", "11"]:
+        for window in [*"12345678", "11", "13", "14", "15", "16", "17", "18", "19", "20"]:
             tmux("new-window", "-d", "-t", f"t:{window}", "--", "zsh", "-f")
         for window, command in keys.items():
             tmux("send-keys", "-t", f"t:{window}", command, "Enter")
         tmux("select-pane", "-t", "t:0", "-T", "")
         tmux("select-pane", "-t", "t:7", "-T", THREAD)
         tmux("select-pane", "-t", "t:8", "-T", "")
+        tmux("select-pane", "-t", "t:13", "-T", "")
+        for window in ("14", "15", "16"):
+            tmux("select-pane", "-t", f"t:{window}", "-T", THREAD)
+        tmux("select-pane", "-t", "t:17", "-T", f"{THREAD[:29]}... | Chat title")
+        tmux("select-pane", "-t", "t:18", "-T", f"{SHARED}... | Chat title")
+        tmux("select-pane", "-t", "t:19", "-T", "Unique chat | named")
+        tmux("select-pane", "-t", "t:20", "-T", "Twin chat | named")
         tmux("set", "-p", "-t", "t:1", "@resurrect-command", "sysmon 2")
         # A live hxp session here (9), and one hxp-sessions reports for another server (10).
         sessions = []

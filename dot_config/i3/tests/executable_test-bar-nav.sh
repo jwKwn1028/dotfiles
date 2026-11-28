@@ -66,8 +66,12 @@ for cmd in xfce4-power-manager-settings pavucontrol brightnessctl notify-send; d
   printf '#!/bin/sh\nprintf "%s\\n" >> "%s"\n' "$cmd" "$IPC_LOG" \
     > "$TEST_TMP/bin/$cmd"
 done
-printf '#!/bin/sh\nprintf "thunderbird %%s\\n" "$*" >> "%s"\n' "$IPC_LOG" \
-  > "$TEST_TMP/bin/thunderbird"
+# task-calendar is not on the session PATH; bar-nav runs it from $HOME.
+TCAL_HOME="$TEST_TMP/home"
+mkdir -p "$TCAL_HOME/Applications/task-calendar"
+printf '#!/bin/sh\nprintf "task-calendar %%s\\n" "$*" >> "%s"\n' "$IPC_LOG" \
+  > "$TCAL_HOME/Applications/task-calendar/task-calendar"
+chmod +x "$TCAL_HOME/Applications/task-calendar/task-calendar"
 
 chmod +x "$TEST_TMP"/bin/*
 chmod +x "$TEST_TMP"/toggle-polybar-resnap.sh "$TEST_TMP"/resnap.sh
@@ -218,10 +222,10 @@ logged '#date.toggle' || fail "left-click did not toggle the clock format"
 logged '#date-sel.toggle' || fail "left-click did not toggle the selected clock format"
 
 reset_log
-nav click-right
-logged 'thunderbird -mail' || fail "right-click did not open Thunderbird mail"
-logged 'i3:mode "default"' || fail "opening Thunderbird left bar mode active"
-[ -e "$STATE" ] && fail "opening Thunderbird left the cursor up"
+HOME="$TCAL_HOME" nav click-right
+logged 'task-calendar ' || fail "right-click did not open the task calendar"
+logged 'i3:mode "default"' || fail "opening the task calendar left bar mode active"
+[ -e "$STATE" ] && fail "opening the task calendar left the cursor up"
 
 reset_log
 nav down || fail "j on a module without a scroll handler returned failure"

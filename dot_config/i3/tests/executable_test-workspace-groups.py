@@ -86,6 +86,73 @@ class GroupTests(unittest.TestCase):
 
 
 class EntryTests(unittest.TestCase):
+    def test_read_requests_leave_subscriber_snapshot_valid_but_errors_and_events_refresh(self):
+        import queue
+        from collections import deque
+
+        subscriber = mock.Mock()
+        received, refreshes = [], []
+        subscriber.sendall.side_effect = lambda data: received.append(json.loads(data))
+        current = [None]
+        connected = [True]
+        controller = mock.Mock(ready=True)
+
+        def initialize():
+            connected[0], controller.ready = True, True
+
+        def available():
+            if not connected[0]:
+                raise OSError("i3 is down")
+
+        def dispatch(action, **values):
+            if current[0] == "failed read":
+                connected[0] = False
+                raise OSError("i3 is down")
+            return True
+
+        def bar_status():
+            refreshes.append(current[0])
+            available()
+            return dict(ready=controller.ready)
+
+        controller.initialize.side_effect = initialize
+        controller.i3.get_version.side_effect = available
+        controller.dispatch.side_effect = dispatch
+        controller.bar_status.side_effect = bar_status
+        actions = ["status", "window-menu", "session-view", "placement", "restore-status", "restore-ready",
+                   "restore-session-status", "restore-session-ready", "restore-session-missing"]
+        script = deque([("subscribe", ("client", subscriber, dict(action="subscribe"))),
+                        *[(action, ("client", mock.Mock(), dict(action=action))) for action in actions],
+                        ("mutation", ("client", mock.Mock(), dict(action="select", group="B"))),
+                        ("failed read", ("client", mock.Mock(), dict(action="status"))),
+                        ("disconnected", ("disconnected", "down", None)),
+                        ("reconnect", ("reconnect", "", None)),
+                        ("stop", ("client", mock.Mock(), dict(action="stop")))])
+
+        class Events:
+            def get(self, timeout):
+                current[0], event = script.popleft()
+                return event
+
+            def get_nowait(self):
+                raise queue.Empty
+
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(entry, "session_dir", return_value=Path(directory)), \
+                mock.patch.object(entry, "socket_path", return_value="unused"), \
+                mock.patch.object(entry.socket, "socket"), \
+                mock.patch.object(entry.signal, "signal"), \
+                mock.patch.object(entry.threading, "Thread"), \
+                mock.patch.object(entry.queue, "SimpleQueue", return_value=Events()), \
+                mock.patch.object(entry.time, "monotonic", return_value=10), \
+                mock.patch.dict(sys.modules, i3ipc=SimpleNamespace(Connection=lambda **_: controller.i3)), \
+                mock.patch("group_controller.Controller", return_value=controller), \
+                mock.patch("group_restore.Restore", return_value=mock.Mock()):
+            entry.serve()
+        self.assertFalse(script)
+        self.assertEqual(refreshes, ["subscribe", "mutation", "failed read", "disconnected", "reconnect", "stop"])
+        self.assertEqual(received, [dict(ready=True), dict(ready=False), dict(ready=True)])
+
     def test_legacy_workers_match_but_controller_processes_do_not(self):
         for command in ("bash /cfg/i3/focus-tracker.sh", "bash /cfg/i3/snap-watcher.sh",
                         "/venvs/autotiling/bin/python /opt/bin/autotiling",
@@ -342,7 +409,7 @@ class WindowMenuTests(unittest.TestCase):
             (apps / "org.example.Viewer.desktop").write_text(
                 "[Desktop Entry]\nIcon=viewer\nStartupWMClass=Viewer\n")
             controller = Controller(SimpleNamespace(), directory)
-            controller.status = lambda: dict(windows=[
+            controller.status = lambda tree=None: dict(windows=[
                 {"id": 11, "name": "one\ntwo", "class": "Viewer", "instance": "viewer", "group": ["A", 1]},
                 {"id": 22, "name": "term", "class": "Term", "instance": "term", "group": ["B", 2]}])
             data = dict(XDG_DATA_HOME=str(Path(directory, "data")), XDG_DATA_DIRS=str(Path(directory, "none")))
@@ -367,6 +434,63 @@ class WindowMenuTests(unittest.TestCase):
             entry.window_menu()
         self.assertEqual(run.call_args.kwargs["input"], "A:1  one\0icon\x1fa")
         self.assertEqual(calls, [("window-menu", {}), ("focus", {"value": 11})])
+
+
+class ReadOnlyQueryTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.space = SimpleNamespace(name="1", num=1, focused=True, visible=True, urgent=False, output="primary")
+        self.con = SimpleNamespace(id=101, window=77, name="editor", window_class="Ghostty",
+                                   window_instance="ghostty", workspace=lambda: self.space)
+        self.tree = SimpleNamespace(workspaces=lambda: [self.space], leaves=lambda: [self.con],
+                                    find_focused=lambda: self.con,
+                                    find_by_id=lambda value: self.con if value == self.con.id else None)
+        self.i3 = mock.Mock()
+        self.i3.get_tree.return_value = self.tree
+        self.i3.get_workspaces.return_value = [self.space]
+        self.controller = Controller(self.i3, self.temporary.name)
+        self.controller.ready = True
+
+    def test_each_read_validates_and_reuses_one_fresh_tree_even_before_selection(self):
+        for action, values in [("status", {}), ("window-menu", {}), ("session-view", {}),
+                               ("placement", dict(value=101))]:
+            with self.subTest(action=action), mock.patch("group_controller.application_dirs", return_value=[]):
+                self.controller.state["selected"] = None
+                self.i3.reset_mock()
+                result = self.controller.dispatch(action, **values)
+                self.i3.get_tree.assert_called_once_with()
+                self.assertEqual(self.controller.state["selected"], "A")
+                if action == "placement":
+                    self.assertTrue(result)
+                elif action == "status":
+                    self.assertEqual(result["windows"][0]["id"], 101)
+        self.space.num = 11
+        self.controller.state["selected"] = None
+        self.assertEqual(self.controller.dispatch("status")["selected"], "B")
+
+    def test_read_actions_still_reject_duplicate_workspace_numbers(self):
+        self.tree.workspaces = lambda: [self.space, self.space]
+        self.controller.restore = mock.Mock()
+        for action, values in [("status", {}), ("window-menu", {}), ("session-view", {}),
+                               ("placement", dict(value=101)), ("restore-session-missing", dict(token="token"))]:
+            with self.subTest(action=action), self.assertRaisesRegex(GroupError, "Multiple workspaces"):
+                self.controller.dispatch(action, **values)
+        self.controller.restore.dispatch.assert_not_called()
+
+    def test_shared_placement_snapshot_preserves_restore_and_readiness_guards(self):
+        restore = self.controller.restore = mock.Mock()
+        restore.window_token.return_value = None
+        restore.reserved.return_value = False
+        for pending, reserved, ready, expected in [(None, False, True, True), ("token", False, True, False),
+                                                    (None, True, True, False), (None, False, False, False)]:
+            with self.subTest(pending=pending, reserved=reserved, ready=ready):
+                restore.window_token.return_value = pending
+                restore.reserved.return_value = reserved
+                self.controller.ready = ready
+                self.i3.reset_mock()
+                self.assertEqual(self.controller.dispatch("placement", value=101), expected)
+                self.i3.get_tree.assert_called_once_with()
 
 
 class StaticI3:

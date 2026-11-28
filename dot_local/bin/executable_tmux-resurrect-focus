@@ -1,0 +1,32 @@
+#!/usr/bin/python3
+"""Restore saved tmux focus without depending on an attached client."""
+
+from pathlib import Path
+import subprocess
+import sys
+
+
+def main():
+    panes, alternate, active = [], [], []
+    for line in Path(sys.argv[1]).read_text().splitlines():
+        fields = line.split("\t")
+        if fields[0] == "pane" and len(fields) >= 9 and fields[8] == "1":
+            target = f"={fields[1]}:{fields[2]}.{fields[5]}"
+            panes.extend(["select-pane", "-Z", "-t", target, ";"])
+        elif fields[0] == "window" and len(fields) >= 6:
+            target = f"={fields[1]}:{fields[2]}"
+            if "-" in fields[5]:
+                alternate.extend(["select-window", "-t", target, ";"])
+            if fields[4] == "1":
+                active.extend(["select-window", "-t", target, ";"])
+        elif fields[0] == "grouped_session" and len(fields) >= 5:
+            for windows, index in ((alternate, fields[3]), (active, fields[4])):
+                if index != ":":
+                    windows.extend(["select-window", "-t", f"={fields[1]}:{index.removeprefix(':')}", ";"])
+    commands = panes + alternate + active
+    if commands:
+        subprocess.run(["tmux", *commands[:-1]], check=True)
+
+
+if __name__ == "__main__":
+    main()
