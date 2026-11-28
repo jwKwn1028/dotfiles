@@ -48,7 +48,23 @@ if (( $+functions[zhm_select] )); then
   bindkey -M hxnor 'V' zhm_user_clipboard_v
   bindkey -M hxnor 'v' zhm_select
   bindkey -M hxins '^[' zhm_normal
-  bindkey -M hxins 'jk' zhm_normal
+  if (( $+functions[zhm_wrap_widget] )); then
+    # jk is Escape only when typed; with input queued (tmux send-keys) it's text.
+    _zhm_insert_jk() { LBUFFER+=jk }
+    zle -N _zhm_insert_jk
+    zhm_wrap_widget _zhm_insert_jk _zhm_insert_jk_synced  # resyncs zhm cursors
+    _zhm_jk() {
+      if (( PENDING || KEYS_QUEUED_COUNT )); then
+        zle _zhm_insert_jk_synced
+      else
+        zle zhm_normal
+      fi
+    }
+    zle -N _zhm_jk
+    bindkey -M hxins 'jk' _zhm_jk
+  else
+    bindkey -M hxins 'jk' zhm_normal
+  fi
   bindkey -M hxins '^[h' zhm_clear_selection_move_left
   bindkey -M hxins '^[j' zhm_move_down_or_history_next
   bindkey -M hxins '^[k' zhm_move_up_or_history_prev

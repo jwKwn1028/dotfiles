@@ -31,8 +31,27 @@
     "wmtheme",
     "theme",
     "icons",
-    "terminal",
+    {
+      "type": "command",
+      "key": "Terminal",
+      "text": "exec \"$HOME/.config/fastfetch/outer-terminal\" name"
+    },
+    {
+      "type": "terminal",
+      "condition": {
+        "succeeded": false
+      }
+    },
     "terminalfont",
+    {
+      "type": "command",
+      "key": "Terminal Font",
+      "text": "exec \"$HOME/.config/fastfetch/outer-terminal\" font",
+      "parallel": false,
+      "condition": {
+        "succeeded": false
+      }
+    },
     {
       "type": "cpu",
       "temp": {
@@ -40,6 +59,7 @@
         "yellow": 90
       }
     },
+    "loadavg",
     {
       "type": "gpu",
       "temp": {
@@ -53,7 +73,11 @@
       "text": "for h in /sys/class/hwmon/*/; do [ \"$(cat \"$h/name\" 2>/dev/null)\" = thinkpad ] || continue; out=\"\"; for f in \"$h\"fan*_input; do [ -e \"$f\" ] || continue; r=$(cat \"$f\"); out=\"${out:+$out / }${r} RPM\"; done; echo \"${out:-N/A}\"; done"
     },
     "memory",
+    "swap",
+    "disk",
+    "netio",
     "battery",
+    "media",
     "break",
     "colors"
   ]

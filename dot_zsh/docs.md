@@ -10,7 +10,7 @@ attaches preserve it; Ghostty uses `no-cursor`. Extra keys:
 
 | Keys | Mode | Action |
 | --- | --- | --- |
-| `j k` / `Escape` | Insert | Return to normal mode. |
+| `j k` / `Escape` | Insert | Return to normal mode. Queued `jk` (tmux-resurrect restores) stays text. |
 | `Alt+H` / `Alt+L` | Insert | Move left / right, clearing the selection. |
 | `Alt+J` / `Alt+K` | Insert | Move down / up, or to the next / previous history item. |
 | `Alt+Q` / `Alt+E` | Insert | Move to the start / end of the command line. |
@@ -66,7 +66,7 @@ The fzf keys need fzf's installed widgets. Editor keymaps are separate: see
 opening a window. Missing editors or failed Thunar startup keep it open.
 
 Short aliases: `h` (Helix here), `v` (Vim here), `mo` (Micro), `ff`
-(fastfetch every 2 s; tmux restores it), `twt` (taskwarrior-tui), `tcal`
+(fastfetch every 15 s; tmux restores it), `twt` (taskwarrior-tui), `tcal`
 (task-calendar), `:q` (exit the shell), and `:qa` (close the focused i3 window).
 `ls` runs eza; `rg` searches smart-case.
 

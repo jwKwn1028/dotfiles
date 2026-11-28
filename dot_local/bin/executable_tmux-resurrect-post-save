@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 """Rebuild saved pane records with nonempty titles and live commands."""
 
-import base64
 import functools
 import json
 import os
@@ -187,21 +186,19 @@ def choose(root, argv, children, listed, title=""):
 
 
 @functools.cache
-def helix_snapshot():
+def helix_helper():
     helper = Path(__file__).with_name("tmux-resurrect-helix")
     if not helper.exists():
         helper = helper.with_name("executable_tmux-resurrect-helix")
-    return runpy.run_path(str(helper))["snapshot"]
+    return runpy.run_path(str(helper))
 
 
 def helix(pane_id, pid, args, root):
-    snapshot = helix_snapshot()
-    state = snapshot(pane_id, pid, args, os.readlink(f"/proc/{root}/cwd"))
+    helper = helix_helper()
+    state = helper["snapshot"](pane_id, pid, args, os.readlink(f"/proc/{root}/cwd"))
     if not state:
         return None
-    # Base64 keeps backslashes and quotes away from resurrect's parsing.
-    payload = base64.urlsafe_b64encode(json.dumps(state, ensure_ascii=False).encode()).decode()
-    return shlex.join(["tmux-resurrect-helix", payload])
+    return shlex.join(["tmux-resurrect-helix", helper["encode"](state)])
 
 
 def hxp_sessions():

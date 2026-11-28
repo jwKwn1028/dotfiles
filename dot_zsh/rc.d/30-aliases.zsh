@@ -7,7 +7,7 @@ if _have vim; then
 fi
 _have hx && alias h='hx .'
 _have micro && alias mo='micro'
-_have fastfetch && alias ff='fastfetch --watch 2'
+_have fastfetch && alias ff='fastfetch --watch 15'
 _have eza && alias ls='eza --color=auto --icons --long --git --no-user --no-permissions'
 (( $+commands[batcat] )) && alias bat='batcat'
 if _have tlp; then

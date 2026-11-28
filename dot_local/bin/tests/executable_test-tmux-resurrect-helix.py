@@ -5,6 +5,8 @@ import base64
 import json
 import os
 from pathlib import Path
+import re
+import runpy
 import shlex
 import shutil
 import subprocess
@@ -21,6 +23,21 @@ if not SCRIPT.exists():
 HELIX_CONFIG = BIN_DIR.parent.parent / "dot_config/helix"
 if not HELIX_CONFIG.is_dir():
     HELIX_CONFIG = Path.home() / ".config/helix"
+
+helper = runpy.run_path(str(HELPER))
+# The legacy base64 holds "jk", which zsh-helix-mode reads as Escape.
+trap = {"options": [], "views": [["/project/a.py", 1, 1]], "hidden": ["/project/b.py:590:9"],
+        "split": None, "focus": 0, "cwd": "/project", "capture_width": 160}
+legacy = base64.urlsafe_b64encode(json.dumps(trap).encode()).decode()
+assert "jk" in legacy, legacy
+word = helper["encode"](trap)
+assert re.fullmatch(r"[A-Z2-7]+=*", word), word
+assert helper["decode"](word) == trap and helper["decode"](legacy) == trap
+# A truncated word fails cleanly, without a traceback.
+broken = subprocess.run([sys.executable, "-B", str(HELPER), legacy.replace("jki", "", 1)],
+                        capture_output=True, text=True)
+assert broken.returncode == 1 and "unreadable saved state" in broken.stderr, broken
+assert "Traceback" not in broken.stderr, broken.stderr
 
 if any(not shutil.which(command) for command in ("tmux", "hx", "zsh", "git")):
     print("SKIP: tmux, hx, zsh and git are required")
@@ -109,7 +126,7 @@ with tempfile.TemporaryDirectory(prefix="resurrect-helix-") as directory:
         fields = path.read_text().rstrip("\n").split("\t")
         command = fields[10][1:]
         words = shlex.split(command)
-        state = json.loads(base64.urlsafe_b64decode(words[1])) if words[0] == "tmux-resurrect-helix" else None
+        state = helper["decode"](words[1]) if words[0] == "tmux-resurrect-helix" else None
         return command, state
 
     def geometry(target):

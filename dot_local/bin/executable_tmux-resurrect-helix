@@ -353,6 +353,18 @@ def quote(text):
     return '"' + text.replace("%", "%%").replace('"', "%u{22}") + '"'
 
 
+def encode(state):
+    """Base32 shell word: no lowercase "jk" for zsh-helix-mode to read as Escape."""
+    return base64.b32encode(json.dumps(state, ensure_ascii=False).encode()).decode()
+
+
+def decode(word):
+    """Inverse of encode(); also reads older base64 saves."""
+    if re.fullmatch(r"[A-Z2-7]+=*", word):
+        return json.loads(base64.b32decode(word))
+    return json.loads(base64.urlsafe_b64decode(word))
+
+
 def restore(state):
     views = state["views"]
     # Splits are typed in below: repeated files would become selections.
@@ -365,8 +377,7 @@ def restore(state):
         except OSError:
             return 1
     pane = os.environ.get("TMUX_PANE")
-    pending = "tmux-resurrect-helix " + base64.urlsafe_b64encode(
-        json.dumps(state, ensure_ascii=False).encode()).decode()
+    pending = "tmux-resurrect-helix " + encode(state)
     owned = False
     editor = None
     try:
@@ -422,4 +433,8 @@ def restore(state):
 
 
 if __name__ == "__main__":
-    sys.exit(restore(json.loads(base64.urlsafe_b64decode(sys.argv[1]))))
+    try:
+        saved = decode(sys.argv[1])
+    except (IndexError, ValueError) as error:  # incl. binascii, JSON
+        sys.exit(f"tmux-resurrect-helix: unreadable saved state: {error}")
+    sys.exit(restore(saved))
