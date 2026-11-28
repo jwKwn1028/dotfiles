@@ -1,9 +1,7 @@
 #!/usr/bin/python3
-"""Save the in-memory log of an i3 that crashed, then turn that log on.
+"""At each i3 start, save a crashed i3's in-memory log, then turn that log on.
 
-i3 logs to shared memory only while `shmlog` is on. A restart, including `r`
-on the crash screen, turns it off but leaves the old log until it is turned on
-again, so this runs at every i3 start, before turning it on.
+A restart turns the log off but keeps its contents until it is turned on.
 """
 
 from __future__ import annotations

@@ -135,17 +135,16 @@ Hidden-group activation marks urgency (`C!`); background arrivals preserve focus
 Slots 1–2 use primary, 3–10 external; one monitor shows all. Switch/reload/hotplug
 reconciles placement. Invalid or empty remembered slots reset to 1/3;
 disconnection preserves group membership and remembered external views.
-`display-setup.sh` owns the layout: `xfsettingsd-start.sh` turns off xfsettingsd's
-profiles and new-display action and clears the layout it applies at start.
+`display-setup.sh` owns the layout; `xfsettingsd-start.sh` stops xfsettingsd
+applying its own.
 
 ### Session Controller
 
 `workspace-groups.py start` replaces the controller and its autotiling, snap,
 and overflow workers. It reconnects after restarts and exits 10 s after i3.
 IPC failure pauses placement and shows `groups unavailable`. Restores survive an
-i3 crash: press `r` on its crash screen (`b` cannot attach a debugger here).
-`i3-crash-log.py` keeps i3's recent log in memory and, after the restart, saves
-it to `~/.local/state/i3/crash/` (newest 10) and says so.
+i3 crash: press `r` on its crash screen (`b` gets no backtrace here), and
+`i3-crash-log.py` saves i3's log to `~/.local/state/i3/crash/` (newest 10).
 
 | File | Responsibility |
 | --- | --- |

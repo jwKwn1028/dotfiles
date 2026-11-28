@@ -17,7 +17,7 @@ BIN_DIR = Path(__file__).resolve().parent.parent
 SCRIPT = BIN_DIR / "executable_tmux-resurrect-post-save"
 if not SCRIPT.exists():
     SCRIPT = BIN_DIR / "tmux-resurrect-post-save"
-PROCESSES = 'btop hx hpc hpcz micro fancy-cat fancy-cat-open hxp-resume sysmon claude codex "yazi->y" "~^ssh [-A-Za-z0-9_.@:=/ ]+$"'
+PROCESSES = 'btop "fastfetch->ff" hx hpc hpcz micro fancy-cat fancy-cat-open hxp-resume sysmon claude codex "yazi->y" "~^ssh [-A-Za-z0-9_.@:=/ ]+$"'
 CHAT, THREAD = str(uuid.uuid4()), str(uuid.uuid4())
 LIVE, EXEC, OTHER = (str(uuid.uuid4()) for _ in range(3))
 
@@ -99,6 +99,8 @@ with tempfile.TemporaryDirectory(prefix="resurrect-post-save-") as directory:
         "18": "ARGV0=codex sleep 306",
         "19": f"cd {named} && ARGV0=codex sleep 307",
         "20": f"cd {named} && ARGV0=codex sleep 308",
+        # fastfetch overwrites its argv, so it saves as plain fastfetch.
+        "21": "ARGV0=fastfetch sleep 309",
     }
     expected = {
         "0": f"fancy-cat-open --wait-for-client -f {docs}/doc.pdf",
@@ -123,6 +125,7 @@ with tempfile.TemporaryDirectory(prefix="resurrect-post-save-") as directory:
         "18": "",
         "19": f"codex resume {NAMED}",
         "20": "",
+        "21": "fastfetch",
         # Editor index changed while hxp-resume waited.
         "12": "",
         "12/1": "",
@@ -132,7 +135,7 @@ with tempfile.TemporaryDirectory(prefix="resurrect-post-save-") as directory:
         tmux("-f", "/dev/null", "new-session", "-d", "-s", "t", "-x", "120", "-y", "30", "--", "zsh", "-f")
         tmux("set", "-g", "@resurrect-processes", PROCESSES)
         (root / "fancy-cat-open").write_text("sleep 300\n")
-        for window in [*"12345678", "11", "13", "14", "15", "16", "17", "18", "19", "20"]:
+        for window in [*"12345678", "11", "13", "14", "15", "16", "17", "18", "19", "20", "21"]:
             tmux("new-window", "-d", "-t", f"t:{window}", "--", "zsh", "-f")
         for window, command in keys.items():
             tmux("send-keys", "-t", f"t:{window}", command, "Enter")

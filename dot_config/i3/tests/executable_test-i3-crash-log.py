@@ -62,7 +62,7 @@ class RescueTests(unittest.TestCase):
         for path in (self.shm, self.bin):
             path.mkdir(parents=True)
         self.calls = self.root / "calls"
-        # i3-msg notes whether a crash log was saved before the log is turned on.
+        # i3-msg records whether the log was saved first.
         (self.bin / "i3-msg").write_text(
             f'#!/bin/sh\nset -- "$@" "saved=$(ls {self.logs} 2>/dev/null | wc -l)"\n'
             f'echo "i3-msg $*" >>{self.calls}\n')

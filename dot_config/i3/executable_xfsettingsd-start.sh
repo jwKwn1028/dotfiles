@@ -1,6 +1,5 @@
 #!/bin/sh
-# Start xfsettingsd, leaving the screen layout to display-setup.sh: at start it
-# applies its stored Default layout, and on hotplug a matching profile.
+# Start xfsettingsd without its own screen layouts; display-setup.sh owns them.
 
 xfconf-query -c keyboards -p /Default/RestoreNumlock --create --type bool --set true
 xfconf-query -c displays -p /AutoEnableProfiles --create --type bool --set false

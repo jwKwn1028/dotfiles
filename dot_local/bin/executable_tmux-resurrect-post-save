@@ -22,6 +22,7 @@ UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
 REWRITES = (
     (re.compile(r"^ssh .*tmux attach-session -t =([A-Za-z0-9_-]+)$"), r"hpc \1"),
     (re.compile(r"^ssh .*zmx attach ([A-Za-z0-9_-]+)$"), r"hpcz \1"),
+    (re.compile(r"^fastfetch( .*)?$"), "fastfetch"),  # It overwrites its own argv.
 )
 FIELDS = ("session_name", "window_index", "pane_index", "pane_id", "pane_pid", "pane_active",
           "pane_current_command", "pane_current_path", "@resurrect-command", "@hxp-resume", "pane_title")

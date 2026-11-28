@@ -65,9 +65,10 @@ The fzf keys need fzf's installed widgets. Editor keymaps are separate: see
 \* In local interactive Ghostty outside tmux/SSH, these close the shell before
 opening a window. Missing editors or failed Thunar startup keep it open.
 
-Short aliases: `h` (Helix here), `v` (Vim here), `mo` (Micro), `twt`
-(taskwarrior-tui), `tcal` (task-calendar), `:q` (exit the shell), and `:qa`
-(close the focused i3 window). `ls` runs eza; `rg` searches smart-case.
+Short aliases: `h` (Helix here), `v` (Vim here), `mo` (Micro), `ff`
+(fastfetch every 2 s; tmux restores it), `twt` (taskwarrior-tui), `tcal`
+(task-calendar), `:q` (exit the shell), and `:qa` (close the focused i3 window).
+`ls` runs eza; `rg` searches smart-case.
 
 Run `sz-all` after applying Zsh changes; panes older than its hook need one `sz`
 first. SSH shells are skipped. Like `sz`, restarts keep only the directory and
